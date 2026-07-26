@@ -23,6 +23,11 @@ Square Enix services remain proprietary and are not included here.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
   fail-closed control, movement contracts, and command safety.
 
+The first end-to-end client is now validated on Windows 11 ARM under Parallels:
+Pablo entered Bastok Markets, AgentBridge exposed live state through the
+restricted tunnel, all 12 MCP tools were discovered, and the control latch was
+armed and emergency-stopped without moving the character.
+
 ## Architecture
 
 ```text
@@ -103,6 +108,8 @@ The complete topology-dependent procedure is in
 [docs/client-runbook.md](docs/client-runbook.md).
 The selected Apple Silicon VM procedure is in
 [docs/windows-arm-vm-runbook.md](docs/windows-arm-vm-runbook.md).
+Failures encountered on the tested path and their verified fixes are in
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 1. Install and update FFXI through an authorized Square Enix path.
 2. Confirm the client connects to the private server with current `xiloader`
@@ -144,5 +151,6 @@ This prototype is for an isolated private-server lab only.
 
 See [docs/research.md](docs/research.md) for current findings and the contractual
 risk, [docs/operations.md](docs/operations.md) for private operations and
-multi-character routing, and [docs/roadmap.md](docs/roadmap.md) for the
-remaining work.
+multi-character routing, [docs/troubleshooting.md](docs/troubleshooting.md) for
+failure recovery, and [docs/roadmap.md](docs/roadmap.md) for the remaining
+work.

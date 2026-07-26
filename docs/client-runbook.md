@@ -1,7 +1,7 @@
 # First Windows client runbook
 
-Status: ready for an operator-selected Windows host
-Date: 2026-07-25
+Status: validated with one Windows 11 ARM client
+Date: 2026-07-26
 
 This procedure keeps LandSandBoat, AgentBridge, and the MCP process private. It
 does not make the setup authorized by Square Enix; review
@@ -132,6 +132,18 @@ In order:
 11. `ffxi_emergency_stop` — verify control is disabled and auto-running is
     false.
 
+For the first target/check portion, the repository includes a bounded smoke
+test that requires an exact nearby entity name:
+
+```sh
+pnpm mcp:gameplay-smoke -- --target Loulia
+```
+
+It enables control, targets only that entity within ten units, queues
+`/check <t>`, captures a new observation, stops movement defensively, and
+always calls the emergency stop. Substitute a harmless nearby NPC from the
+read-only `pnpm mcp:smoke` output; do not guess a target name.
+
 Movement is a lease, not an open-ended command. AgentBridge checks progress ten
 times per second and stops on arrival, timeout, no progress, target loss,
 logout, explicit stop, addon unload, or emergency stop. Keep a hand on the
@@ -151,3 +163,8 @@ For the first run, retain:
 
 Do not record passwords, bridge tokens, Square Enix credentials, client files,
 or DAT assets.
+
+See [troubleshooting.md](troubleshooting.md) for the exact failures observed on
+the Apple Silicon/Parallels path, including Colima UDP forwarding,
+`FFXI-3001`, stale xiloader TLS sessions, Windows ARM character rendering, and
+safe streaming checkpoints.

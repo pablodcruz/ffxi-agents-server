@@ -1,6 +1,6 @@
 # Windows 11 ARM VM runbook
 
-Status: official base client installed; update and compatibility validation pending
+Status: validated through live private-server login and MCP observation
 Host: Apple M4 Mac mini, 16 GB RAM
 VM: Parallels Desktop trial with Windows 11 ARM
 
@@ -73,9 +73,9 @@ assets into this repository.
 - Removed the re-downloadable installer cache after installation verification
   to recover VM disk space. No client or installer files were added to Git.
 
-This checkpoint proves installation only. The PlayOnline/FFXI update,
-configuration utility, and Direct3D compatibility checks below still need to
-pass before adding a private-server loader.
+After this checkpoint, the client was updated through the authorized retail
+path, the configuration utility saved working compatibility settings, and the
+current client rendered both character creation and Bastok Markets.
 
 ## 3. Compatibility checkpoint
 
@@ -105,8 +105,19 @@ cannot directly publish ports on Parallels' host adapter. Configure the
 advertised zone address and bounded Mac-side TCP/UDP forwarder instead:
 
 ```sh
+colima stop
+colima start --port-forwarder grpc
 ./scripts/server.sh set-client-address 10.211.55.2 --yes --allow-registration
 pnpm forwarder
+```
+
+Colima defaults to its `ssh` port forwarder, which supports TCP only. The
+`grpc` forwarder is required here because FFXI map traffic uses UDP 54230.
+Confirm both listeners before launching the client:
+
+```text
+limactl  ... UDP 127.0.0.1:54230
+node     ... UDP 10.211.55.2:54230
 ```
 
 For the first VM, Parallels' Shared Network addresses were verified as:
@@ -125,6 +136,34 @@ Validate reachability from Windows with:
 Test-NetConnection <mac-parallels-address> -Port 54001
 ```
 
+The private forwarder keeps an otherwise idle xiloader authentication
+connection open for 15 minutes. A shorter two-minute timeout caused xiloader
+to report `Bad JSON reply from remote` when a human took longer than two
+minutes to finish the account prompt, even though both TLS and JSON forwarding
+were healthy.
+
+### FFXI-3001 after selecting a character
+
+`FFXI-3001` means the lobby-to-map handoff timed out. Check all three stages:
+
+1. `connect` should log the character's zone and the private host endpoint.
+2. `map` should create a pending session for the character.
+3. The forwarder should log both a new UDP peer and an active UDP reply path.
+
+On the reference setup, the immediate cause was Colima's TCP-only `ssh` port
+forwarder: Docker reported `127.0.0.1:54230->54230/udp`, but no macOS process
+owned that UDP socket. Restarting the existing profile with
+`colima start --port-forwarder grpc` created the missing `limactl` listener
+without replacing the persistent server volumes.
+
+On the ARM VM reference setup, the client sent its only initial UDP datagram
+about 400 milliseconds before the emulated x86 map process finished creating
+the pending session. LandSandBoat discarded that early packet and the client
+did not retry it. The forwarder therefore retries only the first datagram once,
+after one second, and cancels that retry upon any upstream reply or a second
+client datagram. This is bounded to one duplicate handshake packet per new UDP
+peer.
+
 ## 5. Add Ashita and AgentBridge
 
 After a loader-only connection passes:
@@ -138,6 +177,10 @@ After a loader-only connection passes:
 6. Establish the loopback tunnel described in
    [client-runbook.md](client-runbook.md).
 7. Run `pnpm doctor`, then follow the closed-loop validation list.
+
+The tested profile and startup script are versioned at
+`ashita/config/boot/agentlab.ini` and `ashita/scripts/agentlab.txt`. They contain
+no credentials or bridge token.
 
 Ashita's `Sandbox` feature can make an existing working client portable, but
 Ashita explicitly requires a working copy of the game first. It is not a source

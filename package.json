@@ -9,6 +9,9 @@
     "doctor": "./scripts/run-node.sh src/doctor.mjs",
     "forwarder": "./scripts/run-forwarder.sh",
     "mcp": "./scripts/run-mcp.sh",
+    "mcp:smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs",
+    "mcp:control-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --control-cycle",
+    "mcp:gameplay-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --gameplay-cycle",
     "test": "./scripts/run-node.sh --test"
   },
   "dependencies": {
