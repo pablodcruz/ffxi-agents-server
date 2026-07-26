@@ -1,0 +1,12 @@
+##########################################################################
+# FFXI Agent Lab startup script
+#
+# Keep the first validation surface intentionally small. AgentBridge starts
+# with writes disabled and requires an explicit MCP arming confirmation.
+##########################################################################
+
+/load thirdparty
+/load addons
+
+/wait 3
+/addon load agentbridge

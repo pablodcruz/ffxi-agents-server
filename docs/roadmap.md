@@ -32,18 +32,21 @@
 - [x] Add server-only and bridge-only readiness diagnostics.
 - [x] Install the client from Square Enix's official Windows download inside
   the VM and verify its Windows registrations and launch files.
-- [ ] Update through an authorized Square Enix path and validate the current
+- [x] Update through an authorized Square Enix path and validate the current
   client inside the VM.
-- [ ] Connect once using only current `xiloader`.
-- [ ] Install Ashita v4 and AgentBridge.
-- [ ] Validate login, observe, target, and one harmless `/check` command.
+- [x] Validate current `xiloader` connectivity through the private server
+  launcher path.
+- [x] Install Ashita v4 and AgentBridge.
+- [x] Validate login, observe, target, and one harmless `/check` command.
 - [ ] Promote a dedicated test character to GM only if needed for setup.
 
 ## Phase 3 — closed-loop play
 
 - [x] Implement a bounded entity-follow primitive with arrival, timeout,
   progress, target-loss, and logout stops.
-- [ ] Validate bounded movement against the live Windows client.
+- [x] Validate bounded movement against the live Windows client.
+- [ ] Add a bounded MCP-native NPC interaction tool to replace the temporary
+  focused-window Enter-key fallback.
 - [ ] Normalize status/job/zone identifiers into names.
 - [x] Add bounded inventory, recast, buffs/debuffs, and menu-state
   observations.
@@ -54,7 +57,7 @@
 - [ ] Add higher-level gameplay regression scenarios after a real client works.
 - [x] Add a fail-closed write latch and emergency stop that halt movement and
   further write tools.
-- [ ] Validate emergency stop against the live Windows client.
+- [x] Validate emergency stop against the live Windows client.
 
 ## Phase 4 — multiple agents and human players
 

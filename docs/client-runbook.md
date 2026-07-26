@@ -1,7 +1,7 @@
 # First Windows client runbook
 
-Status: ready for an operator-selected Windows host
-Date: 2026-07-25
+Status: validated with one Windows 11 ARM client
+Date: 2026-07-26
 
 This procedure keeps LandSandBoat, AgentBridge, and the MCP process private. It
 does not make the setup authorized by Square Enix; review
@@ -113,6 +113,13 @@ pnpm doctor -- --bridge-only
 The bridge check reports whether writes and movement are enabled but never
 prints the shared token.
 
+To map a wider visible area without enabling control, increase the bounded
+observation limits:
+
+```sh
+pnpm mcp:smoke -- --radius 50 --max-entities 64
+```
+
 ## 5. Validate the first closed loop
 
 In order:
@@ -131,6 +138,32 @@ In order:
 10. `ffxi_stop_movement`.
 11. `ffxi_emergency_stop` — verify control is disabled and auto-running is
     false.
+
+For the first target/check portion, the repository includes a bounded smoke
+test that requires an exact nearby entity name:
+
+```sh
+pnpm mcp:gameplay-smoke -- --target Loulia
+```
+
+It enables control, targets only that entity within ten units, queues
+`/check <t>`, captures a new observation, stops movement defensively, and
+always calls the emergency stop. Substitute a harmless nearby NPC from the
+read-only `pnpm mcp:smoke` output; do not guess a target name.
+
+After the target/check path succeeds, add `--move-to-target` to test one
+five-second movement lease:
+
+```sh
+pnpm mcp:gameplay-smoke -- --target Loulia --move-to-target
+```
+
+The target must begin within ten units by default. After a wide read-only
+observation confirms a safe waypoint, `--max-start-distance` can raise that
+limit to at most 30 and `--movement-timeout` can raise the lease to at most 20
+seconds. Movement still stops at three units, after two seconds without
+progress, on target loss, or when the script's defensive stop and emergency
+stop run.
 
 Movement is a lease, not an open-ended command. AgentBridge checks progress ten
 times per second and stops on arrival, timeout, no progress, target loss,
@@ -151,3 +184,8 @@ For the first run, retain:
 
 Do not record passwords, bridge tokens, Square Enix credentials, client files,
 or DAT assets.
+
+See [troubleshooting.md](troubleshooting.md) for the exact failures observed on
+the Apple Silicon/Parallels path, including Colima UDP forwarding,
+`FFXI-3001`, stale xiloader TLS sessions, Windows ARM character rendering, and
+safe streaming checkpoints.

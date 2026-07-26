@@ -98,12 +98,28 @@ When the game server runs in Colima and the Windows client runs on Parallels,
 keep Docker loopback-only and use the private host forwarder:
 
 ```sh
+colima stop
+colima start --port-forwarder grpc
 ./scripts/server.sh set-client-address 10.211.55.2 --yes --allow-registration
 pnpm forwarder
 ```
 
+Colima's default `ssh` port forwarder carries TCP only. Use `grpc` so Docker's
+published map port reaches macOS over UDP as well. The host forwarder refuses
+to start on macOS when no process owns the loopback UDP target, preventing a
+misleading `FFXI-3001` character-selection timeout.
+
 The forwarder must remain running while clients are connected. It refuses
 wildcard and public addresses and exposes only the required FFXI game ports.
+TCP and UDP peers expire after 15 minutes without traffic. This window is long
+enough for xiloader's interactive account and login prompts, which open their
+TLS connection before accepting credentials, while still bounding abandoned
+connections.
+The first UDP datagram for a new peer is retried once after one second if the
+map server has not replied. LandSandBoat creates the pending map session
+asynchronously after character selection; under x86 emulation on Apple Silicon,
+the original datagram can arrive before that session exists. Any upstream reply
+or a second client datagram cancels the retry.
 Disable registration immediately after the supervised first account is
 created.
 
@@ -142,6 +158,17 @@ All character MCP tools accept optional `agent_id`; omission routes to
 agent, different agents can act concurrently, and emergency/stop requests
 bypass the normal write queue. Use `ffxi_agent_profiles` to list routing
 metadata without secrets.
+
+After a read-only smoke test succeeds in a private live session, validate the
+control safety latch without moving the character or issuing a gameplay
+command:
+
+```sh
+./scripts/run-node.sh scripts/mcp-smoke.mjs --control-cycle
+```
+
+The optional cycle arms control with the required confirmation, reads the
+enabled state, and always calls the emergency stop in a `finally` block.
 
 Every attempted write is appended to the ignored, mode-`0600`
 `runtime/audit/agent-actions.jsonl` with agent id, operation, bounded
