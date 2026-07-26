@@ -30,8 +30,10 @@
 - [x] Write the Apple Silicon VM and clean-client installation runbook.
 - [x] Write the topology, tunnel, credential, and first-action runbook.
 - [x] Add server-only and bridge-only readiness diagnostics.
-- [ ] Install and validate a current client from Square Enix's official
-  Windows download inside the VM.
+- [x] Install the client from Square Enix's official Windows download inside
+  the VM and verify its Windows registrations and launch files.
+- [ ] Update through an authorized Square Enix path and validate the current
+  client inside the VM.
 - [ ] Connect once using only current `xiloader`.
 - [ ] Install Ashita v4 and AgentBridge.
 - [ ] Validate login, observe, target, and one harmless `/check` command.

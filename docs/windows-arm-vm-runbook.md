@@ -1,6 +1,6 @@
 # Windows 11 ARM VM runbook
 
-Status: selected for the first client
+Status: official base client installed; update and compatibility validation pending
 Host: Apple M4 Mac mini, 16 GB RAM
 VM: Parallels Desktop trial with Windows 11 ARM
 
@@ -59,6 +59,23 @@ requires another official regional build.
 
 Never copy Square Enix credentials, registration codes, client files, or DAT
 assets into this repository.
+
+### Local installation checkpoint — 2026-07-26
+
+- Installed DirectX, PlayOnline Viewer, and FINAL FANTASY XI from Square Enix's
+  official North American multipart download.
+- Verified that Windows registered both PlayOnline Viewer and FINAL FANTASY XI.
+- Verified the installed launch files at the standard `Program Files (x86)`
+  paths.
+- Verified that the Windows DirectPlay optional feature is enabled.
+- Installed and verified Microsoft Visual C++ x86 runtime
+  `14.44.35211.00`, required by Ashita v4.
+- Removed the re-downloadable installer cache after installation verification
+  to recover VM disk space. No client or installer files were added to Git.
+
+This checkpoint proves installation only. The PlayOnline/FFXI update,
+configuration utility, and Direct3D compatibility checks below still need to
+pass before adding a private-server loader.
 
 ## 3. Compatibility checkpoint
 
