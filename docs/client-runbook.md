@@ -113,6 +113,13 @@ pnpm doctor -- --bridge-only
 The bridge check reports whether writes and movement are enabled but never
 prints the shared token.
 
+To map a wider visible area without enabling control, increase the bounded
+observation limits:
+
+```sh
+pnpm mcp:smoke -- --radius 50 --max-entities 64
+```
+
 ## 5. Validate the first closed loop
 
 In order:
@@ -151,9 +158,12 @@ five-second movement lease:
 pnpm mcp:gameplay-smoke -- --target Loulia --move-to-target
 ```
 
-The target must begin within ten units. Movement stops at three units, after
-five seconds, after two seconds without progress, on target loss, or when the
-script's defensive stop and emergency stop run.
+The target must begin within ten units by default. After a wide read-only
+observation confirms a safe waypoint, `--max-start-distance` can raise that
+limit to at most 30 and `--movement-timeout` can raise the lease to at most 20
+seconds. Movement still stops at three units, after two seconds without
+progress, on target loss, or when the script's defensive stop and emergency
+stop run.
 
 Movement is a lease, not an open-ended command. AgentBridge checks progress ten
 times per second and stops on arrival, timeout, no progress, target loss,

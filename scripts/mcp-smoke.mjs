@@ -11,9 +11,37 @@ const runGameplayCycle = process.argv.includes("--gameplay-cycle") || runMovemen
 const runControlCycle = process.argv.includes("--control-cycle") || runGameplayCycle;
 const targetArgumentIndex = process.argv.indexOf("--target");
 const targetName = targetArgumentIndex >= 0 ? process.argv[targetArgumentIndex + 1] : undefined;
+const radiusArgumentIndex = process.argv.indexOf("--radius");
+const maxEntitiesArgumentIndex = process.argv.indexOf("--max-entities");
+const maxStartDistanceArgumentIndex = process.argv.indexOf("--max-start-distance");
+const movementTimeoutArgumentIndex = process.argv.indexOf("--movement-timeout");
+const observationRadius = radiusArgumentIndex >= 0
+  ? Number(process.argv[radiusArgumentIndex + 1])
+  : 10;
+const maxEntities = maxEntitiesArgumentIndex >= 0
+  ? Number(process.argv[maxEntitiesArgumentIndex + 1])
+  : 8;
+const maxStartDistance = maxStartDistanceArgumentIndex >= 0
+  ? Number(process.argv[maxStartDistanceArgumentIndex + 1])
+  : 10;
+const movementTimeout = movementTimeoutArgumentIndex >= 0
+  ? Number(process.argv[movementTimeoutArgumentIndex + 1])
+  : 5;
 
 if (runGameplayCycle && !targetName) {
   throw new Error("The gameplay cycle requires --target with one exact nearby entity name.");
+}
+if (!Number.isFinite(observationRadius) || observationRadius < 1 || observationRadius > 50) {
+  throw new Error("--radius must be a number from 1 through 50.");
+}
+if (!Number.isInteger(maxEntities) || maxEntities < 1 || maxEntities > 64) {
+  throw new Error("--max-entities must be an integer from 1 through 64.");
+}
+if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 30) {
+  throw new Error("--max-start-distance must be a number from 2 through 30.");
+}
+if (!Number.isFinite(movementTimeout) || movementTimeout < 1 || movementTimeout > 20) {
+  throw new Error("--movement-timeout must be a number from 1 through 20.");
 }
 
 const transport = new StdioClientTransport({
@@ -33,7 +61,11 @@ try {
     client.callTool({ name: "ffxi_control_status", arguments: {} }),
     client.callTool({
       name: "ffxi_observe",
-      arguments: { radius: 10, max_entities: 8, event_limit: 5 },
+      arguments: {
+        radius: observationRadius,
+        max_entities: maxEntities,
+        event_limit: 5,
+      },
     }),
     client.callTool({ name: "ffxi_server_status", arguments: {} }),
   ]);
@@ -54,7 +86,7 @@ try {
       if (runGameplayCycle) {
         const target = await client.callTool({
           name: "ffxi_target_entity",
-          arguments: { name: targetName, max_distance: 10 },
+          arguments: { name: targetName, max_distance: maxStartDistance },
         });
         const check = await client.callTool({
           name: "ffxi_gameplay_command",
@@ -66,17 +98,24 @@ try {
             name: "ffxi_move_to_entity",
             arguments: {
               server_id: target.structuredContent.server_id,
-              max_start_distance: 10,
+              max_start_distance: maxStartDistance,
               stop_distance: 3,
-              timeout_seconds: 5,
+              timeout_seconds: movementTimeout,
               stuck_seconds: 2,
             },
           });
         }
-        await new Promise((resolve) => setTimeout(resolve, runMovementCycle ? 5500 : 1500));
+        await new Promise((resolve) => setTimeout(
+          resolve,
+          runMovementCycle ? (movementTimeout * 1000) + 500 : 1500,
+        ));
         const postObservation = await client.callTool({
           name: "ffxi_observe",
-          arguments: { radius: 10, max_entities: 8, event_limit: 10 },
+          arguments: {
+            radius: observationRadius,
+            max_entities: maxEntities,
+            event_limit: 10,
+          },
         });
         const stopMovement = await client.callTool({
           name: "ffxi_stop_movement",
