@@ -1,0 +1,21 @@
+{
+  "name": "ffxi-agent-lab",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "A safe MCP control plane and client bridge for an agent-only LandSandBoat FFXI lab.",
+  "scripts": {
+    "agent:add": "./scripts/run-node.sh src/add-agent.mjs",
+    "doctor": "./scripts/run-node.sh src/doctor.mjs",
+    "forwarder": "./scripts/run-forwarder.sh",
+    "mcp": "./scripts/run-mcp.sh",
+    "test": "./scripts/run-node.sh --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "3.25.76"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

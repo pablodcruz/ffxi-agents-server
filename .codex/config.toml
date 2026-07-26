@@ -1,0 +1,15 @@
+[mcp_servers.ffxi_agent]
+command = "bash"
+args = ["scripts/run-mcp.sh"]
+cwd = "."
+env_vars = ["FFXI_AGENTS_CONFIG", "FFXI_BRIDGE_TOKEN", "FFXI_BRIDGE_HOST", "FFXI_BRIDGE_PORT", "LSB_API_URL"]
+startup_timeout_sec = 15
+tool_timeout_sec = 10
+required = false
+default_tools_approval_mode = "writes"
+
+[mcp_servers.ffxi_agent.tools.ffxi_emergency_stop]
+approval_mode = "auto"
+
+[mcp_servers.ffxi_agent.tools.ffxi_stop_movement]
+approval_mode = "auto"

@@ -1,0 +1,19 @@
+[Unit]
+Description=Create and verify a LandSandBoat database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ffxi
+Group=ffxi
+WorkingDirectory=/opt/ffxi-agent-lab
+ExecStart=/opt/ffxi-agent-lab/scripts/scheduled-backup.sh
+UMask=0077
+Nice=10
+
+# Adjust this policy to the deployment paths before installation.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/ffxi-agent-lab/runtime

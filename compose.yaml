@@ -1,0 +1,184 @@
+name: ffxi-agent-lab
+
+x-db-application-credentials: &db-application-credentials
+  MARIADB_DATABASE: xidb
+  MARIADB_USER: xiadmin
+  MARIADB_PASSWORD: ${LSB_DB_PASSWORD:?Run ./scripts/server.sh init first}
+
+x-lsb-common: &lsb-common
+  image: ${LSB_SERVER_IMAGE:-ghcr.io/landsandboat/server@sha256:d502012d679b516924acaf31a31c2ccf6696b1490792833157a273b6ac7d2d83}
+  environment:
+    <<: *db-application-credentials
+    XI_NETWORK_SQL_HOST: database
+    XI_NETWORK_ZMQ_IP: world
+    XI_NETWORK_ENABLE_HTTP: "true"
+    XI_NETWORK_HTTP_HOST: 0.0.0.0
+    XI_NETWORK_ZONE_IP: ${LSB_ZONE_IP:-127.0.0.1}
+    XI_LOGIN_ACCOUNT_CREATION: ${LSB_ACCOUNT_CREATION:-true}
+  volumes:
+    # xi_map builds and persists any navmesh missing from the mesh image.
+    - navmeshes:/server/navmeshes
+    - ximeshes:/server/ximeshes:ro
+
+services:
+  mesh-seed:
+    image: ${LSB_MESH_IMAGE:-ghcr.io/landsandboat/ximeshes@sha256:39558f676a18362581368cac19a1e54cd013a74e660767c1f3c6362ef1d2321f}
+    # The published mesh image is currently amd64-only. It runs once during
+    # startup and works under Docker's architecture emulation on Apple Silicon.
+    platform: linux/amd64
+    command:
+      - sh
+      - -c
+      - test -n "$(find /navmeshes -maxdepth 1 -name '*.nav' -print -quit)" && test -n "$(find /ximeshes -maxdepth 1 -name '*.ximesh' -print -quit)" && chown -R 1000:1000 /navmeshes
+    volumes:
+      - navmeshes:/navmeshes
+      - ximeshes:/ximeshes
+    restart: "no"
+
+  database:
+    image: ${LSB_DATABASE_IMAGE:-mariadb@sha256:628f228f0fd5913a220438693576b29b6fe4dc1fa0a1298c0e98579fae28635f}
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    environment:
+      <<: *db-application-credentials
+      MARIADB_ROOT_PASSWORD: ${LSB_DB_ROOT_PASSWORD:?Run ./scripts/server.sh init first}
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  database-update:
+    <<: *lsb-common
+    # dbtool writes its installed Git revision to tools/config.yaml. Persist
+    # that state so recreating this one-shot container performs an incremental
+    # update instead of importing every static SQL table again.
+    user: "0:0"
+    command:
+      - sh
+      - -ec
+      - |
+        if [ -f /dbtool-state/config.yaml ]; then
+          cp /dbtool-state/config.yaml /server/tools/config.yaml
+        fi
+        python /server/tools/dbtool.py update
+        case "$$XI_NETWORK_ZONE_IP" in
+          ""|*[!0-9.]*)
+            echo "LSB_ZONE_IP must be a validated IPv4 address." >&2
+            exit 1
+            ;;
+        esac
+        mariadb \
+          --host="$$XI_NETWORK_SQL_HOST" \
+          --user="$$XI_NETWORK_SQL_LOGIN" \
+          --password="$$XI_NETWORK_SQL_PASSWORD" \
+          "$$XI_NETWORK_SQL_DATABASE" \
+          --execute="UPDATE zone_settings SET zoneip='$$XI_NETWORK_ZONE_IP'"
+        cp /server/tools/config.yaml /dbtool-state/config.yaml
+        chown 1000:1000 /dbtool-state/config.yaml
+    volumes:
+      - navmeshes:/server/navmeshes
+      - ximeshes:/server/ximeshes:ro
+      - dbtool-state:/dbtool-state
+    depends_on:
+      database:
+        condition: service_healthy
+      mesh-seed:
+        condition: service_completed_successfully
+    restart: "no"
+
+  connect:
+    <<: *lsb-common
+    command: ["/server/xi_connect"]
+    restart: unless-stopped
+    ports:
+      - "${LSB_BIND_IP:-127.0.0.1}:54001:54001/tcp"
+      - "${LSB_BIND_IP:-127.0.0.1}:54230:54230/tcp"
+      - "${LSB_BIND_IP:-127.0.0.1}:54231:54231/tcp"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "xi_connect"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  search:
+    <<: *lsb-common
+    command: ["/server/xi_search"]
+    restart: unless-stopped
+    ports:
+      - "${LSB_BIND_IP:-127.0.0.1}:54002:54002/tcp"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "xi_search"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  world:
+    <<: *lsb-common
+    command: ["/server/xi_world"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8088/tcp"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/api/sessions', timeout=2).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  map:
+    <<: *lsb-common
+    command: ["/server/xi_map"]
+    restart: unless-stopped
+    ports:
+      - "${LSB_BIND_IP:-127.0.0.1}:54230:54230/udp"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+      mesh-seed:
+        condition: service_completed_successfully
+      world:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "xi_map"]
+      start_period: 90s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  database:
+  dbtool-state:
+  navmeshes:
+  ximeshes:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly verified LandSandBoat database backup
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=ffxi-agent-backup.service
+
+[Install]
+WantedBy=timers.target
