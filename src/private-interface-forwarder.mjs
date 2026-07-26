@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_TCP_PORTS = [54001, 54002, 54230, 54231];
 const DEFAULT_UDP_PORTS = [54230];
 const MAX_UDP_PACKET_BYTES = 65507;
+export const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+export const DEFAULT_UDP_INITIAL_RETRY_MS = 1000;
 
 function isPrivateIpv4(address) {
   const parts = address.split(".").map(Number);
@@ -66,6 +68,30 @@ function bindUdp(socket, host, port) {
   });
 }
 
+function requireUdpTargetListener(host, port) {
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket("udp4");
+    socket.once("error", (error) => {
+      socket.close();
+      if (error.code === "EADDRINUSE") {
+        resolve();
+        return;
+      }
+      reject(error);
+    });
+    socket.once("listening", () => {
+      socket.close(() => {
+        reject(
+          new Error(
+            `No UDP listener is bound to ${host}:${port}. On Colima for macOS, use the grpc port forwarder because ssh supports TCP only.`,
+          ),
+        );
+      });
+    });
+    socket.bind({ address: host, port, exclusive: true });
+  });
+}
+
 export async function startPrivateInterfaceForwarder({
   listenHost,
   targetHost = "127.0.0.1",
@@ -73,7 +99,9 @@ export async function startPrivateInterfaceForwarder({
   udpMappings = DEFAULT_UDP_PORTS,
   maxTcpConnections = 32,
   maxUdpPeers = 16,
-  idleTimeoutMs = 120_000,
+  idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
+  udpInitialRetryMs = DEFAULT_UDP_INITIAL_RETRY_MS,
+  verifyUdpTargetListeners = process.platform === "darwin",
   allowLoopbackForTests = false,
   allowEphemeralPortsForTests = false,
   logger = console,
@@ -93,6 +121,13 @@ export async function startPrivateInterfaceForwarder({
   if (!Number.isInteger(maxUdpPeers) || maxUdpPeers < 1 || maxUdpPeers > 64) {
     throw new Error("maxUdpPeers must be between 1 and 64.");
   }
+  if (
+    !Number.isInteger(udpInitialRetryMs) ||
+    udpInitialRetryMs < 0 ||
+    udpInitialRetryMs > 5000
+  ) {
+    throw new Error("udpInitialRetryMs must be between 0 and 5000 milliseconds.");
+  }
 
   const normalizedTcp = normalizeMappings(tcpMappings, {
     allowEphemeral: allowEphemeralPortsForTests,
@@ -105,6 +140,12 @@ export async function startPrivateInterfaceForwarder({
   const udpListeners = [];
   const udpPeers = new Set();
   let activeTcpConnections = 0;
+
+  if (verifyUdpTargetListeners) {
+    for (const mapping of normalizedUdp) {
+      await requireUdpTargetListener(targetHost, mapping.targetPort);
+    }
+  }
 
   try {
     for (const mapping of normalizedTcp) {
@@ -159,22 +200,80 @@ export async function startPrivateInterfaceForwarder({
         if (!peer) {
           if (peers.size >= maxUdpPeers) return;
           const upstream = dgram.createSocket("udp4");
-          peer = { upstream, remote, lastSeen: Date.now() };
+          peer = {
+            upstream,
+            remote,
+            lastSeen: Date.now(),
+            clientDatagrams: 0,
+            upstreamDatagrams: 0,
+            initialRetryTimer: null,
+          };
           peers.set(key, peer);
           udpPeers.add(upstream);
           upstream.on("message", (response) => {
-            listener.send(response, peer.remote.port, peer.remote.address);
+            peer.upstreamDatagrams += 1;
+            if (peer.initialRetryTimer) {
+              clearTimeout(peer.initialRetryTimer);
+              peer.initialRetryTimer = null;
+            }
+            if (peer.upstreamDatagrams === 1) {
+              logger.info?.(
+                `UDP reply path active for ${key} (${response.length} bytes from ${targetHost}:${mapping.targetPort}).`,
+              );
+            }
+            listener.send(response, peer.remote.port, peer.remote.address, (error) => {
+              if (error) {
+                logger.error(`UDP client send error for ${key}: ${error.message}`);
+              }
+            });
           });
           upstream.on("error", (error) => {
             logger.error(`UDP upstream error: ${error.message}`);
+            if (peer.initialRetryTimer) {
+              clearTimeout(peer.initialRetryTimer);
+            }
             peers.delete(key);
             udpPeers.delete(upstream);
             upstream.close();
           });
+          logger.info?.(
+            `UDP peer ${key} forwarding to ${targetHost}:${mapping.targetPort}.`,
+          );
         }
         peer.lastSeen = Date.now();
         peer.remote = remote;
-        peer.upstream.send(message, mapping.targetPort, targetHost);
+        peer.clientDatagrams += 1;
+        peer.upstream.send(message, mapping.targetPort, targetHost, (error) => {
+          if (error) {
+            logger.error(`UDP upstream send error for ${key}: ${error.message}`);
+          }
+        });
+        if (
+          peer.clientDatagrams === 1 &&
+          udpInitialRetryMs > 0 &&
+          peer.initialRetryTimer === null
+        ) {
+          const initialDatagram = Buffer.from(message);
+          peer.initialRetryTimer = setTimeout(() => {
+            peer.initialRetryTimer = null;
+            if (
+              peers.get(key) !== peer ||
+              peer.upstreamDatagrams > 0 ||
+              peer.clientDatagrams !== 1
+            ) {
+              return;
+            }
+            logger.info?.(
+              `Retrying initial UDP datagram for ${key} after ${udpInitialRetryMs}ms without an upstream reply.`,
+            );
+            peer.upstream.send(initialDatagram, mapping.targetPort, targetHost, (error) => {
+              if (error) {
+                logger.error(`UDP upstream retry error for ${key}: ${error.message}`);
+              }
+            });
+          }, udpInitialRetryMs);
+          peer.initialRetryTimer.unref();
+        }
       });
       listener.on("error", (error) => logger.error(`UDP forwarder error: ${error.message}`));
 
@@ -182,8 +281,14 @@ export async function startPrivateInterfaceForwarder({
         const cutoff = Date.now() - idleTimeoutMs;
         for (const [key, peer] of peers) {
           if (peer.lastSeen < cutoff) {
+            logger.info?.(
+              `UDP peer ${key} expired after ${peer.clientDatagrams} client and ${peer.upstreamDatagrams} upstream datagrams.`,
+            );
             peers.delete(key);
             udpPeers.delete(peer.upstream);
+            if (peer.initialRetryTimer) {
+              clearTimeout(peer.initialRetryTimer);
+            }
             peer.upstream.close();
           }
         }
@@ -207,6 +312,8 @@ export async function startPrivateInterfaceForwarder({
   const addresses = {
     listen_host: listenHost,
     target_host: targetHost,
+    idle_timeout_ms: idleTimeoutMs,
+    udp_initial_retry_ms: udpInitialRetryMs,
     tcp: tcpServers.map(({ server, mapping }) => ({
       listen_port: server.address().port,
       target_port: mapping.targetPort,
@@ -221,6 +328,13 @@ export async function startPrivateInterfaceForwarder({
     addresses,
     async close() {
       tcpSockets.forEach((socket) => socket.destroy());
+      udpListeners.forEach(({ peers }) => {
+        peers.forEach((peer) => {
+          if (peer.initialRetryTimer) {
+            clearTimeout(peer.initialRetryTimer);
+          }
+        });
+      });
       udpPeers.forEach((socket) => socket.close());
       await Promise.all([
         ...tcpServers.map(
