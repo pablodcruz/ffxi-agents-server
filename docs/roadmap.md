@@ -37,14 +37,16 @@
 - [x] Validate current `xiloader` connectivity through the private server
   launcher path.
 - [x] Install Ashita v4 and AgentBridge.
-- [ ] Validate login, observe, target, and one harmless `/check` command.
+- [x] Validate login, observe, target, and one harmless `/check` command.
 - [ ] Promote a dedicated test character to GM only if needed for setup.
 
 ## Phase 3 — closed-loop play
 
 - [x] Implement a bounded entity-follow primitive with arrival, timeout,
   progress, target-loss, and logout stops.
-- [ ] Validate bounded movement against the live Windows client.
+- [x] Validate bounded movement against the live Windows client.
+- [ ] Add a bounded MCP-native NPC interaction tool to replace the temporary
+  focused-window Enter-key fallback.
 - [ ] Normalize status/job/zone identifiers into names.
 - [x] Add bounded inventory, recast, buffs/debuffs, and menu-state
   observations.

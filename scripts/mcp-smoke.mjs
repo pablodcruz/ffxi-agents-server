@@ -6,7 +6,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
-const runGameplayCycle = process.argv.includes("--gameplay-cycle");
+const runMovementCycle = process.argv.includes("--move-to-target");
+const runGameplayCycle = process.argv.includes("--gameplay-cycle") || runMovementCycle;
 const runControlCycle = process.argv.includes("--control-cycle") || runGameplayCycle;
 const targetArgumentIndex = process.argv.indexOf("--target");
 const targetName = targetArgumentIndex >= 0 ? process.argv[targetArgumentIndex + 1] : undefined;
@@ -59,7 +60,20 @@ try {
           name: "ffxi_gameplay_command",
           arguments: { command: "/check <t>" },
         });
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        let movement;
+        if (runMovementCycle && !target.isError) {
+          movement = await client.callTool({
+            name: "ffxi_move_to_entity",
+            arguments: {
+              server_id: target.structuredContent.server_id,
+              max_start_distance: 10,
+              stop_distance: 3,
+              timeout_seconds: 5,
+              stuck_seconds: 2,
+            },
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, runMovementCycle ? 5500 : 1500));
         const postObservation = await client.callTool({
           name: "ffxi_observe",
           arguments: { radius: 10, max_entities: 8, event_limit: 10 },
@@ -72,6 +86,7 @@ try {
           ...controlCycle,
           target,
           check,
+          ...(movement ? { movement } : {}),
           postObservation,
           stopMovement,
         };

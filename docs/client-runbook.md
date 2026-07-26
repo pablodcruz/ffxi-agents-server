@@ -144,6 +144,17 @@ It enables control, targets only that entity within ten units, queues
 always calls the emergency stop. Substitute a harmless nearby NPC from the
 read-only `pnpm mcp:smoke` output; do not guess a target name.
 
+After the target/check path succeeds, add `--move-to-target` to test one
+five-second movement lease:
+
+```sh
+pnpm mcp:gameplay-smoke -- --target Loulia --move-to-target
+```
+
+The target must begin within ten units. Movement stops at three units, after
+five seconds, after two seconds without progress, on target loss, or when the
+script's defensive stop and emergency stop run.
+
 Movement is a lease, not an open-ended command. AgentBridge checks progress ten
 times per second and stops on arrival, timeout, no progress, target loss,
 logout, explicit stop, addon unload, or emergency stop. Keep a hand on the

@@ -26,7 +26,9 @@ Square Enix services remain proprietary and are not included here.
 The first end-to-end client is now validated on Windows 11 ARM under Parallels:
 Pablo entered Bastok Markets, AgentBridge exposed live state through the
 restricted tunnel, all 12 MCP tools were discovered, and the control latch was
-armed and emergency-stopped without moving the character.
+used to target and check a nearby NPC. A five-second movement lease moved Pablo
+from 7.52 to 2.67 units from that NPC, stopped on arrival, and finished with
+control disabled by the emergency stop.
 
 ## Architecture
 
