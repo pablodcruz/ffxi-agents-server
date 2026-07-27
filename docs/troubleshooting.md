@@ -418,6 +418,17 @@ registry values again before launching the game. The tested OBS output is
 
 Do not add the Ashita console or login window to the public scene. Capture the
 Parallels game window and publish sanitized MCP action summaries separately.
+For summaries inside the game window, enable AgentBridge's local-only activity
+feed after reaching the in-world checkpoint:
+
+```sh
+pnpm mcp:feed -- --enabled true
+```
+
+The feed cannot send arbitrary text or server chat. It shows only bounded
+target, movement, input, heading, and allowlisted command-verb events. Disable
+it with the same command and `--enabled false` if it obscures dialogue or
+combat text.
 
 ## Safe recovery sequence
 

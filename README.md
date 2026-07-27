@@ -155,6 +155,8 @@ This prototype is for an isolated private-server lab only.
   assets.
 - GM, chat, console, addon-management, script, packet-injection, and chained
   commands are not exposed to the agent.
+- The optional stream activity feed writes sanitized summaries only to the
+  local game chat window; it cannot send server chat or arbitrary text.
 - Agent writes start disabled and must be explicitly armed after every addon
   load or emergency stop.
 - Bounded movement automatically stops on arrival, timeout, lack of progress,

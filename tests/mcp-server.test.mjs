@@ -29,6 +29,7 @@ async function createMockBridge(token) {
         "interact",
         "move_to_entity",
         "move_to_position",
+        "set_activity_feed",
         "gameplay_command",
       ].includes(request.operation);
       let ok = authenticated;
@@ -53,6 +54,11 @@ async function createMockBridge(token) {
         error = "Agent writes are disabled.";
       } else if (request.operation === "clear_target") {
         result = { cleared: true, target_index: 0 };
+      } else if (request.operation === "set_activity_feed") {
+        result = {
+          enabled: request.params.enabled,
+          local_chat_only: true,
+        };
       } else {
         result = {
           operation: request.operation,
@@ -146,6 +152,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_observe",
       "ffxi_recent_events",
       "ffxi_server_status",
+      "ffxi_set_activity_feed",
       "ffxi_stop_movement",
       "ffxi_target_entity",
     ].sort(),
@@ -201,12 +208,26 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(disarmedInteract.isError, true);
 
+  const disarmedFeed = await client.callTool({
+    name: "ffxi_set_activity_feed",
+    arguments: { enabled: true },
+  });
+  assert.equal(disarmedFeed.isError, true);
+
   const enabled = await client.callTool({
     name: "ffxi_enable_control",
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
   });
   assert.equal(enabled.isError, undefined);
   assert.equal(enabled.structuredContent.enabled, true);
+
+  const activityFeed = await client.callTool({
+    name: "ffxi_set_activity_feed",
+    arguments: { enabled: true },
+  });
+  assert.equal(activityFeed.isError, undefined);
+  assert.equal(activityFeed.structuredContent.enabled, true);
+  assert.equal(activityFeed.structuredContent.local_chat_only, true);
 
   const movement = await client.callTool({
     name: "ffxi_move_to_entity",

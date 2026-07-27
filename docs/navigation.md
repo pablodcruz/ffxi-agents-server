@@ -315,12 +315,20 @@ sequence for every fight:
    alert floor; and
 5. verify defeat, EXP, character state, and emergency-disarmed control.
 
-Three fights against targetable Tunnel Worm `17215530` completed successfully.
+Five fights against targetable Tunnel Worm `17215530` completed successfully.
 Each produced a defeat event and 140 EXP while Pablo remained at or above 89%,
-95%, and 93% HP respectively. Character EXP progressed from 140 to 280, then
-420, then 560 out of 750 needed at Monk level 2. Hand-to-hand and defensive
-skills also increased, and the inventory observation recorded two beastmen's
-seals.
+95%, 93%, 81%, and 93% HP respectively. Character EXP progressed from 140 to
+280, 420, 560, and 700 out of 750 at Monk level 2. The fifth victory advanced
+Pablo to Monk level 3 at 90/1000 EXP, raised maximum HP from 48 to 63, attack
+from 17 to 19, and defense from 28 to 30. The client independently emitted
+`Pablo attains level 3!`. Hand-to-hand and defensive skills also increased,
+and the inventory observation recorded two beastmen's seals.
+
+The final two fights ran with AgentBridge 0.10.0's local activity feed enabled.
+The game chat displayed sanitized target IDs and `/check`, `/attack`,
+`/attackoff`, and `/heal` verbs alongside the game's normal combat, EXP, and
+level-up messages. The feed remained enabled after emergency stops, while the
+write latch itself returned to disabled.
 
 Huge Hornet `17215527` also checked as `easy_prey`, but it demonstrated why a
 generic `/check` verdict is not a complete mob-policy layer. The combat HP

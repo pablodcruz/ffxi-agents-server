@@ -165,6 +165,39 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_set_activity_feed",
+  {
+    title: "Set the local FFXI activity feed",
+    description:
+      "Enable or disable concise AgentBridge action summaries in the local game chat window. This never sends server chat and accepts no arbitrary message text.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      enabled: z.boolean(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, enabled }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "set_activity_feed",
+          { enabled },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_emergency_stop",
   {
     title: "Emergency-stop FFXI agent",
