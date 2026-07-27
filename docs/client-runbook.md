@@ -139,6 +139,22 @@ In order:
 11. `ffxi_emergency_stop` — verify control is disabled and auto-running is
     false.
 
+For navmesh routes, inspect the exact waypoints and elevation changes without
+enabling control:
+
+```sh
+pnpm mcp:pathfind -- \
+  --mesh South_Gustaberg.nav \
+  --x 262.415 --y -280.940 --z -0.089 \
+  --plan-only
+```
+
+The path runner always calls `ffxi_emergency_stop` when it exits, whether the
+route succeeds or fails. This fail-closed behavior prevents a stalled waypoint
+from leaving AgentBridge armed. During execution, it may replan from the
+character's observed stop position up to two times; `--max-replans 0` disables
+recovery, and the accepted range is zero through three.
+
 For the first target/check portion, the repository includes a bounded smoke
 test that requires an exact nearby entity name:
 

@@ -4,6 +4,7 @@ import {
   detourToFfxi,
   distance2d,
   ffxiToDetour,
+  reachesDestination,
 } from "../src/navmesh-planner.mjs";
 
 test("converts between FFXI and Detour coordinate systems", () => {
@@ -15,4 +16,17 @@ test("converts between FFXI and Detour coordinate systems", () => {
 
 test("calculates horizontal FFXI waypoint distance", () => {
   assert.equal(distance2d({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
+});
+
+test("rejects a partial path that ends at a disconnected corridor edge", () => {
+  const destination = { x: 10, y: 10, z: 0 };
+  assert.equal(
+    reachesDestination([{ x: 8, y: 8, z: -5 }], destination),
+    true,
+  );
+  assert.equal(
+    reachesDestination([{ x: 5, y: 5, z: 0 }], destination),
+    false,
+  );
+  assert.equal(reachesDestination([], destination), false);
 });

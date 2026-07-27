@@ -104,6 +104,11 @@ The path runner currently reports this successful transition as a failed final
 waypoint because the new zone resets world coordinates. Zone-change detection
 must take precedence over same-zone arrival checks in a future runner.
 
+Detour may also return a path to the edge of a disconnected polygon corridor
+with a success status even though the requested destination was not reached.
+The host planner rejects these partial endpoints instead of allowing the runner
+to treat them as a usable route.
+
 Copy the outdoor mesh in the same way:
 
 ```sh
@@ -114,6 +119,30 @@ docker cp \
 
 South Gustaberg navigation then moved Pablo to less than 11 yalms from a Huge
 Hornet without using the camera.
+
+### Live collision mismatch near the Bastok approach
+
+A later South Gustaberg run exposed a reproducible mismatch between the server
+mesh and client collision near the scaffolded embankment around
+`(304, -300)`. Detour produced a tight switchback from z `-6.3` to z `-3.0`.
+The client reached the first three points, failed to make progress on the
+fourth, and slid back down the slope. Replanning twice from the observed stop
+position correctly failed closed, but generated the same corridor because the
+mesh contains only that connection.
+
+Temporarily excluding the failed polygon proved that no alternate connected
+corridor exists in this mesh component. Detour returned a nominally successful
+partial path that ended about seven horizontal yalms from the requested
+destination; the planner now rejects that case.
+
+Short world-coordinate probes mapped the client collision without relying on
+camera-relative movement. Pablo safely descended west along the lower contour
+to approximately `(250, -296, -13.9)`, with each probe bounded by timeout,
+lack-of-progress detection, an entity scan, and emergency disarm. This live
+evidence establishes the next recovery requirement: persist collision-derived
+blocked edges and support a bounded probe graph for isolated mesh components.
+The camera view was used only to correlate the failing edge with the visible
+embankment, not to steer.
 
 ## Bounded combat
 
@@ -199,7 +228,9 @@ or copied here.
 
 1. Detect zone changes as successful path termination and select the next mesh.
 2. Resolve zone IDs to mesh filenames and export meshes on demand.
-3. Add dynamic-obstacle recovery and bounded replanning.
+3. Persist temporarily blocked navmesh edges and route around them when another
+   connected corridor exists; bounded replanning from the actual stop position
+   is already implemented.
 4. Persist quest interaction points as data rather than one-off coordinates.
 5. Add a bounded loop that selects successive low-risk targets and returns to
    a safe location without embedding one-off entity IDs.
