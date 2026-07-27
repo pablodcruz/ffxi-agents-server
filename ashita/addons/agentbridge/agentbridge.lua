@@ -8,7 +8,7 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.9.0';
+addon.version = '0.9.1';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -530,9 +530,14 @@ local function find_target(params)
         local server_id = entities:GetServerId(index);
         if (server_id > 0 and entities:GetDistance(index) <= max_distance * max_distance) then
             local name = entities:GetName(index) or '';
-            local id_matches = requested_id ~= nil and server_id == requested_id;
-            local name_matches = requested_name ~= nil and name:lower() == requested_name;
-            if (id_matches or name_matches) then
+            local matches = false;
+            if (requested_id ~= nil) then
+                -- An explicit server ID must disambiguate duplicate entity names.
+                matches = server_id == requested_id;
+            elseif (requested_name ~= nil) then
+                matches = name:lower() == requested_name;
+            end
+            if (matches) then
                 target:SetTarget(index, true);
                 return entity_snapshot(index, entities);
             end

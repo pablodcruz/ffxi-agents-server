@@ -1,7 +1,8 @@
 # Navigation
 
-Status: world-coordinate movement, navmesh routing, NPC interaction, and a
-multi-zone transition are validated; bounded combat validation is in progress.
+Status: world-coordinate movement, navmesh routing, NPC interaction, a
+multi-zone transition, bounded combat, recovery, and level progression are
+validated.
 
 ## Why camera input is not the navigation layer
 
@@ -11,7 +12,7 @@ pan, frame timing, and collision geometry should not be part of the agent's
 route-planning contract.
 
 Ashita's official `IAutoFollow` interface exposes `FollowDeltaX` and
-`FollowDeltaY`. AgentBridge 0.9.0 normalizes the vector from the character's
+`FollowDeltaY`. AgentBridge 0.9.1 normalizes the vector from the character's
 current world position to a requested waypoint, writes those deltas, and
 recomputes the vector every 100 ms. This moves toward world coordinates without
 depending on the camera.
@@ -120,8 +121,10 @@ Hornet without using the camera.
 bridge protocol. It:
 
 - selects one exact nearby entity;
+- rests to a configurable minimum starting HP when necessary;
 - approaches it with a leased entity-follow movement;
 - refuses to attack outside the configured range;
+- reacquires and verifies the exact server ID after movement;
 - sends only `/attack <t>`;
 - samples player and target HP once per second;
 - stops at a configurable player-HP floor, target defeat, logout, or timeout;
@@ -133,15 +136,47 @@ Example:
 ```sh
 pnpm mcp:combat -- \
   --target "Huge Hornet" \
-  --max-start-distance 25 \
+  --server-id 17215525 \
+  --max-start-distance 10 \
+  --minimum-start-hp-percent 90 \
   --minimum-hp-percent 40 \
   --combat-timeout 90
 ```
+
+Use `--server-id` when multiple nearby entities share the same display name.
+The ID comes from `ffxi_observe`; the bridge still validates that the entity is
+nearby before targeting it. AgentBridge 0.9.1 makes an explicit server ID
+authoritative; name matching is only a fallback when no ID is supplied. This
+fixed an ambiguity where a corpse or a different live Huge Hornet could be
+selected because several entities shared the same name.
+
+Recovery can also be run independently:
+
+```sh
+pnpm mcp:rest -- --minimum-hp-percent 90 --timeout 75
+```
+
+The helper toggles `/heal`, samples HP every two seconds, stands after reaching
+the threshold, and always invokes the emergency stop. In the live test it
+restored Pablo from 57% to 100% without changing world position.
 
 The first live invocation failed closed before sending `/attack` because the
 map server had already been terminated by its two-second inactivity watchdog.
 The QEMU-safe watchdog configuration and recovery are documented in
 [troubleshooting.md](troubleshooting.md).
+
+After that server fix, four Huge Hornet encounters validated the full loop:
+
+- each target was selected by its observed server ID;
+- the helper re-verified the same ID immediately before `/attack <t>`;
+- all four fights ended with `target_defeated`, and Pablo never crossed the 40%
+  emergency HP floor;
+- each fight awarded 160 EXP; and
+- the fourth fight changed the authoritative character state from Monk level 1
+  at 480/500 EXP and 33 maximum HP to Monk level 2 at 140/750 EXP and 48
+  maximum HP.
+
+The client event stream independently reported `Pablo attains level 2!`.
 
 ## Provenance and licensing
 
@@ -166,5 +201,5 @@ or copied here.
 2. Resolve zone IDs to mesh filenames and export meshes on demand.
 3. Add dynamic-obstacle recovery and bounded replanning.
 4. Persist quest interaction points as data rather than one-off coordinates.
-5. Validate bounded combat through level 2 and add recovery/target selection
-   policy for repeated encounters.
+5. Add a bounded loop that selects successive low-risk targets and returns to
+   a safe location without embedding one-off entity IDs.

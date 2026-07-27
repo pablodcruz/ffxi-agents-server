@@ -23,7 +23,8 @@ Square Enix services remain proprietary and are not included here.
 - Camera-independent world-coordinate movement plus a host-side
   LandSandBoat/Recast navmesh path-planning prototype.
 - Guarded NPC interaction/dialogue helpers and a bounded combat orchestrator
-  with health-floor, timeout, `/attackoff`, and emergency-stop behavior.
+  with exact-entity verification, pre-fight recovery, health-floor, timeout,
+  `/attackoff`, and emergency-stop behavior.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
   fail-closed control, movement contracts, and command safety.
 
@@ -35,7 +36,8 @@ from 7.52 to 2.67 units from that NPC, stopped on arrival, and finished with
 control disabled by the emergency stop. A later navmesh run completed 21
 waypoints to Nbu Latteh, accepted **Mom, the Adventurer?**, obtained the quest's
 Fire Crystal, crossed the Bastok Markets zone line, loaded South Gustaberg, and
-navigated near a level-one Huge Hornet without camera steering.
+navigated near level-one Huge Hornets without camera steering. Four bounded
+MCP fights then earned 640 EXP and raised Pablo from Monk level 1 to level 2.
 
 ## Architecture
 
