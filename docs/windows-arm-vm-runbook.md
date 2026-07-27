@@ -88,8 +88,8 @@ current client rendered both character creation and Bastok Markets.
 - A Windows restart confirmed that the guest resolution and FFXI registry
   values persist.
 - OBS uses the Parallels window for video and a separate macOS Desktop Audio
-  Capture source. A decoded local recording confirmed non-silent audio before
-  streaming.
+  Capture source. Its tested output is 1920x1080 at 30 FPS and 6000 kbps. A
+  decoded local recording confirmed non-silent audio before streaming.
 
 ## 3. Compatibility checkpoint
 

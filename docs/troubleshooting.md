@@ -328,11 +328,17 @@ The verified repair is:
 5. keep both sources unmuted and on stream/recording track 1; and
 6. record a local Windows notification before going live.
 
-The successful local test was 1280x720 H.264 video with 48 kHz stereo AAC at
-160 kbps. Decoding the recording with `ffmpeg` and `volumedetect` measured
-`-37.3 dB` mean and `-9.8 dB` peak, proving the track was no longer silent.
+The final successful local test was 1920x1080 H.264 at approximately 6 Mbps
+with 48 kHz stereo AAC at 160 kbps. Decoding the recording with `ffmpeg` and
+`volumedetect` measured `-37.5 dB` mean and `-9.8 dB` peak, proving the track
+was no longer silent.
 OBS microphone permission is not required for this path, and no microphone
 source should be added unless the operator explicitly wants one on stream.
+
+OBS 32.0.4 exited uncleanly twice while creating the macOS Audio Capture source
+and applying its first output changes. Relaunching in **Normal Mode** preserved
+the source and settings. Keep streaming stopped while changing sources, and do
+not consent to uploading a crash report unless the operator has reviewed it.
 
 ### FFXI is blurry, low resolution, or framed incorrectly in OBS
 
@@ -359,7 +365,9 @@ tested VM, so `0003` and `0004` required a backed-up manual correction. Export
 the key first (the tested VM keeps the `.reg` backup under
 `C:\FFXI-Lab\backups`) and restore that backup if the client becomes unstable.
 After restarting Windows, verify both the 2560x1440 guest resolution and the
-registry values again before launching the game.
+registry values again before launching the game. The tested OBS output is
+1920x1080 at 30 FPS and 6000 kbps, with its 1920x1080 canvas preserving the
+16:9 VM framing.
 
 Do not add the Ashita console or login window to the public scene. Capture the
 Parallels game window and publish sanitized MCP action summaries separately.
