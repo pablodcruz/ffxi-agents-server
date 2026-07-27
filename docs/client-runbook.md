@@ -155,6 +155,21 @@ from leaving AgentBridge armed. During execution, it may replan from the
 character's observed stop position up to two times; `--max-replans 0` disables
 recovery, and the accepted range is zero through three.
 
+If the navmesh corridor is disconnected from client collision, use the bounded
+probe runner only after a read-only entity scan:
+
+```sh
+pnpm mcp:probe-route -- \
+  --mesh South_Gustaberg.nav \
+  --x 240 --y -305 --z -17 \
+  --max-probes 6 \
+  --step-distance 3
+```
+
+Do not lower its HP floor or entity-clearance defaults merely to force a route.
+Inspect `stop_reason`, `final_control`, and the private collision log before
+continuing.
+
 For the first target/check portion, the repository includes a bounded smoke
 test that requires an exact nearby entity name:
 

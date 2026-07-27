@@ -23,6 +23,7 @@
     "mcp:move": "./scripts/run-node.sh scripts/mcp-move.mjs",
     "mcp:navigate": "./scripts/run-node.sh scripts/mcp-navigate.mjs",
     "mcp:pathfind": "./scripts/run-node.sh scripts/mcp-pathfind.mjs",
+    "mcp:probe-route": "./scripts/run-node.sh scripts/mcp-probe-route.mjs",
     "mcp:rest": "./scripts/run-node.sh scripts/mcp-rest.mjs",
     "mcp:observe": "./scripts/run-node.sh scripts/mcp-observe.mjs",
     "mcp:state": "./scripts/run-node.sh scripts/mcp-state.mjs",
