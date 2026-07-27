@@ -54,6 +54,28 @@ async function observe() {
   return valueOf(response);
 }
 
+async function waitForExactTarget() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const observation = await observe();
+    if (observation.target?.server_id === serverId) return observation;
+  }
+  throw new Error("The client did not accept the exact target server ID.");
+}
+
+async function waitForCheckVerdict(afterEventId) {
+  const deadline = Date.now() + 3000;
+  let observation;
+  let result;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    observation = await observe();
+    result = parseCheckVerdict(observation.recent_events, { afterEventId });
+    if (result.verdict !== "unknown") return { observation, result };
+  }
+  return { observation, result };
+}
+
 try {
   await client.connect(transport);
   connected = true;
@@ -86,17 +108,14 @@ try {
     },
   });
   if (target.isError) throw new Error("Could not target the exact entity.");
+  await waitForExactTarget();
   const check = await client.callTool({
     name: "ffxi_gameplay_command",
     arguments: { command: "/check <t>" },
   });
   if (check.isError) throw new Error("Could not queue /check.");
 
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const after = await observe();
-  const result = parseCheckVerdict(after.recent_events, {
-    afterEventId: baselineEventId,
-  });
+  const { result } = await waitForCheckVerdict(baselineEventId);
   const emergencyStop = await client.callTool({
     name: "ffxi_emergency_stop",
     arguments: {},

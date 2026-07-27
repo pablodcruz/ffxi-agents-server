@@ -188,7 +188,16 @@ Use the exact name and server ID from the current observation. Only `safe`
 (`too_weak` or `easy_prey`) authorizes the first unattended combat test.
 `caution`, `unsafe`, `unknown`, a nonzero exit, or a target that has left the
 radius all block combat. The helper cannot move or attack and emergency-disarms
-AgentBridge on every exit.
+AgentBridge on every exit. It also waits for the game client to confirm that
+the requested server ID became the active target; an entity that is present in
+memory but not accepted by the client is rejected before `/check`.
+
+Do not treat the combat HP floor as a disengage mechanism. `/attackoff` stops
+the character from attacking, but an already-hostile monster can continue to
+attack. Start with only game-rated `safe` targets, maintain a conservative
+starting-HP requirement, and add explicit mob-family exclusions for dangerous
+abilities. The first live leveling run excluded Huge Hornets after Final Sting
+caused the mob to fall without awarding EXP.
 
 For the first target/check portion, the repository includes a bounded smoke
 test that requires an exact nearby entity name:

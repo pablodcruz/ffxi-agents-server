@@ -248,6 +248,13 @@ attempt against a roaming Ding Bats also failed before control was armed when
 the exact entity left the observation radius. These two cases verify both
 game-derived rejection and precondition rejection.
 
+The check helper also waits for the client to report the requested server ID
+as its active target before sending `/check`. This additional verification was
+added after two live Tunnel Worms shared the same display name: one exact ID
+appeared in entity memory but the client would not accept it as a target. The
+old sequence produced a generic command error; the strengthened sequence
+failed before sending `/check`, while the targetable worm ID succeeded.
+
 `mcp:combat` composes existing narrow MCP tools rather than expanding the
 bridge protocol. It:
 
@@ -295,6 +302,45 @@ The first live invocation failed closed before sending `/attack` because the
 map server had already been terminated by its two-second inactivity watchdog.
 The QEMU-safe watchdog configuration and recovery are documented in
 [troubleshooting.md](troubleshooting.md).
+
+### Live leveling evidence
+
+The first gated leveling loop on the upper South Gustaberg plateau used this
+sequence for every fight:
+
+1. read-only entity observation;
+2. exact name and server-ID `/check`;
+3. require `verdict: safe`;
+4. bounded exact-ID combat with a 90% starting-HP requirement and a 70% HP
+   alert floor; and
+5. verify defeat, EXP, character state, and emergency-disarmed control.
+
+Three fights against targetable Tunnel Worm `17215530` completed successfully.
+Each produced a defeat event and 140 EXP while Pablo remained at or above 89%,
+95%, and 93% HP respectively. Character EXP progressed from 140 to 280, then
+420, then 560 out of 750 needed at Monk level 2. Hand-to-hand and defensive
+skills also increased, and the inventory observation recorded two beastmen's
+seals.
+
+Huge Hornet `17215527` also checked as `easy_prey`, but it demonstrated why a
+generic `/check` verdict is not a complete mob-policy layer. The combat HP
+floor triggered with the hornet at 9%; `/attackoff` did not disengage it, and
+the mob then used Final Sting and fell without producing a defeat or EXP
+event. Hornets are therefore excluded from this leveling loop. Treat the
+combat HP floor as an alert and best-effort attack stop, not as a guaranteed
+escape from an already-hostile mob.
+
+The route to the targetable worms exposed two client-collision corrections to
+the South Gustaberg navmesh:
+
+- the ramp switchback near `(304, -305)` must go south to approximately
+  `(303.5, -306.5)`, cross east near `(305.5, -306.5)`, and then climb north;
+- a plateau wall near x `326–327` blocks direct westward movement around
+  y `-281`, but can be passed south near y `-290`.
+
+These corrections were derived from bounded world-coordinate leases and
+post-move observations. Screenshots were used only to confirm the visible wall,
+not to steer the character.
 
 After that server fix, four Huge Hornet encounters validated the full loop:
 
