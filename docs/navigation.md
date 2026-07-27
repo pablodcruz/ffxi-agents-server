@@ -221,6 +221,30 @@ observable and cancellable.
 The first live watch performed eleven polls for lower-component Ding Bats,
 found none during their daytime despawn window, and left AgentBridge disabled.
 
+Before combat, convert the game's `/check` text into a machine-readable safety
+decision:
+
+```sh
+pnpm mcp:check-target -- \
+  --target "Ding Bats" \
+  --server-id 17215559 \
+  --maximum-distance 20
+```
+
+This helper requires the exact observed name and server ID, verifies that the
+entity is active and inside the distance bound, then issues only target and
+`/check` commands. It classifies “too weak” and “easy prey” as `safe`, “decent
+challenge” as `caution`, and “even match” or any tougher result as `unsafe`.
+Missing, stale, or unrecognized chat evidence becomes `unknown`, returns a
+failure status, and must block combat. The helper never moves or attacks and
+always reports the final emergency-disarmed control state.
+
+Live validation against Maneating Hornet `17215550` returned `tough`,
+`high_defense: true`, and `verdict: unsafe`; no attack was sent. An earlier
+attempt against a roaming Ding Bats also failed before control was armed when
+the exact entity left the observation radius. These two cases verify both
+game-derived rejection and precondition rejection.
+
 `mcp:combat` composes existing narrow MCP tools rather than expanding the
 bridge protocol. It:
 

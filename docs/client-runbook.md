@@ -175,6 +175,21 @@ enabling control. Require an exact name, a conservative distance, and a small
 elevation difference; a target above or below the character may be separated
 by impassable client collision even when its horizontal distance looks safe.
 
+Before attacking a monster, require a fresh machine-readable `/check` verdict:
+
+```sh
+pnpm mcp:check-target -- \
+  --target "Ding Bats" \
+  --server-id 17215559 \
+  --maximum-distance 20
+```
+
+Use the exact name and server ID from the current observation. Only `safe`
+(`too_weak` or `easy_prey`) authorizes the first unattended combat test.
+`caution`, `unsafe`, `unknown`, a nonzero exit, or a target that has left the
+radius all block combat. The helper cannot move or attack and emergency-disarms
+AgentBridge on every exit.
+
 For the first target/check portion, the repository includes a bounded smoke
 test that requires an exact nearby entity name:
 
