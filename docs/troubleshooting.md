@@ -340,6 +340,52 @@ and applying its first output changes. Relaunching in **Normal Mode** preserved
 the source and settings. Keep streaming stopped while changing sources, and do
 not consent to uploading a crash report unless the operator has reviewed it.
 
+### xiloader prints `Closing...` immediately after FFXI starts
+
+The tested Windows 11 ARM client can initialize Ashita and Direct3D, then
+unload the game less than one second later without producing a Windows crash
+event. The diagnostic sequence looks like this:
+
+```text
+Successfully logged in as <redacted>!
+Connected to server!
+Resolving host: <WINDOWS_HOSTNAME>
+Closing...
+```
+
+`Resolving host: <WINDOWS_HOSTNAME>` is normal. xiloader is resolving the
+client machine's own address before calling FFXI; it is not reporting failed
+DNS. In the matching Ashita log, `GameLoaded` completes, the Direct3D and input
+devices are created, and `GameUnloaded` follows immediately.
+
+On the tested Parallels ARM VM, the trigger was the manually increased
+2560x1440 background render buffer. The display itself can remain borderless
+2560x1440, but restoring the official High preset's 1024x576 background buffer
+made the client stable again:
+
+| Value | Stable ARM VM value |
+| --- | --- |
+| `0001` / `0002` | `0xa00` / `0x5a0` (2560x1440 display) |
+| `0003` / `0004` | `0x400` / `0x240` (1024x576 background render) |
+| `0034` | `0x3` (borderless) |
+| `0037` / `0038` | `0x900` / `0x510` (2304x1296 UI) |
+
+Recovery:
+
+1. keep OBS stopped;
+2. export the current FFXI registry key for rollback;
+3. restore
+   `C:\FFXI-Lab\backups\ffxi-graphics-before-native-render.reg`;
+4. keep the Ashita profile at `autoclose = 1`;
+5. gracefully restart Windows;
+6. verify Parallels again reports 2560x1440; and
+7. launch the saved `AshitaAgentLab` task and verify one live server session
+   plus a reachable, write-disabled AgentBridge.
+
+Setting `autoclose = 0` while launching from Task Scheduler can leave xiloader
+attached to an invisible `conhost.exe`. Restore `autoclose = 1` and restart
+Windows rather than repeatedly starting orphaned loader processes.
+
 ### FFXI is blurry, low resolution, or framed incorrectly in OBS
 
 Match the guest, game, and OBS aspect ratios instead of stretching a low
@@ -356,14 +402,15 @@ resolution game window:
 | Value | Meaning | Tested setting |
 | --- | --- | --- |
 | `0001` / `0002` | display width / height | `0xa00` / `0x5a0` (2560x1440) |
-| `0003` / `0004` | background render width / height | `0xa00` / `0x5a0` (2560x1440) |
+| `0003` / `0004` | background render width / height | `0x400` / `0x240` (1024x576, stable ARM baseline) |
 | `0034` | window mode | `0x3` (borderless) |
 | `0037` / `0038` | UI width / height | `0x900` / `0x510` (2304x1296) |
 
-The official High preset left the background buffer at only 1024x576 in the
-tested VM, so `0003` and `0004` required a backed-up manual correction. Export
-the key first (the tested VM keeps the `.reg` backup under
-`C:\FFXI-Lab\backups`) and restore that backup if the client becomes unstable.
+The official High preset leaves the background buffer at 1024x576. Increasing
+`0003` and `0004` to 2560x1440 produced a sharper image but later caused an
+immediate, clean client unload on the tested Windows 11 ARM VM. Treat 1024x576
+as the stable compatibility baseline and change the background buffer only
+after exporting the key and completing a ten-minute launch/gameplay test.
 After restarting Windows, verify both the 2560x1440 guest resolution and the
 registry values again before launching the game. The tested OBS output is
 1920x1080 at 30 FPS and 6000 kbps, with its 1920x1080 canvas preserving the
@@ -407,6 +454,13 @@ are visible:
 Before going live, inspect the OBS preview and confirm that the Ashita console,
 xiloader form, Windows desktop, browser, and Mac terminal are not captured.
 The in-world game window is the safest streaming checkpoint.
+
+Set YouTube metadata before starting the stream. Use a session-specific title
+under the `FFXI AI Agent Lab` name and a description that identifies the
+LandSandBoat/Ashita/MCP experiment, links the public repository, states that it
+is a local non-commercial learning project, and says that credentials and
+private launcher screens are intentionally kept off-stream. Replace default
+titles such as `Clanker Site Live Stream` on archived FFXI sessions.
 
 Useful issue evidence includes timestamps, error codes, sanitized service
 logs, versions, architecture, and whether each expected listener exists.
