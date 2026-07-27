@@ -170,6 +170,11 @@ Do not lower its HP floor or entity-clearance defaults merely to force a route.
 Inspect `stop_reason`, `final_control`, and the private collision log before
 continuing.
 
+For time-gated targets, use the read-only `pnpm mcp:wait-target` helper before
+enabling control. Require an exact name, a conservative distance, and a small
+elevation difference; a target above or below the character may be separated
+by impassable client collision even when its horizontal distance looks safe.
+
 For the first target/check portion, the repository includes a bounded smoke
 test that requires an exact nearby entity name:
 

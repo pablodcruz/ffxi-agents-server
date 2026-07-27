@@ -27,6 +27,7 @@
     "mcp:rest": "./scripts/run-node.sh scripts/mcp-rest.mjs",
     "mcp:observe": "./scripts/run-node.sh scripts/mcp-observe.mjs",
     "mcp:state": "./scripts/run-node.sh scripts/mcp-state.mjs",
+    "mcp:wait-target": "./scripts/run-node.sh scripts/mcp-wait-target.mjs",
     "test": "./scripts/run-node.sh --test"
   },
   "dependencies": {

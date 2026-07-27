@@ -200,6 +200,27 @@ correctly refused combat.
 
 ## Bounded combat
 
+Time-gated targets can be watched without arming AgentBridge:
+
+```sh
+pnpm mcp:wait-target -- \
+  --target "Ding Bats" \
+  --timeout 55 \
+  --poll-seconds 5 \
+  --maximum-distance 30 \
+  --maximum-elevation-difference 4
+```
+
+The watcher is read-only. It accepts one or more exact `--target` names and
+returns only a live entity that is active, has HP, is inside the distance
+bound, and is on approximately the same elevation as the player. This prevents
+the host from selecting a visually nearby monster on the inaccessible side of
+a cliff. Its timeout is capped at 55 seconds so longer watches remain
+observable and cancellable.
+
+The first live watch performed eleven polls for lower-component Ding Bats,
+found none during their daytime despawn window, and left AgentBridge disabled.
+
 `mcp:combat` composes existing narrow MCP tools rather than expanding the
 bridge protocol. It:
 
