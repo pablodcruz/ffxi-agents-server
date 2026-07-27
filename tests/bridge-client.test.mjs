@@ -10,6 +10,7 @@ import {
 test("accepts one allowlisted gameplay command", () => {
   assert.equal(validateGameplayCommand('  /ma "Cure" <me>  '), '/ma "Cure" <me>');
   assert.equal(validateGameplayCommand("/attack <t>"), "/attack <t>");
+  assert.equal(validateGameplayCommand("/trade <t>"), "/trade <t>");
 });
 
 test("blocks command chaining, chat, GM, and addon commands", () => {

@@ -803,7 +803,7 @@ server.registerTool(
   {
     title: "Run allowlisted FFXI gameplay command",
     description:
-      "Queue one bounded gameplay command such as /attack, /ma, /ja, /ws, /item, /heal, /follow, or /check. GM, chat, addon, console, script, and chained commands are blocked.",
+      "Queue one bounded gameplay command such as /attack, /ma, /ja, /ws, /item, /heal, /follow, /trade, or /check. GM, chat, addon, console, script, and chained commands are blocked.",
     inputSchema: {
       agent_id: agentIdSchema,
       command: z.string().min(1).max(200),

@@ -312,11 +312,54 @@ signal is an unchanged in-game clock while MCP positions continue to update.
 Focus the FFXI window inside Parallels; the renderer and OBS capture should
 resume immediately.
 
-For audio, verify all three layers:
+For audio, do not trust the presence of an OBS audio track or an apparently
+active mixer alone. In the tested OBS 32.0.4 setup, the `macOS Screen Capture`
+source produced stereo AAC but every decoded sample was digital silence
+(`-91.0 dB` peak and mean).
 
-1. the Windows output device produces game audio;
-2. OBS's macOS Screen Capture source is unmuted and its meter moves; and
-3. the YouTube live player receives the stream audio.
+The verified repair is:
+
+1. grant OBS **Screen & System Audio Recording** permission in macOS;
+2. keep the Parallels `macOS Screen Capture` source for video;
+3. enable **Show fullscreen and hidden windows / applications** and reselect
+   `[Parallels Desktop] Windows 11` after putting the VM in full screen;
+4. add a separate **macOS Audio Capture** source using **Desktop Audio
+   Capture**;
+5. keep both sources unmuted and on stream/recording track 1; and
+6. record a local Windows notification before going live.
+
+The successful local test was 1280x720 H.264 video with 48 kHz stereo AAC at
+160 kbps. Decoding the recording with `ffmpeg` and `volumedetect` measured
+`-37.3 dB` mean and `-9.8 dB` peak, proving the track was no longer silent.
+OBS microphone permission is not required for this path, and no microphone
+source should be added unless the operator explicitly wants one on stream.
+
+### FFXI is blurry, low resolution, or framed incorrectly in OBS
+
+Match the guest, game, and OBS aspect ratios instead of stretching a low
+resolution game window:
+
+1. stop OBS streaming and close FFXI and PlayOnline;
+2. put Parallels in full screen and verify Windows reports `2560x1440`;
+3. use the official FFXI configuration utility to select **Borderless
+   Window**, `2560x1440`, a `2304x1296` UI scale, and the High preset;
+4. export the FFXI registry key before any manual adjustment; and
+5. verify the following tested values under
+   `HKLM\SOFTWARE\WOW6432Node\PlayOnlineUS\SquareEnix\FinalFantasyXI`:
+
+| Value | Meaning | Tested setting |
+| --- | --- | --- |
+| `0001` / `0002` | display width / height | `0xa00` / `0x5a0` (2560x1440) |
+| `0003` / `0004` | background render width / height | `0xa00` / `0x5a0` (2560x1440) |
+| `0034` | window mode | `0x3` (borderless) |
+| `0037` / `0038` | UI width / height | `0x900` / `0x510` (2304x1296) |
+
+The official High preset left the background buffer at only 1024x576 in the
+tested VM, so `0003` and `0004` required a backed-up manual correction. Export
+the key first (the tested VM keeps the `.reg` backup under
+`C:\FFXI-Lab\backups`) and restore that backup if the client becomes unstable.
+After restarting Windows, verify both the 2560x1440 guest resolution and the
+registry values again before launching the game.
 
 Do not add the Ashita console or login window to the public scene. Capture the
 Parallels game window and publish sanitized MCP action summaries separately.

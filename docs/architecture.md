@@ -36,7 +36,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_move_to_entity` | Yes | Start a short, progress-checked auto-follow lease |
 | `ffxi_move_to_position` | Yes | Move toward one bounded world-coordinate waypoint |
 | `ffxi_directional_input` | Yes | Send one automatically released fallback input pulse |
-| `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command |
+| `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command, including a standard NPC trade window |
 
 The MCP server marks observation tools read-only and uses write approvals for
 game actions. The Ashita addon repeats the command allowlist so bypassing the

@@ -155,6 +155,7 @@ const SAFE_COMMANDS = [
   /^\/range(?:\s|$)/i,
   /^\/ta\s/i,
   /^\/target\s/i,
+  /^\/trade(?:\s|$)/i,
   /^\/weaponskill\s/i,
   /^\/ws\s/i,
 ];

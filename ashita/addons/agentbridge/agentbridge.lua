@@ -8,7 +8,7 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.9.1';
+addon.version = '0.9.2';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -52,6 +52,7 @@ local allowed_commands =
     ['/range'] = true,
     ['/ta'] = true,
     ['/target'] = true,
+    ['/trade'] = true,
     ['/weaponskill'] = true,
     ['/ws'] = true,
 };
