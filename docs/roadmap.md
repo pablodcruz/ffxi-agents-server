@@ -53,6 +53,10 @@
 - [ ] Validate detailed character observations against the live Windows
   client.
 - [ ] Add higher-level skills for travel, combat, recovery, and quest steps.
+- [x] Validate exact-ID `/check`, recovery, repeatable combat, and progression
+  from Monk level 2 to level 3 against the live client.
+- [x] Add a local-only, sanitized in-game activity feed for streamed agent
+  actions.
 - [x] Record structured, secret-filtered write audit traces.
 - [ ] Add higher-level gameplay regression scenarios after a real client works.
 - [x] Add a fail-closed write latch and emergency stop that halt movement and

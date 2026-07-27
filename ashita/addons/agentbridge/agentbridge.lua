@@ -8,7 +8,7 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.9.2';
+addon.version = '0.10.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -32,6 +32,7 @@ local bridge =
     next_movement_check = 0,
     input_pulse = nil,
     heading_hold = nil,
+    activity_feed_enabled = false,
 };
 
 local allowed_commands =
@@ -112,7 +113,33 @@ local function read_config()
         print('[AgentBridge] token must be replaced with at least 24 characters.');
         return nil;
     end
+    if (config.activity_feed_enabled ~= nil and type(config.activity_feed_enabled) ~= 'boolean') then
+        print('[AgentBridge] activity_feed_enabled must be true or false.');
+        return nil;
+    end
     return config;
+end
+
+local function display_activity_event(message)
+    if (not bridge.activity_feed_enabled) then
+        return;
+    end
+
+    local display = message
+        :gsub('%c', ' ')
+        :gsub('%s+', ' ')
+        :match('^%s*(.-)%s*$')
+        :sub(1, 180);
+    local visible =
+        display:find('^Agent movement ') ~= nil or
+        display:find('^Agent target ') ~= nil or
+        display:find('^Agent gameplay command ') ~= nil or
+        display:find('^Agent heading ') ~= nil or
+        display:find('^Agent .- pulse ') ~= nil or
+        display:find('^Agent activity feed ') ~= nil;
+    if (visible) then
+        print(('[Agent Activity] %s'):fmt(display:gsub('^Agent ', '')));
+    end
 end
 
 local function add_event(mode, message)
@@ -132,6 +159,9 @@ local function add_event(mode, message)
 
     while (#bridge.events > 100) do
         table.remove(bridge.events, 1);
+    end
+    if (mode == -1) then
+        display_activity_event(message);
     end
 end
 
@@ -224,6 +254,7 @@ local function control_snapshot()
         movement = movement,
         input_active = bridge.input_pulse ~= nil,
         heading_active = bridge.heading_hold ~= nil,
+        activity_feed_enabled = bridge.activity_feed_enabled,
     };
 end
 
@@ -540,7 +571,12 @@ local function find_target(params)
             end
             if (matches) then
                 target:SetTarget(index, true);
-                return entity_snapshot(index, entities);
+                local snapshot = entity_snapshot(index, entities);
+                add_event(-1, ('Agent target selected: %s (%u).'):fmt(
+                    snapshot.name,
+                    snapshot.server_id
+                ));
+                return snapshot;
             end
         end
     end
@@ -1003,6 +1039,25 @@ local function dispatch(request)
     elseif (request.operation == 'emergency_stop') then
         emergency_stop('emergency_stop');
         return control_snapshot();
+    elseif (request.operation == 'set_activity_feed') then
+        require_control_enabled();
+        if (type(params.enabled) ~= 'boolean') then
+            error('Activity feed enabled must be true or false.');
+        end
+        bridge.activity_feed_enabled = params.enabled;
+        local state = params.enabled and 'enabled' or 'disabled';
+        if (params.enabled) then
+            add_event(-1, ('Agent activity feed %s.'):fmt(state));
+        else
+            print('[Agent Activity] feed disabled.');
+            add_event(-1, ('Agent activity feed %s.'):fmt(state));
+        end
+        return
+        {
+            enabled = bridge.activity_feed_enabled,
+            local_chat_only = true,
+            control = control_snapshot(),
+        };
     elseif (request.operation == 'stop_movement') then
         stop_movement('requested');
         return control_snapshot();
@@ -1031,6 +1086,8 @@ local function dispatch(request)
         require_control_enabled();
         local command = validate_command(params.command);
         AshitaCore:GetChatManager():QueueCommand(1, command);
+        local verb = command:match('^(%S+)') or 'gameplay command';
+        add_event(-1, ('Agent gameplay command queued: %s.'):fmt(verb:lower()));
         return
         {
             queued = true,
@@ -1108,6 +1165,7 @@ ashita.events.register('load', 'load_cb', function ()
     bridge.control_enabled = false;
     bridge.control_changed_at = os.time();
     bridge.control_reason = 'addon_load';
+    bridge.activity_feed_enabled = bridge.config.activity_feed_enabled == true;
 
     local listener, listen_error = socket.bind(bridge.config.bind_host, bridge.config.bind_port);
     if (listener == nil) then
@@ -1118,6 +1176,9 @@ ashita.events.register('load', 'load_cb', function ()
     bridge.listener = listener;
     bridge.listener:settimeout(0);
     print(('[AgentBridge] Listening on %s:%u with writes disabled.'):fmt(bridge.config.bind_host, bridge.config.bind_port));
+    if (bridge.activity_feed_enabled) then
+        print('[Agent Activity] feed enabled from config.');
+    end
 end);
 
 ashita.events.register('unload', 'unload_cb', function ()

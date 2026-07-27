@@ -30,6 +30,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_character_state` | No | Read bounded stats, statuses, recasts, menu state, and one inventory container |
 | `ffxi_recent_events` | No | Read a bounded event tail |
 | `ffxi_enable_control` | Yes | Explicitly arm private-server client writes |
+| `ffxi_set_activity_feed` | Yes | Toggle sanitized action summaries in local game chat only |
 | `ffxi_emergency_stop` | Yes | Disarm writes, movement, and combat immediately |
 | `ffxi_stop_movement` | Yes | Cancel a movement lease |
 | `ffxi_target_entity` | Yes | Select one nearby entity |
@@ -48,6 +49,42 @@ per character while different characters remain independent; emergency stop
 and movement stop are urgent operations that do not wait behind the normal
 write queue. Every write attempt produces a restricted JSONL audit record;
 secret-shaped fields and observation/chat payloads are excluded.
+
+### Local stream activity feed
+
+AgentBridge can mirror a narrow subset of its own internal action events into
+the local FFXI chat window. The feed is disabled by default and can be toggled
+with:
+
+```sh
+pnpm mcp:feed -- --enabled true
+```
+
+It displays target selections, bounded movement start/stop events, input
+pulses, heading changes, and only the verb of an allowlisted gameplay command.
+It accepts no arbitrary message string, strips control characters, truncates
+output, and never sends `/say`, `/tell`, linkshell, or any other server chat.
+Normal combat, EXP, and `/check` results remain the game's own chat events.
+
+### Development teleport boundary
+
+Normal agent play should use navmesh/world-coordinate movement and standard
+travel menus. If client collision blocks prototype work for an extended
+period, a future recovery-only teleport may use LandSandBoat's server
+administration path, but it must remain separate from
+`ffxi_gameplay_command`. The intended design requires all of the following:
+
+- disabled by default behind an explicit development setting;
+- a dedicated private-server test character with audited GM privilege;
+- fixed allowlisted zones and recovery coordinates, never arbitrary player
+  input;
+- no use for combat, loot, quest completion, or progression shortcuts;
+- an operator-visible audit event and stream disclosure; and
+- automatic return to ordinary movement after recovery.
+
+No teleport is enabled in the current gameplay interface. Movement is still
+making measurable progress, so the prototype continues to validate authentic
+navigation and records collision corrections instead.
 
 ## Trust boundaries
 
