@@ -17,6 +17,7 @@
     "mcp:interact": "./scripts/run-node.sh scripts/mcp-interact.mjs",
     "mcp:menu": "./scripts/run-node.sh scripts/mcp-menu.mjs",
     "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",
+    "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",
     "mcp:direction": "./scripts/run-node.sh scripts/mcp-direction.mjs",
     "mcp:heading": "./scripts/run-node.sh scripts/mcp-heading.mjs",
     "mcp:move": "./scripts/run-node.sh scripts/mcp-move.mjs",

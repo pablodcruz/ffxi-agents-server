@@ -1,7 +1,7 @@
 # Navigation
 
-Status: world-coordinate movement validated; navmesh routing prototype validated;
-tight-corner clearance recovery in progress.
+Status: world-coordinate movement, navmesh routing, NPC interaction, and a
+multi-zone transition are validated; bounded combat validation is in progress.
 
 ## Why camera input is not the navigation layer
 
@@ -81,10 +81,67 @@ pnpm mcp:pathfind -- \
 
 The first live query from G-9 to Nbu Latteh produced 19 route points. It
 correctly routed north to the G-8 approach before crossing east, disproving the
-earlier visual guess that the bridge entrance was south. The runner completed
-the first two points and stopped safely 2.95 yalms from a tight third corner.
-The next implementation step is clearance-aware corner recovery (wall-normal
-offset or Detour Crowd sampling), not a return to camera steering.
+earlier visual guess that the bridge entrance was south. That first run stopped
+safely at a tight corner. After a clean login and the movement-vector fix, the
+same route completed all 21 generated waypoints, including that corner, and
+stopped 0.66 yalms from Nbu Latteh.
+
+The MCP interaction helper then targeted Nbu, opened event 230, and advanced
+five guarded confirm steps. The game closed the dialogue and reported
+`Obtained: Fire crystal`, validating acceptance of the Bastok quest
+**Mom, the Adventurer?**
+
+The next route crossed Bastok Markets to its southwest boundary. Detour ended
+at the last walkable polygon; a short second path around the wall reached the
+zone line and produced:
+
+```text
+=== Area: South Gustaberg ===
+```
+
+The path runner currently reports this successful transition as a failed final
+waypoint because the new zone resets world coordinates. Zone-change detection
+must take precedence over same-zone arrival checks in a future runner.
+
+Copy the outdoor mesh in the same way:
+
+```sh
+docker cp \
+  ffxi-agent-lab-map-1:/server/navmeshes/South_Gustaberg.nav \
+  runtime/navmeshes/South_Gustaberg.nav
+```
+
+South Gustaberg navigation then moved Pablo to less than 11 yalms from a Huge
+Hornet without using the camera.
+
+## Bounded combat
+
+`mcp:combat` composes existing narrow MCP tools rather than expanding the
+bridge protocol. It:
+
+- selects one exact nearby entity;
+- approaches it with a leased entity-follow movement;
+- refuses to attack outside the configured range;
+- sends only `/attack <t>`;
+- samples player and target HP once per second;
+- stops at a configurable player-HP floor, target defeat, logout, or timeout;
+- sends `/attackoff`; and
+- always invokes the emergency stop before exit.
+
+Example:
+
+```sh
+pnpm mcp:combat -- \
+  --target "Huge Hornet" \
+  --max-start-distance 25 \
+  --minimum-hp-percent 40 \
+  --combat-timeout 90
+```
+
+The first live invocation failed closed before sending `/attack` because the
+map server had already been terminated by its two-second inactivity watchdog.
+The QEMU-safe watchdog configuration and recovery are documented in
+[troubleshooting.md](troubleshooting.md).
 
 ## Provenance and licensing
 
@@ -105,8 +162,9 @@ or copied here.
 
 ## Remaining work
 
-1. Add clearance-aware corner recovery and rerun the Nbu route.
+1. Detect zone changes as successful path termination and select the next mesh.
 2. Resolve zone IDs to mesh filenames and export meshes on demand.
 3. Add dynamic-obstacle recovery and bounded replanning.
-4. Record zone transitions and interaction points for multi-zone quests.
-5. Treat combat positioning as a separate policy on top of the same navigator.
+4. Persist quest interaction points as data rather than one-off coordinates.
+5. Validate bounded combat through level 2 and add recovery/target selection
+   policy for repeated encounters.

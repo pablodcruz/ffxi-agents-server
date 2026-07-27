@@ -255,8 +255,11 @@ the direct smoke test succeeds.
 
 The tested LandSandBoat image executes x86-64 code through QEMU on this
 aarch64 Colima VM. A slow all-zone load can trigger the map inactivity
-watchdog. Compose restarts the service, but process liveness alone does not
-mean all zones are ready.
+watchdog. Upstream defaults to two seconds. This repository keeps the watchdog
+enabled but raises its period to 30 seconds through
+`XI_MAIN_INACTIVITY_WATCHDOG_PERIOD`. Override the local default with
+`LSB_WATCHDOG_PERIOD_MS` only after reviewing map logs. Compose restarts the
+service, but process liveness alone does not mean all zones are ready.
 
 Always wait for:
 
@@ -276,11 +279,26 @@ docker logs --since 10m ffxi-agent-lab-map-1
 ./scripts/server.sh check
 ```
 
-On the reference Apple Silicon setup, `xi_map` exceeded its two-second
-inactivity watchdog while running under x86 QEMU emulation. The watchdog
-terminated the process, Compose restarted it, and the client later displayed
-`FFXI-4001: No response from the FINAL FANTASY XI server`. A subsequent
-`FFXI-3101` can appear while the old lobby session is being torn down.
+On the reference Apple Silicon setup, `xi_map` repeatedly exceeded its
+upstream two-second inactivity watchdog while running under x86 QEMU
+emulation. The watchdog terminated the process, Compose restarted it, and the
+client later displayed `FFXI-4001: No response from the FINAL FANTASY XI
+server`. A subsequent `FFXI-3101` can appear while the old lobby session is
+being torn down.
+
+Recreate the map service after pulling a repository revision that includes the
+QEMU-safe watchdog period:
+
+```sh
+docker compose up --detach --no-deps --force-recreate map
+./scripts/server.sh check
+```
+
+Confirm the new container log contains:
+
+```text
+Applying ENV VAR XI_MAIN_INACTIVITY_WATCHDOG_PERIOD
+```
 
 Wait for `Map process completed zone initialization`, dismiss the client error,
 and relaunch the saved Ashita profile. Character position is persisted by the

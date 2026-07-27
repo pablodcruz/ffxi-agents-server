@@ -45,6 +45,7 @@ init_environment() {
     printf 'LSB_ZONE_IP=127.0.0.1\n'
     printf 'FFXI_FORWARD_LISTEN_HOST=\n'
     printf 'LSB_ACCOUNT_CREATION=true\n'
+    printf 'LSB_WATCHDOG_PERIOD_MS=30000\n'
     printf 'LSB_SERVER_IMAGE=ghcr.io/landsandboat/server@sha256:d502012d679b516924acaf31a31c2ccf6696b1490792833157a273b6ac7d2d83\n'
     printf 'LSB_MESH_IMAGE=ghcr.io/landsandboat/ximeshes@sha256:39558f676a18362581368cac19a1e54cd013a74e660767c1f3c6362ef1d2321f\n'
     printf 'LSB_DATABASE_IMAGE=mariadb@sha256:628f228f0fd5913a220438693576b29b6fe4dc1fa0a1298c0e98579fae28635f\n'
