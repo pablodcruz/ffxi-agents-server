@@ -185,4 +185,47 @@ export class AgentRegistry {
       }
     }
   }
+
+  async runExternalWrite(agentId, operation, params, callback, { urgent = false } = {}) {
+    const agent = this.resolve(agentId);
+    const invoke = async () => {
+      const startedAt = performance.now();
+      try {
+        const value = await callback(agent.client);
+        this.auditLogger.record({
+          agentId: agent.id,
+          operation,
+          params,
+          outcome: "ok",
+          durationMs: performance.now() - startedAt,
+        });
+        return { agentId: agent.id, value };
+      } catch (error) {
+        this.auditLogger.record({
+          agentId: agent.id,
+          operation,
+          params,
+          outcome: "error",
+          durationMs: performance.now() - startedAt,
+          errorCode: error instanceof BridgeError ? error.code : "unexpected_error",
+        });
+        throw error;
+      }
+    };
+
+    if (urgent) {
+      return await invoke();
+    }
+
+    const previous = this.writeQueues.get(agent.id) || Promise.resolve();
+    const current = previous.catch(() => undefined).then(invoke);
+    this.writeQueues.set(agent.id, current);
+    try {
+      return await current;
+    } finally {
+      if (this.writeQueues.get(agent.id) === current) {
+        this.writeQueues.delete(agent.id);
+      }
+    }
+  }
 }

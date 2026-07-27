@@ -37,8 +37,8 @@ if (!Number.isFinite(observationRadius) || observationRadius < 1 || observationR
 if (!Number.isInteger(maxEntities) || maxEntities < 1 || maxEntities > 64) {
   throw new Error("--max-entities must be an integer from 1 through 64.");
 }
-if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 30) {
-  throw new Error("--max-start-distance must be a number from 2 through 30.");
+if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 40) {
+  throw new Error("--max-start-distance must be a number from 2 through 40.");
 }
 if (!Number.isFinite(movementTimeout) || movementTimeout < 1 || movementTimeout > 20) {
   throw new Error("--movement-timeout must be a number from 1 through 20.");

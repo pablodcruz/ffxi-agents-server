@@ -20,6 +20,8 @@ Square Enix services remain proprietary and are not included here.
   one explicitly requested inventory container at a time.
 - A fail-closed write latch, emergency stop, and leased entity-follow movement
   with timeout and progress checks.
+- Camera-independent world-coordinate movement plus a host-side
+  LandSandBoat/Recast navmesh path-planning prototype.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
   fail-closed control, movement contracts, and command safety.
 
@@ -112,6 +114,8 @@ The selected Apple Silicon VM procedure is in
 [docs/windows-arm-vm-runbook.md](docs/windows-arm-vm-runbook.md).
 Failures encountered on the tested path and their verified fixes are in
 [docs/troubleshooting.md](docs/troubleshooting.md).
+The movement primitives, mesh provenance, live route results, and remaining
+clearance work are in [docs/navigation.md](docs/navigation.md).
 
 1. Install and update FFXI through an authorized Square Enix path.
 2. Confirm the client connects to the private server with current `xiloader`

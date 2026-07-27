@@ -8,11 +8,12 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.3.0';
+addon.version = '0.9.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
 
+local ffi = require 'ffi';
 local json = require 'json';
 local socket = require 'socket';
 
@@ -29,6 +30,8 @@ local bridge =
     control_reason = 'addon_load',
     movement = nil,
     next_movement_check = 0,
+    input_pulse = nil,
+    heading_hold = nil,
 };
 
 local allowed_commands =
@@ -51,6 +54,16 @@ local allowed_commands =
     ['/target'] = true,
     ['/weaponskill'] = true,
     ['/ws'] = true,
+};
+
+local allowed_input_actions =
+{
+    forward = 0x48,
+    backward = 0x50,
+    turn_left = 0x4B,
+    turn_right = 0x4D,
+    camera_left = 0xCB,
+    camera_right = 0xCD,
 };
 
 local function close_client()
@@ -144,11 +157,32 @@ local function stop_movement(reason)
     return was_active;
 end
 
+local function stop_input_pulse(reason)
+    local was_active = bridge.input_pulse ~= nil;
+    local action = was_active and bridge.input_pulse.action or 'input';
+    bridge.input_pulse = nil;
+    if (was_active) then
+        add_event(-1, ('Agent %s pulse stopped: %s'):fmt(action, reason or 'requested'));
+    end
+    return was_active;
+end
+
+local function stop_heading_hold(reason)
+    local was_active = bridge.heading_hold ~= nil;
+    bridge.heading_hold = nil;
+    if (was_active) then
+        add_event(-1, ('Agent heading hold stopped: %s'):fmt(reason or 'requested'));
+    end
+    return was_active;
+end
+
 local function emergency_stop(reason)
     bridge.control_enabled = false;
     bridge.control_changed_at = os.time();
     bridge.control_reason = reason or 'emergency_stop';
     stop_movement(bridge.control_reason);
+    stop_input_pulse(bridge.control_reason);
+    stop_heading_hold(bridge.control_reason);
     AshitaCore:GetChatManager():QueueCommand(1, '/attackoff');
     add_event(-1, ('Agent control disabled: %s'):fmt(bridge.control_reason));
 end
@@ -168,8 +202,11 @@ local function control_snapshot()
     if (bridge.movement ~= nil) then
         movement =
         {
+            kind = bridge.movement.kind,
             server_id = bridge.movement.server_id,
             name = bridge.movement.name,
+            target_x = bridge.movement.target_x,
+            target_y = bridge.movement.target_y,
             started_at = bridge.movement.started_at,
             deadline = bridge.movement.deadline,
             stop_distance = bridge.movement.stop_distance,
@@ -184,6 +221,8 @@ local function control_snapshot()
         reason = bridge.control_reason,
         auto_running = auto_running,
         movement = movement,
+        input_active = bridge.input_pulse ~= nil,
+        heading_active = bridge.heading_hold ~= nil,
     };
 end
 
@@ -503,13 +542,197 @@ local function find_target(params)
     error('No matching entity was found within the requested distance.');
 end
 
+local function clear_target()
+    require_control_enabled();
+    stop_movement('target_clear');
+    local target = AshitaCore:GetMemoryManager():GetTarget();
+    target:SetTarget(0, true);
+    add_event(-1, 'Agent target lock cleared.');
+    return
+    {
+        cleared = target:GetTargetIndex(0) == 0,
+        target_index = tonumber(target:GetTargetIndex(0)),
+        control = control_snapshot(),
+    };
+end
+
+local function set_heading(params)
+    require_control_enabled();
+    stop_movement('heading_change');
+
+    local heading = tonumber(params.heading);
+    if (heading == nil or heading ~= heading or heading < -math.pi or heading > math.pi) then
+        error('heading must be a finite number from -pi through pi.');
+    end
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Cannot set heading until a character is logged in.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Cannot set heading while an in-game menu or dialogue is open.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (player_index <= 0 or entities:GetServerId(player_index) == 0) then
+        error('Could not resolve the local player entity.');
+    end
+
+    target:SetTarget(0, true);
+    bridge.heading_hold = { heading = heading };
+    entities:SetLocalPositionYaw(player_index, heading);
+    entities:SetHeading(player_index, heading);
+    add_event(-1, ('Agent heading set to %.4f radians.'):fmt(heading));
+    return
+    {
+        heading = entities:GetHeading(player_index),
+        local_position_yaw = entities:GetLocalPositionYaw(player_index),
+        requested_heading = heading,
+        player = entity_snapshot(player_index, entities),
+        control = control_snapshot(),
+    };
+end
+
+local function apply_heading_hold()
+    local hold = bridge.heading_hold;
+    if (hold == nil) then
+        return;
+    end
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (not bridge.control_enabled or player:GetLoginStatus() ~= 2) then
+        stop_heading_hold('control_disabled_or_logged_out');
+        return;
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        stop_heading_hold('menu_open');
+        return;
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (player_index <= 0 or entities:GetServerId(player_index) == 0) then
+        stop_heading_hold('player_unavailable');
+        return;
+    end
+
+    entities:SetLocalPositionYaw(player_index, hold.heading);
+    entities:SetHeading(player_index, hold.heading);
+end
+
+local function start_confirm_pulse(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Cannot inject confirm input until a character is logged in.');
+    end
+    if (bridge.input_pulse ~= nil) then
+        error('A confirm input pulse is already active.');
+    end
+
+    local mode = type(params.mode) == 'string' and params.mode:lower() or 'target';
+    local entity = nil;
+    if (mode == 'target') then
+        params.max_distance = math.clamp(tonumber(params.max_distance) or 6, 1, 6);
+        entity = find_target(params);
+        if (entity.entity_type ~= 1 and entity.entity_type ~= 2 and entity.entity_type ~= 3) then
+            error('The requested interaction target is not an NPC or world object.');
+        end
+    elseif (mode == 'confirm') then
+        error('Confirm mode requires the host MCP input adapter.');
+    else
+        error('Interaction mode must be target or confirm.');
+    end
+
+    stop_movement('interaction');
+    bridge.input_pulse =
+    {
+        key = 0x1C,
+        action = 'confirm',
+        mode = mode,
+        down_frames = 2,
+        deadline = socket.gettime() + 0.08,
+        release_frames = 2,
+        requested_at = socket.gettime(),
+    };
+    add_event(-1, ('Agent confirm pulse queued (%s).'):fmt(mode));
+    return
+    {
+        queued = true,
+        mode = mode,
+        entity = entity,
+        menu_open = target:GetIsMenuOpen() ~= 0,
+        control = control_snapshot(),
+    };
+end
+
+local function start_input_pulse(params)
+    require_control_enabled();
+    stop_movement('directional_input');
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Cannot inject directional input until a character is logged in.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Cannot inject directional input while an in-game menu or dialogue is open.');
+    end
+    if (bridge.input_pulse ~= nil) then
+        error('An input pulse is already active.');
+    end
+
+    local action = type(params.action) == 'string' and params.action:lower() or '';
+    local key = allowed_input_actions[action];
+    if (key == nil) then
+        error('Directional input action is outside the AgentBridge allowlist.');
+    end
+    local duration_ms = math.floor(tonumber(params.duration_ms) or 250);
+    if (duration_ms < 50 or duration_ms > 1000) then
+        error('duration_ms must be between 50 and 1000.');
+    end
+
+    target:SetTarget(0, true);
+    local now = socket.gettime();
+    bridge.input_pulse =
+    {
+        key = key,
+        action = action,
+        down_frames = 2,
+        deadline = now + (duration_ms / 1000),
+        release_frames = 2,
+        requested_at = now,
+    };
+    add_event(-1, ('Agent %s pulse queued for %u ms.'):fmt(action, duration_ms));
+    return
+    {
+        queued = true,
+        action = action,
+        key = key,
+        duration_ms = duration_ms,
+        input_source = 'agentbridge_directinput',
+        control = control_snapshot(),
+    };
+end
+
 local function start_movement(params)
     require_control_enabled();
 
     local timeout_seconds = math.clamp(tonumber(params.timeout_seconds) or 10, 1, 20);
     local stuck_seconds = math.clamp(tonumber(params.stuck_seconds) or 3, 1, 8);
     local stop_distance = math.clamp(tonumber(params.stop_distance) or 3, 1, 10);
-    local max_start_distance = math.clamp(tonumber(params.max_start_distance) or 25, 2, 30);
+    local max_start_distance = math.clamp(tonumber(params.max_start_distance) or 25, 2, 40);
     if (stop_distance >= max_start_distance) then
         error('stop_distance must be smaller than max_start_distance.');
     end
@@ -542,6 +765,7 @@ local function start_movement(params)
 
     bridge.movement =
     {
+        kind = 'entity',
         index = entity.index,
         server_id = entity.server_id,
         name = entity.name,
@@ -558,6 +782,110 @@ local function start_movement(params)
     {
         started = true,
         entity = entity,
+        control = control_snapshot(),
+    };
+end
+
+local function player_position()
+    local memory = AshitaCore:GetMemoryManager();
+    local player_index = memory:GetParty():GetMemberTargetIndex(0);
+    local entities = memory:GetEntity();
+    if (player_index <= 0 or entities:GetServerId(player_index) == 0) then
+        return nil;
+    end
+    return
+        entities:GetLocalPositionX(player_index),
+        entities:GetLocalPositionY(player_index),
+        entities:GetLocalPositionZ(player_index);
+end
+
+local function drive_toward_position(x, y)
+    local px, py = player_position();
+    if (px == nil) then
+        error('Player position is unavailable.');
+    end
+
+    local dx = x - px;
+    local dy = y - py;
+    local distance = math.sqrt((dx * dx) + (dy * dy));
+    if (distance > 0.01) then
+        dx = dx / distance;
+        dy = dy / distance;
+    end
+
+    local auto_follow = AshitaCore:GetMemoryManager():GetAutoFollow();
+    auto_follow:SetTargetIndex(0);
+    auto_follow:SetTargetServerId(0);
+    auto_follow:SetFollowTargetIndex(0);
+    auto_follow:SetFollowTargetServerId(0);
+    auto_follow:SetFollowDeltaX(dx);
+    auto_follow:SetFollowDeltaZ(0);
+    auto_follow:SetFollowDeltaY(dy);
+    auto_follow:SetFollowDeltaW(1);
+    auto_follow:SetIsAutoRunning(1);
+    return distance;
+end
+
+local function start_position_movement(params)
+    require_control_enabled();
+
+    local target_x = tonumber(params.x);
+    local target_y = tonumber(params.y);
+    if (target_x == nil or target_y == nil or target_x ~= target_x or target_y ~= target_y) then
+        error('x and y must be finite world coordinates.');
+    end
+    if (math.abs(target_x) > 10000 or math.abs(target_y) > 10000) then
+        error('x and y are outside the supported world-coordinate range.');
+    end
+
+    local timeout_seconds = math.clamp(tonumber(params.timeout_seconds) or 15, 1, 60);
+    local stuck_seconds = math.clamp(tonumber(params.stuck_seconds) or 3, 1, 8);
+    local stop_distance = math.clamp(tonumber(params.stop_distance) or 1, 0.5, 5);
+    local max_start_distance = math.clamp(tonumber(params.max_start_distance) or 60, 2, 100);
+    local px, py, pz = player_position();
+    if (px == nil) then
+        error('Player position is unavailable.');
+    end
+    local dx = target_x - px;
+    local dy = target_y - py;
+    local distance = math.sqrt((dx * dx) + (dy * dy));
+    if (distance > max_start_distance) then
+        error('Position waypoint is beyond max_start_distance.');
+    end
+    if (distance <= stop_distance) then
+        stop_movement('already_within_stop_distance');
+        return
+        {
+            started = false,
+            reason = 'already_within_stop_distance',
+            target = { x = target_x, y = target_y, z = pz },
+            distance = distance,
+            control = control_snapshot(),
+        };
+    end
+
+    stop_movement('replaced');
+    local now = socket.gettime();
+    drive_toward_position(target_x, target_y);
+    bridge.movement =
+    {
+        kind = 'position',
+        target_x = target_x,
+        target_y = target_y,
+        started_at = now,
+        deadline = now + timeout_seconds,
+        stop_distance = stop_distance,
+        stuck_seconds = stuck_seconds,
+        best_distance = distance,
+        last_progress_at = now,
+    };
+    bridge.next_movement_check = now + 0.1;
+    add_event(-1, ('Agent movement started toward waypoint (%.2f, %.2f).'):fmt(target_x, target_y));
+    return
+    {
+        started = true,
+        target = { x = target_x, y = target_y, z = pz },
+        distance = distance,
         control = control_snapshot(),
     };
 end
@@ -580,13 +908,24 @@ local function monitor_movement()
     end
 
     local movement = bridge.movement;
-    local entities = memory:GetEntity();
-    if (entities:GetServerId(movement.index) ~= movement.server_id) then
-        stop_movement('target_lost');
-        return;
+    local distance;
+    if (movement.kind == 'position') then
+        local px, py = player_position();
+        if (px == nil) then
+            stop_movement('player_position_unavailable');
+            return;
+        end
+        local dx = movement.target_x - px;
+        local dy = movement.target_y - py;
+        distance = math.sqrt((dx * dx) + (dy * dy));
+    else
+        local entities = memory:GetEntity();
+        if (entities:GetServerId(movement.index) ~= movement.server_id) then
+            stop_movement('target_lost');
+            return;
+        end
+        distance = math.sqrt(math.max(0, entities:GetDistance(movement.index)));
     end
-
-    local distance = math.sqrt(math.max(0, entities:GetDistance(movement.index)));
     if (distance <= movement.stop_distance) then
         stop_movement('arrived');
         return;
@@ -604,6 +943,9 @@ local function monitor_movement()
         return;
     end
 
+    if (movement.kind == 'position') then
+        drive_toward_position(movement.target_x, movement.target_y);
+    end
     if (memory:GetAutoFollow():GetIsAutoRunning() == 0) then
         stop_movement('client_stopped');
     end
@@ -667,8 +1009,18 @@ local function dispatch(request)
     elseif (request.operation == 'target_entity') then
         require_control_enabled();
         return find_target(params);
+    elseif (request.operation == 'clear_target') then
+        return clear_target();
+    elseif (request.operation == 'set_heading') then
+        return set_heading(params);
+    elseif (request.operation == 'interact') then
+        return start_confirm_pulse(params);
+    elseif (request.operation == 'input_action') then
+        return start_input_pulse(params);
     elseif (request.operation == 'move_to_entity') then
         return start_movement(params);
+    elseif (request.operation == 'move_to_position') then
+        return start_position_movement(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);
@@ -771,7 +1123,39 @@ ashita.events.register('text_in', 'text_in_cb', function (event)
     add_event(event.mode, event.message_modified);
 end);
 
+ashita.events.register('key_state', 'key_state_cb', function (event)
+    local pulse = bridge.input_pulse;
+    if (pulse == nil) then
+        return;
+    end
+
+    local memory = AshitaCore:GetMemoryManager();
+    if (not bridge.control_enabled or memory:GetPlayer():GetLoginStatus() ~= 2) then
+        stop_input_pulse('control_disabled_or_logged_out');
+        return;
+    end
+    if (event.data_raw == nil or event.size <= pulse.key) then
+        stop_input_pulse('keyboard_state_unavailable');
+        return;
+    end
+
+    local keys = ffi.cast('uint8_t*', event.data_raw);
+    if (pulse.down_frames > 0 or socket.gettime() < pulse.deadline) then
+        keys[pulse.key] = 0x80;
+        pulse.down_frames = math.max(0, pulse.down_frames - 1);
+        return;
+    end
+
+    keys[pulse.key] = 0;
+    pulse.release_frames = pulse.release_frames - 1;
+    if (pulse.release_frames <= 0) then
+        add_event(-1, ('Agent %s pulse completed.'):fmt(pulse.action));
+        bridge.input_pulse = nil;
+    end
+end);
+
 ashita.events.register('d3d_present', 'present_cb', function ()
+    apply_heading_hold();
     monitor_movement();
     if (bridge.listener ~= nil) then
         process_client();

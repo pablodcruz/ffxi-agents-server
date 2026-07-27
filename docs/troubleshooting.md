@@ -267,6 +267,42 @@ Always wait for:
 For multiple players or long-running hosting, use a real x86-64 Linux host
 unless a genuinely native and tested server image becomes available.
 
+### FFXI-4001 appears during live play
+
+Inspect the map logs before blaming the forwarder:
+
+```sh
+docker logs --since 10m ffxi-agent-lab-map-1
+./scripts/server.sh check
+```
+
+On the reference Apple Silicon setup, `xi_map` exceeded its two-second
+inactivity watchdog while running under x86 QEMU emulation. The watchdog
+terminated the process, Compose restarted it, and the client later displayed
+`FFXI-4001: No response from the FINAL FANTASY XI server`. A subsequent
+`FFXI-3101` can appear while the old lobby session is being torn down.
+
+Wait for `Map process completed zone initialization`, dismiss the client error,
+and relaunch the saved Ashita profile. Character position is persisted by the
+server. This failure is independent of host-side navmesh queries, which read an
+ignored copy of the mesh and do not call the live map process.
+
+### OBS shows a frozen FFXI frame but MCP observations still change
+
+FFXI can pause rendering when the guest game window loses focus. The clearest
+signal is an unchanged in-game clock while MCP positions continue to update.
+Focus the FFXI window inside Parallels; the renderer and OBS capture should
+resume immediately.
+
+For audio, verify all three layers:
+
+1. the Windows output device produces game audio;
+2. OBS's macOS Screen Capture source is unmuted and its meter moves; and
+3. the YouTube live player receives the stream audio.
+
+Do not add the Ashita console or login window to the public scene. Capture the
+Parallels game window and publish sanitized MCP action summaries separately.
+
 ## Safe recovery sequence
 
 When state is unclear, use this order:
