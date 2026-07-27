@@ -171,6 +171,9 @@ The runner:
   backtrack over known ground;
 - stops on arrival, probe limit, no remaining safe candidate, low HP, or a
   nearby entity;
+- performs each precondition and hazard scan while disarmed, then opens the
+  write latch only for one movement lease and emergency-disarms before the next
+  observation;
 - appends private mode-`0600` JSONL evidence to
   `runtime/navigation/collision-probes.jsonl`; and
 - calls `ffxi_emergency_stop` and reports the final disarmed control state.

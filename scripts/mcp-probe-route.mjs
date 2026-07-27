@@ -107,12 +107,6 @@ try {
   const probes = [];
   let stopReason = "probe_limit";
 
-  const enable = await client.callTool({
-    name: "ffxi_enable_control",
-    arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
-  });
-  if (enable.isError) throw new Error("Could not arm private-server control.");
-
   for (let index = 0; index < maxProbes; index += 1) {
     const before = await observe();
     const start = before.player?.position;
@@ -153,6 +147,11 @@ try {
     }
 
     const timeoutSeconds = Math.min(10, Math.max(4, Math.ceil(stepDistance / 2) + 2));
+    const enable = await client.callTool({
+      name: "ffxi_enable_control",
+      arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
+    });
+    if (enable.isError) throw new Error("Could not arm private-server control.");
     const movement = await client.callTool({
       name: "ffxi_move_to_position",
       arguments: {
@@ -166,6 +165,13 @@ try {
     });
     if (movement.isError) throw new Error(`Probe ${index + 1} could not start.`);
     await waitForMovement(timeoutSeconds);
+    const leaseStop = await client.callTool({
+      name: "ffxi_emergency_stop",
+      arguments: {},
+    });
+    if (leaseStop.isError) {
+      throw new Error(`Probe ${index + 1} could not disarm control.`);
+    }
 
     const after = await observe();
     const classification = classifyProbe({
