@@ -144,6 +144,60 @@ blocked edges and support a bounded probe graph for isolated mesh components.
 The camera view was used only to correlate the failing edge with the visible
 embankment, not to steer.
 
+### Bounded collision-probe recovery
+
+`mcp:probe-route` turns those manual probes into a bounded recovery layer:
+
+```sh
+pnpm mcp:probe-route -- \
+  --mesh South_Gustaberg.nav \
+  --x 240 --y -305 --z -17 \
+  --max-probes 8 \
+  --step-distance 6 \
+  --minimum-entity-distance 12 \
+  --minimum-hp-percent 90
+```
+
+The runner:
+
+- generates goal-biased world-coordinate candidates at eight relative angles;
+- rejects candidates near observed entities, previously failed endpoints, or
+  destination-specific visited nodes;
+- classifies each lease as arrived, partial progress, or stalled using observed
+  displacement;
+- treats every unreached endpoint as collision evidence while preserving a
+  partial endpoint as a reachable node;
+- scopes cycle avoidance to one destination so a later route may safely
+  backtrack over known ground;
+- stops on arrival, probe limit, no remaining safe candidate, low HP, or a
+  nearby entity;
+- appends private mode-`0600` JSONL evidence to
+  `runtime/navigation/collision-probes.jsonl`; and
+- calls `ffxi_emergency_stop` and reports the final disarmed control state.
+
+The first live run recovered from the western shelf to a lower corridor while
+Pablo remained at 100% HP. Six-yalm probes efficiently traversed open contour
+segments; three-yalm probes resolved narrow wall corners and prevented a
+two-node oscillation. A proposed lower-basin coordinate was proven to be across
+another client wall, so the runner explored the reachable corridor and stopped
+instead of clipping through collision.
+
+LandSandBoat spawn data is useful for selecting a safe recovery destination,
+but the database axes differ from AgentBridge observations:
+
+```text
+AgentBridge x = mob_spawn_points.pos_x
+AgentBridge y = mob_spawn_points.pos_z
+AgentBridge z = mob_spawn_points.pos_y
+```
+
+Queries must also constrain the zone's mob ID range; `mob_groups.groupid` is
+reused across zones and is not sufficient by itself to associate an arbitrary
+spawn row with South Gustaberg. The live database check identified night-only
+level 2–3 Ding Bats on the lower component. The nearby daytime Stone Eater was
+level 3–4, and `/check` reported “seems tough” with high defense, so the agent
+correctly refused combat.
+
 ## Bounded combat
 
 `mcp:combat` composes existing narrow MCP tools rather than expanding the
@@ -231,6 +285,8 @@ or copied here.
 3. Persist temporarily blocked navmesh edges and route around them when another
    connected corridor exists; bounded replanning from the actual stop position
    is already implemented.
-4. Persist quest interaction points as data rather than one-off coordinates.
-5. Add a bounded loop that selects successive low-risk targets and returns to
+4. Hand a failed navmesh segment automatically to the collision-probe runner
+   and feed successful probe nodes back into the route graph.
+5. Persist quest interaction points as data rather than one-off coordinates.
+6. Add a bounded loop that selects successive low-risk targets and returns to
    a safe location without embedding one-off entity IDs.
