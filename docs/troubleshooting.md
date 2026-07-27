@@ -255,8 +255,11 @@ the direct smoke test succeeds.
 
 The tested LandSandBoat image executes x86-64 code through QEMU on this
 aarch64 Colima VM. A slow all-zone load can trigger the map inactivity
-watchdog. Compose restarts the service, but process liveness alone does not
-mean all zones are ready.
+watchdog. Upstream defaults to two seconds. This repository keeps the watchdog
+enabled but raises its period to 30 seconds through
+`XI_MAIN_INACTIVITY_WATCHDOG_PERIOD`. Override the local default with
+`LSB_WATCHDOG_PERIOD_MS` only after reviewing map logs. Compose restarts the
+service, but process liveness alone does not mean all zones are ready.
 
 Always wait for:
 
@@ -266,6 +269,108 @@ Always wait for:
 
 For multiple players or long-running hosting, use a real x86-64 Linux host
 unless a genuinely native and tested server image becomes available.
+
+### FFXI-4001 appears during live play
+
+Inspect the map logs before blaming the forwarder:
+
+```sh
+docker logs --since 10m ffxi-agent-lab-map-1
+./scripts/server.sh check
+```
+
+On the reference Apple Silicon setup, `xi_map` repeatedly exceeded its
+upstream two-second inactivity watchdog while running under x86 QEMU
+emulation. The watchdog terminated the process, Compose restarted it, and the
+client later displayed `FFXI-4001: No response from the FINAL FANTASY XI
+server`. A subsequent `FFXI-3101` can appear while the old lobby session is
+being torn down.
+
+Recreate the map service after pulling a repository revision that includes the
+QEMU-safe watchdog period:
+
+```sh
+docker compose up --detach --no-deps --force-recreate map
+./scripts/server.sh check
+```
+
+Confirm the new container log contains:
+
+```text
+Applying ENV VAR XI_MAIN_INACTIVITY_WATCHDOG_PERIOD
+```
+
+Wait for `Map process completed zone initialization`, dismiss the client error,
+and relaunch the saved Ashita profile. Character position is persisted by the
+server. This failure is independent of host-side navmesh queries, which read an
+ignored copy of the mesh and do not call the live map process.
+
+### OBS shows a frozen FFXI frame but MCP observations still change
+
+FFXI can pause rendering when the guest game window loses focus. The clearest
+signal is an unchanged in-game clock while MCP positions continue to update.
+Focus the FFXI window inside Parallels; the renderer and OBS capture should
+resume immediately.
+
+For audio, do not trust the presence of an OBS audio track or an apparently
+active mixer alone. In the tested OBS 32.0.4 setup, the `macOS Screen Capture`
+source produced stereo AAC but every decoded sample was digital silence
+(`-91.0 dB` peak and mean).
+
+The verified repair is:
+
+1. grant OBS **Screen & System Audio Recording** permission in macOS;
+2. keep the Parallels `macOS Screen Capture` source for video;
+3. enable **Show fullscreen and hidden windows / applications** and reselect
+   `[Parallels Desktop] Windows 11` after putting the VM in full screen;
+4. add a separate **macOS Audio Capture** source using **Desktop Audio
+   Capture**;
+5. keep both sources unmuted and on stream/recording track 1; and
+6. record a local Windows notification before going live.
+
+The final successful local test was 1920x1080 H.264 at approximately 6 Mbps
+with 48 kHz stereo AAC at 160 kbps. Decoding the recording with `ffmpeg` and
+`volumedetect` measured `-37.5 dB` mean and `-9.8 dB` peak, proving the track
+was no longer silent.
+OBS microphone permission is not required for this path, and no microphone
+source should be added unless the operator explicitly wants one on stream.
+
+OBS 32.0.4 exited uncleanly twice while creating the macOS Audio Capture source
+and applying its first output changes. Relaunching in **Normal Mode** preserved
+the source and settings. Keep streaming stopped while changing sources, and do
+not consent to uploading a crash report unless the operator has reviewed it.
+
+### FFXI is blurry, low resolution, or framed incorrectly in OBS
+
+Match the guest, game, and OBS aspect ratios instead of stretching a low
+resolution game window:
+
+1. stop OBS streaming and close FFXI and PlayOnline;
+2. put Parallels in full screen and verify Windows reports `2560x1440`;
+3. use the official FFXI configuration utility to select **Borderless
+   Window**, `2560x1440`, a `2304x1296` UI scale, and the High preset;
+4. export the FFXI registry key before any manual adjustment; and
+5. verify the following tested values under
+   `HKLM\SOFTWARE\WOW6432Node\PlayOnlineUS\SquareEnix\FinalFantasyXI`:
+
+| Value | Meaning | Tested setting |
+| --- | --- | --- |
+| `0001` / `0002` | display width / height | `0xa00` / `0x5a0` (2560x1440) |
+| `0003` / `0004` | background render width / height | `0xa00` / `0x5a0` (2560x1440) |
+| `0034` | window mode | `0x3` (borderless) |
+| `0037` / `0038` | UI width / height | `0x900` / `0x510` (2304x1296) |
+
+The official High preset left the background buffer at only 1024x576 in the
+tested VM, so `0003` and `0004` required a backed-up manual correction. Export
+the key first (the tested VM keeps the `.reg` backup under
+`C:\FFXI-Lab\backups`) and restore that backup if the client becomes unstable.
+After restarting Windows, verify both the 2560x1440 guest resolution and the
+registry values again before launching the game. The tested OBS output is
+1920x1080 at 30 FPS and 6000 kbps, with its 1920x1080 canvas preserving the
+16:9 VM framing.
+
+Do not add the Ashita console or login window to the public scene. Capture the
+Parallels game window and publish sanitized MCP action summaries separately.
 
 ## Safe recovery sequence
 

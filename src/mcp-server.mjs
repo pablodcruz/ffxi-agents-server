@@ -3,8 +3,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AgentRegistry } from "./agent-registry.mjs";
 import { BridgeError, validateGameplayCommand } from "./bridge-client.mjs";
+import { createInputAdapterFromEnv } from "./input-adapter.mjs";
 
 const agents = new AgentRegistry();
+const inputAdapter = createInputAdapterFromEnv();
 const lsbApiUrl = (process.env.LSB_API_URL || "http://127.0.0.1:8088/api").replace(/\/$/, "");
 const agentIdSchema = z
   .string()
@@ -14,7 +16,7 @@ const agentIdSchema = z
 const server = new McpServer(
   {
     name: "ffxi-agent-control",
-    version: "0.4.0",
+    version: "0.6.0",
   },
   {
     instructions:
@@ -302,7 +304,7 @@ server.registerTool(
       agent_id: agentIdSchema,
       server_id: z.number().int().positive().optional(),
       name: z.string().min(1).max(64).optional(),
-      max_start_distance: z.number().min(2).max(30).default(25),
+      max_start_distance: z.number().min(2).max(40).default(25),
       stop_distance: z.number().min(1).max(10).default(3),
       timeout_seconds: z.number().min(1).max(20).default(10),
       stuck_seconds: z.number().min(1).max(8).default(3),
@@ -340,6 +342,65 @@ server.registerTool(
           {
             server_id,
             name,
+            max_start_distance,
+            stop_distance,
+            timeout_seconds,
+            stuck_seconds,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_move_to_position",
+  {
+    title: "Move toward an FFXI world-coordinate waypoint",
+    description:
+      "Start a bounded camera-independent movement lease toward one nearby world-coordinate waypoint. Use a navmesh-planned waypoint, observe after each segment, and stop on arrival, timeout, lack of progress, logout, explicit stop, or emergency stop.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      x: z.number().finite().min(-10000).max(10000),
+      y: z.number().finite().min(-10000).max(10000),
+      max_start_distance: z.number().min(2).max(100).default(60),
+      stop_distance: z.number().min(0.5).max(5).default(1),
+      timeout_seconds: z.number().min(1).max(60).default(15),
+      stuck_seconds: z.number().min(1).max(8).default(3),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    x,
+    y,
+    max_start_distance,
+    stop_distance,
+    timeout_seconds,
+    stuck_seconds,
+  }) => {
+    try {
+      if (stop_distance >= max_start_distance) {
+        throw new BridgeError(
+          "stop_distance must be smaller than max_start_distance.",
+          "invalid_movement",
+        );
+      }
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "move_to_position",
+          {
+            x,
+            y,
             max_start_distance,
             stop_distance,
             timeout_seconds,
@@ -423,11 +484,326 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_clear_target",
+  {
+    title: "Clear the current FFXI target lock",
+    description:
+      "Clear the current target and stop auto-follow before free steering or another bounded action.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id }) => {
+    try {
+      return agentResult(
+        await agents.request(agent_id, "clear_target", {}, { write: true }),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_face_heading",
+  {
+    title: "Face FFXI character toward a heading",
+    description:
+      "Set the local private-server character's facing direction without moving. Heading is in radians: east 0, south pi/2, west pi or -pi, north -pi/2. Normal collision still applies to later movement.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      heading: z.number().min(-Math.PI).max(Math.PI),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, heading }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "set_heading",
+          { heading },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_interact",
+  {
+    title: "Interact with an FFXI target or dialogue",
+    description:
+      "Inject one bounded Enter/confirm action. Target mode uses AgentBridge to select and interact with one exact NPC or world object within six units. Confirm mode uses the configured host input adapter only after AgentBridge proves control is armed and an in-game menu is open.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      mode: z.enum(["target", "confirm"]).default("target"),
+      server_id: z.number().int().positive().optional(),
+      name: z.string().min(1).max(64).optional(),
+      max_distance: z.number().min(1).max(6).default(6),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, mode, server_id, name, max_distance }) => {
+    try {
+      if (mode === "target" && !server_id && !name) {
+        throw new BridgeError(
+          "Target interaction requires server_id or name.",
+          "invalid_target",
+        );
+      }
+      if (mode === "confirm") {
+        if (!inputAdapter) {
+          throw new BridgeError(
+            "Confirm mode requires a configured FFXI_INPUT_ADAPTER.",
+            "input_adapter_unavailable",
+          );
+        }
+        return agentResult(
+          await agents.runExternalWrite(
+            agent_id,
+            "interact_confirm",
+            { mode: "confirm" },
+            async (bridge) => {
+              const control = await bridge.request("control_status");
+              if (!control.enabled) {
+                throw new BridgeError(
+                  "Agent writes are disabled. Explicitly enable control before confirming a menu.",
+                  "control_disabled",
+                );
+              }
+              const state = await bridge.request("character_state", {
+                include_recasts: false,
+              });
+              if (!state.menu_open) {
+                throw new BridgeError(
+                  "Confirm mode requires an open in-game menu or dialogue.",
+                  "menu_closed",
+                );
+              }
+              const input = await inputAdapter.sendMenuAction("confirm");
+              return {
+                queued: true,
+                mode: "confirm",
+                menu_open: true,
+                input,
+                control,
+              };
+            },
+          ),
+        );
+      }
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "interact",
+          {
+            mode,
+            server_id,
+            name,
+            max_distance,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_menu_input",
+  {
+    title: "Send bounded FFXI menu input",
+    description:
+      "Send exactly one allowlisted menu action through the configured host input adapter. AgentBridge must report that control is armed and an in-game menu or dialogue is open. Actions are confirm, cancel, up, or down.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      action: z.enum(["confirm", "cancel", "up", "down"]),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, action }) => {
+    try {
+      if (!inputAdapter) {
+        throw new BridgeError(
+          "Menu input requires a configured FFXI_INPUT_ADAPTER.",
+          "input_adapter_unavailable",
+        );
+      }
+      return agentResult(
+        await agents.runExternalWrite(
+          agent_id,
+          "menu_input",
+          { action },
+          async (bridge) => {
+            const control = await bridge.request("control_status");
+            if (!control.enabled) {
+              throw new BridgeError(
+                "Agent writes are disabled. Explicitly enable control before sending menu input.",
+                "control_disabled",
+              );
+            }
+            const state = await bridge.request("character_state", {
+              include_recasts: false,
+            });
+            if (!state.menu_open) {
+              throw new BridgeError(
+                "Menu input requires an open in-game menu or dialogue.",
+                "menu_closed",
+              );
+            }
+            const input = await inputAdapter.sendMenuAction(action);
+            return {
+              queued: true,
+              action,
+              menu_open: true,
+              input,
+              control,
+            };
+          },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_directional_input",
+  {
+    title: "Send bounded FFXI directional input",
+    description:
+      "Send one automatically released movement, lateral, or camera-pan DirectInput pulse through AgentBridge. AgentBridge must report that control is armed, no auto-follow lease is active, and no in-game menu is open. Duration is capped at one second.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      action: z.enum([
+        "forward",
+        "backward",
+        "turn_left",
+        "turn_right",
+        "camera_left",
+        "camera_right",
+      ]),
+      duration_ms: z.number().int().min(50).max(1000).default(250),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, action, duration_ms }) => {
+    try {
+      return agentResult(
+        await agents.runExternalWrite(
+          agent_id,
+          "directional_input",
+          { action, duration_ms },
+          async (bridge) => {
+            const control = await bridge.request("control_status");
+            if (!control.enabled) {
+              throw new BridgeError(
+                "Agent writes are disabled. Explicitly enable control before sending directional input.",
+                "control_disabled",
+              );
+            }
+            if (control.auto_running) {
+              throw new BridgeError(
+                "Stop the active auto-follow lease before sending directional input.",
+                "movement_active",
+              );
+            }
+            const state = await bridge.request("character_state", {
+              include_recasts: false,
+            });
+            if (state.menu_open) {
+              throw new BridgeError(
+                "Directional input requires all in-game menus and dialogue to be closed.",
+                "menu_open",
+              );
+            }
+            const clearedTarget = await bridge.request("clear_target");
+            if (!clearedTarget.cleared) {
+              throw new BridgeError(
+                "AgentBridge could not clear the target lock before directional input.",
+                "target_clear_failed",
+              );
+            }
+            const before = await bridge.request("observe", {
+              radius: 1,
+              max_entities: 1,
+              event_limit: 0,
+            });
+            const input = await bridge.request("input_action", {
+              action,
+              duration_ms,
+            });
+            await new Promise((resolve) => setTimeout(
+              resolve,
+              duration_ms + 150,
+            ));
+            const after = await bridge.request("observe", {
+              radius: 1,
+              max_entities: 1,
+              event_limit: 0,
+            });
+            return {
+              completed: true,
+              input,
+              before: {
+                position: before.player.position,
+                heading: before.player.heading,
+              },
+              after: {
+                position: after.player.position,
+                heading: after.player.heading,
+              },
+              target_cleared: clearedTarget.cleared,
+              control,
+            };
+          },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_gameplay_command",
   {
     title: "Run allowlisted FFXI gameplay command",
     description:
-      "Queue one bounded gameplay command such as /attack, /ma, /ja, /ws, /item, /heal, /follow, or /check. GM, chat, addon, console, script, and chained commands are blocked.",
+      "Queue one bounded gameplay command such as /attack, /ma, /ja, /ws, /item, /heal, /follow, /trade, or /check. GM, chat, addon, console, script, and chained commands are blocked.",
     inputSchema: {
       agent_id: agentIdSchema,
       command: z.string().min(1).max(200),

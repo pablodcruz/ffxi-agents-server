@@ -34,7 +34,9 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_stop_movement` | Yes | Cancel a movement lease |
 | `ffxi_target_entity` | Yes | Select one nearby entity |
 | `ffxi_move_to_entity` | Yes | Start a short, progress-checked auto-follow lease |
-| `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command |
+| `ffxi_move_to_position` | Yes | Move toward one bounded world-coordinate waypoint |
+| `ffxi_directional_input` | Yes | Send one automatically released fallback input pulse |
+| `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command, including a standard NPC trade window |
 
 The MCP server marks observation tools read-only and uses write approvals for
 game actions. The Ashita addon repeats the command allowlist so bypassing the
@@ -127,11 +129,13 @@ The expected agent loop is:
 4. Wait only as long as the game mechanic requires.
 5. Observe again and verify the result.
 
-Long open-loop command sequences are deliberately excluded. The first movement
-primitive uses Ashita's wrapped auto-follow state and targets only a nearby
-entity. It checks progress at 100 ms intervals and has hard arrival, timeout,
-stuck, target-loss, logout, explicit-stop, and emergency-stop exits. Arbitrary
-coordinate navigation and OS input remain outside the interface.
+Long open-loop command sequences are deliberately excluded. Entity movement
+uses Ashita's wrapped auto-follow target state. Coordinate movement uses
+Ashita's world-space `FollowDeltaX/Y` vector and recomputes it every 100 ms,
+independently of the camera. Both have hard arrival, timeout, stuck, logout,
+explicit-stop, and emergency-stop exits. A host-side Recast/Detour planner
+queries LandSandBoat's own ignored runtime navmesh and sends one short waypoint
+lease at a time. See [navigation.md](navigation.md).
 
 Detailed character perception is a separate bounded read. Recasts are capped
 and inventory is limited to one requested container with an item-count cap per

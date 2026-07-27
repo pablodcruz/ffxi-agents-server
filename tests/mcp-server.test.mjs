@@ -22,8 +22,13 @@ async function createMockBridge(token) {
       const request = JSON.parse(buffer.slice(0, newline));
       const authenticated = request.token === token;
       const writeOperation = [
+        "clear_target",
+        "input_action",
+        "set_heading",
         "target_entity",
+        "interact",
         "move_to_entity",
+        "move_to_position",
         "gameplay_command",
       ].includes(request.operation);
       let ok = authenticated;
@@ -46,12 +51,16 @@ async function createMockBridge(token) {
       } else if (writeOperation && !controlEnabled) {
         ok = false;
         error = "Agent writes are disabled.";
+      } else if (request.operation === "clear_target") {
+        result = { cleared: true, target_index: 0 };
       } else {
         result = {
           operation: request.operation,
           login_status: 2,
           nearby_entities: [],
-          started: request.operation === "move_to_entity" ? true : undefined,
+          started: ["move_to_entity", "move_to_position"].includes(request.operation)
+            ? true
+            : undefined,
         };
       }
       socket.end(
@@ -124,10 +133,16 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_gameplay_command",
       "ffxi_agent_profiles",
       "ffxi_character_state",
+      "ffxi_clear_target",
       "ffxi_control_status",
+      "ffxi_directional_input",
       "ffxi_emergency_stop",
       "ffxi_enable_control",
+      "ffxi_face_heading",
+      "ffxi_interact",
+      "ffxi_menu_input",
       "ffxi_move_to_entity",
+      "ffxi_move_to_position",
       "ffxi_observe",
       "ffxi_recent_events",
       "ffxi_server_status",
@@ -180,6 +195,12 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(disarmedWrite.isError, true);
 
+  const disarmedInteract = await client.callTool({
+    name: "ffxi_interact",
+    arguments: { mode: "target", server_id: 1234, max_distance: 6 },
+  });
+  assert.equal(disarmedInteract.isError, true);
+
   const enabled = await client.callTool({
     name: "ffxi_enable_control",
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
@@ -200,6 +221,39 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   assert.equal(movement.isError, undefined);
   assert.equal(movement.structuredContent.operation, "move_to_entity");
   assert.equal(movement.structuredContent.started, true);
+
+  const waypointMovement = await client.callTool({
+    name: "ffxi_move_to_position",
+    arguments: {
+      x: -220.5,
+      y: -100.25,
+      max_start_distance: 60,
+      stop_distance: 1,
+      timeout_seconds: 10,
+      stuck_seconds: 3,
+    },
+  });
+  assert.equal(waypointMovement.isError, undefined);
+  assert.equal(waypointMovement.structuredContent.operation, "move_to_position");
+  assert.equal(waypointMovement.structuredContent.started, true);
+
+  const heading = await client.callTool({
+    name: "ffxi_face_heading",
+    arguments: { heading: 0 },
+  });
+  assert.equal(heading.isError, undefined);
+  assert.equal(heading.structuredContent.operation, "set_heading");
+
+  const interaction = await client.callTool({
+    name: "ffxi_interact",
+    arguments: {
+      mode: "target",
+      server_id: 1234,
+      max_distance: 6,
+    },
+  });
+  assert.equal(interaction.isError, undefined);
+  assert.equal(interaction.structuredContent.operation, "interact");
 
   const stopped = await client.callTool({
     name: "ffxi_emergency_stop",

@@ -6,16 +6,31 @@
   "description": "A safe MCP control plane and client bridge for an agent-only LandSandBoat FFXI lab.",
   "scripts": {
     "agent:add": "./scripts/run-node.sh src/add-agent.mjs",
+    "client:addon-update": "./scripts/run-node.sh scripts/serve-addon-update.mjs",
+    "client:reload-agentbridge": "./scripts/run-node.sh scripts/reload-agentbridge.mjs",
     "doctor": "./scripts/run-node.sh src/doctor.mjs",
     "forwarder": "./scripts/run-forwarder.sh",
     "mcp": "./scripts/run-mcp.sh",
     "mcp:smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs",
     "mcp:control-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --control-cycle",
     "mcp:gameplay-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --gameplay-cycle",
+    "mcp:interact": "./scripts/run-node.sh scripts/mcp-interact.mjs",
+    "mcp:menu": "./scripts/run-node.sh scripts/mcp-menu.mjs",
+    "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",
+    "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",
+    "mcp:direction": "./scripts/run-node.sh scripts/mcp-direction.mjs",
+    "mcp:heading": "./scripts/run-node.sh scripts/mcp-heading.mjs",
+    "mcp:move": "./scripts/run-node.sh scripts/mcp-move.mjs",
+    "mcp:navigate": "./scripts/run-node.sh scripts/mcp-navigate.mjs",
+    "mcp:pathfind": "./scripts/run-node.sh scripts/mcp-pathfind.mjs",
+    "mcp:rest": "./scripts/run-node.sh scripts/mcp-rest.mjs",
+    "mcp:observe": "./scripts/run-node.sh scripts/mcp-observe.mjs",
+    "mcp:state": "./scripts/run-node.sh scripts/mcp-state.mjs",
     "test": "./scripts/run-node.sh --test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "recast-navigation": "0.43.1",
     "zod": "3.25.76"
   },
   "engines": {

@@ -1,0 +1,310 @@
+#!/usr/bin/env node
+
+import path from "node:path";
+import process from "node:process";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const projectDir = path.resolve(import.meta.dirname, "..");
+
+function argument(name, fallback) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : fallback;
+}
+
+const targetName = argument("--target");
+const targetServerId = Number(argument("--server-id", "0"));
+const maxStartDistance = Number(argument("--max-start-distance", "25"));
+const stopDistance = Number(argument("--stop-distance", "3"));
+const approachTimeoutSeconds = Number(argument("--approach-timeout", "20"));
+const combatTimeoutSeconds = Number(argument("--combat-timeout", "120"));
+const minimumHpPercent = Number(argument("--minimum-hp-percent", "35"));
+const minimumStartHpPercent = Number(argument("--minimum-start-hp-percent", "90"));
+const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
+
+if (!targetName) {
+  throw new Error("Combat requires --target with one exact nearby entity name.");
+}
+if (!Number.isInteger(targetServerId) || targetServerId < 0) {
+  throw new Error("--server-id must be a positive integer when provided.");
+}
+if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 40) {
+  throw new Error("--max-start-distance must be a number from 2 through 40.");
+}
+if (!Number.isFinite(stopDistance) || stopDistance < 1 || stopDistance > 6) {
+  throw new Error("--stop-distance must be a number from 1 through 6.");
+}
+if (
+  !Number.isFinite(approachTimeoutSeconds) ||
+  approachTimeoutSeconds < 1 ||
+  approachTimeoutSeconds > 30
+) {
+  throw new Error("--approach-timeout must be a number from 1 through 30.");
+}
+if (
+  !Number.isFinite(combatTimeoutSeconds) ||
+  combatTimeoutSeconds < 5 ||
+  combatTimeoutSeconds > 300
+) {
+  throw new Error("--combat-timeout must be a number from 5 through 300.");
+}
+if (
+  !Number.isFinite(minimumHpPercent) ||
+  minimumHpPercent < 10 ||
+  minimumHpPercent > 90
+) {
+  throw new Error("--minimum-hp-percent must be a number from 10 through 90.");
+}
+if (
+  !Number.isFinite(minimumStartHpPercent) ||
+  minimumStartHpPercent < minimumHpPercent ||
+  minimumStartHpPercent > 100
+) {
+  throw new Error(
+    "--minimum-start-hp-percent must be between the combat HP floor and 100.",
+  );
+}
+if (
+  !Number.isFinite(recoveryTimeoutSeconds) ||
+  recoveryTimeoutSeconds < 5 ||
+  recoveryTimeoutSeconds > 180
+) {
+  throw new Error("--recovery-timeout must be a number from 5 through 180.");
+}
+
+const transport = new StdioClientTransport({
+  command: process.execPath,
+  args: [path.join(projectDir, "src", "mcp-server.mjs")],
+  cwd: projectDir,
+  env: process.env,
+  stderr: "inherit",
+});
+const client = new Client({ name: "ffxi-agent-lab-combat", version: "0.1.0" });
+
+function valueOf(response) {
+  return response.structuredContent || response.content;
+}
+
+async function observe() {
+  const response = await client.callTool({
+    name: "ffxi_observe",
+    arguments: { radius: 40, max_entities: 24, event_limit: 20 },
+  });
+  if (response.isError) throw new Error("FFXI observation failed.");
+  return valueOf(response);
+}
+
+async function characterState() {
+  const response = await client.callTool({
+    name: "ffxi_character_state",
+    arguments: { include_recasts: false },
+  });
+  if (response.isError) throw new Error("FFXI character-state read failed.");
+  return valueOf(response);
+}
+
+async function command(text) {
+  const response = await client.callTool({
+    name: "ffxi_gameplay_command",
+    arguments: { command: text },
+  });
+  if (response.isError) throw new Error(`Gameplay command failed: ${text}`);
+  return valueOf(response);
+}
+
+async function waitForMovement(timeoutSeconds) {
+  const deadline = Date.now() + (timeoutSeconds * 1000) + 1000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const response = await client.callTool({
+      name: "ffxi_control_status",
+      arguments: {},
+    });
+    if (response.isError) throw new Error("Could not read movement status.");
+    if (!valueOf(response).movement) return;
+  }
+  await client.callTool({ name: "ffxi_stop_movement", arguments: {} });
+  throw new Error("Approach movement did not finish within its timeout.");
+}
+
+function targetDefeated(observation, serverId) {
+  const entity = observation.nearby_entities?.find(
+    (candidate) => candidate.server_id === serverId,
+  );
+  return !entity || entity.hp_percent <= 0 || entity.status === 2;
+}
+
+async function recoverHp() {
+  let observation = await observe();
+  const samples = [{
+    at: observation.observed_at,
+    player_hp_percent: observation.player?.hp_percent,
+  }];
+  if ((observation.player?.hp_percent ?? 0) >= minimumStartHpPercent) {
+    return { rested: false, samples };
+  }
+
+  await command("/heal");
+  let recovered = false;
+  const deadline = Date.now() + (recoveryTimeoutSeconds * 1000);
+  try {
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      observation = await observe();
+      samples.push({
+        at: observation.observed_at,
+        player_hp_percent: observation.player?.hp_percent,
+      });
+      if ((observation.player?.hp_percent ?? 0) >= minimumStartHpPercent) {
+        recovered = true;
+        break;
+      }
+      if (observation.login_status !== 2) {
+        throw new Error("Login state changed while recovering HP.");
+      }
+    }
+  } finally {
+    await command("/heal").catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
+  if (!recovered) {
+    throw new Error(
+      `HP did not recover to ${minimumStartHpPercent}% within the timeout.`,
+    );
+  }
+  return { rested: true, samples };
+}
+
+let result;
+let failure;
+
+try {
+  await client.connect(transport);
+  const beforeState = await characterState();
+
+  await client.callTool({
+    name: "ffxi_enable_control",
+    arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
+  });
+  const recovery = await recoverHp();
+  const targetResponse = await client.callTool({
+    name: "ffxi_target_entity",
+    arguments: {
+      name: targetName,
+      ...(targetServerId > 0 ? { server_id: targetServerId } : {}),
+      max_distance: maxStartDistance,
+    },
+  });
+  if (targetResponse.isError) throw new Error(`Could not target ${targetName}.`);
+  const target = valueOf(targetResponse);
+
+  const movementResponse = await client.callTool({
+    name: "ffxi_move_to_entity",
+    arguments: {
+      server_id: target.server_id,
+      max_start_distance: maxStartDistance,
+      stop_distance: stopDistance,
+      timeout_seconds: approachTimeoutSeconds,
+      stuck_seconds: 3,
+    },
+  });
+  if (movementResponse.isError) throw new Error(`Could not approach ${targetName}.`);
+  await waitForMovement(approachTimeoutSeconds);
+
+  const approached = await observe();
+  const approachedTarget = approached.nearby_entities?.find(
+    (entity) => entity.server_id === target.server_id,
+  );
+  if (!approachedTarget || approachedTarget.distance > stopDistance + 2) {
+    throw new Error(`${targetName} is not within safe attack range after approach.`);
+  }
+
+  const retargetResponse = await client.callTool({
+    name: "ffxi_target_entity",
+    arguments: {
+      name: targetName,
+      server_id: target.server_id,
+      max_distance: stopDistance + 2,
+    },
+  });
+  if (retargetResponse.isError) {
+    throw new Error(`Could not reacquire ${targetName} after approach.`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const armedObservation = await observe();
+  if (armedObservation.target?.server_id !== target.server_id) {
+    throw new Error(`Client target verification failed for ${targetName}.`);
+  }
+
+  await command("/attack <t>");
+
+  const deadline = Date.now() + (combatTimeoutSeconds * 1000);
+  const samples = [];
+  let reason = "timeout";
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const observation = await observe();
+    samples.push({
+      at: observation.observed_at,
+      player_hp_percent: observation.player?.hp_percent,
+      target_hp_percent: observation.nearby_entities?.find(
+        (entity) => entity.server_id === target.server_id,
+      )?.hp_percent,
+    });
+    if (samples.length > 12) samples.shift();
+
+    if ((observation.player?.hp_percent ?? 0) <= minimumHpPercent) {
+      reason = "low_hp";
+      break;
+    }
+    if (targetDefeated(observation, target.server_id)) {
+      reason = "target_defeated";
+      break;
+    }
+    if (observation.login_status !== 2) {
+      reason = "not_logged_in";
+      break;
+    }
+  }
+
+  await command("/attackoff").catch(() => {});
+  // LandSandBoat emits defeat/EXP events shortly after target HP reaches zero.
+  await new Promise((resolve) => setTimeout(resolve, 2200));
+  const [after, afterState] = await Promise.all([observe(), characterState()]);
+
+  result = {
+    protocol: "mcp-stdio",
+    target: {
+      name: target.name,
+      server_id: target.server_id,
+    },
+    safety: {
+      minimum_hp_percent: minimumHpPercent,
+      minimum_start_hp_percent: minimumStartHpPercent,
+      approach_timeout_seconds: approachTimeoutSeconds,
+      combat_timeout_seconds: combatTimeoutSeconds,
+      recovery_timeout_seconds: recoveryTimeoutSeconds,
+    },
+    reason,
+    recovery,
+    before: beforeState.player,
+    after: afterState.player,
+    samples,
+    recent_events: after.recent_events,
+  };
+} catch (error) {
+  failure = error;
+} finally {
+  await client.callTool({ name: "ffxi_emergency_stop", arguments: {} })
+    .catch(() => {});
+  await client.close().catch(() => {});
+}
+
+if (result) {
+  console.log(JSON.stringify(result, null, 2));
+}
+if (failure) {
+  throw failure;
+}

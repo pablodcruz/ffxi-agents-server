@@ -20,15 +20,24 @@ Square Enix services remain proprietary and are not included here.
   one explicitly requested inventory container at a time.
 - A fail-closed write latch, emergency stop, and leased entity-follow movement
   with timeout and progress checks.
+- Camera-independent world-coordinate movement plus a host-side
+  LandSandBoat/Recast navmesh path-planning prototype.
+- Guarded NPC interaction/dialogue helpers and a bounded combat orchestrator
+  with exact-entity verification, pre-fight recovery, health-floor, timeout,
+  `/attackoff`, and emergency-stop behavior.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
   fail-closed control, movement contracts, and command safety.
 
 The first end-to-end client is now validated on Windows 11 ARM under Parallels:
 Pablo entered Bastok Markets, AgentBridge exposed live state through the
-restricted tunnel, all 12 MCP tools were discovered, and the control latch was
+restricted tunnel, all 18 MCP tools were discovered, and the control latch was
 used to target and check a nearby NPC. A five-second movement lease moved Pablo
 from 7.52 to 2.67 units from that NPC, stopped on arrival, and finished with
-control disabled by the emergency stop.
+control disabled by the emergency stop. A later navmesh run completed 21
+waypoints to Nbu Latteh, accepted **Mom, the Adventurer?**, obtained the quest's
+Fire Crystal, crossed the Bastok Markets zone line, loaded South Gustaberg, and
+navigated near level-one Huge Hornets without camera steering. Four bounded
+MCP fights then earned 640 EXP and raised Pablo from Monk level 1 to level 2.
 
 ## Architecture
 
@@ -112,6 +121,8 @@ The selected Apple Silicon VM procedure is in
 [docs/windows-arm-vm-runbook.md](docs/windows-arm-vm-runbook.md).
 Failures encountered on the tested path and their verified fixes are in
 [docs/troubleshooting.md](docs/troubleshooting.md).
+The movement primitives, mesh provenance, live route results, and remaining
+quest/combat work are in [docs/navigation.md](docs/navigation.md).
 
 1. Install and update FFXI through an authorized Square Enix path.
 2. Confirm the client connects to the private server with current `xiloader`

@@ -7,7 +7,7 @@ RUNTIME_ENV="${PROJECT_DIR}/runtime/mcp.env"
 if [[ -f "${RUNTIME_ENV}" ]]; then
   while IFS='=' read -r key value; do
     case "${key}" in
-      FFXI_AGENTS_CONFIG|FFXI_BRIDGE_HOST|FFXI_BRIDGE_PORT|FFXI_BRIDGE_TOKEN|LSB_API_URL)
+      FFXI_AGENTS_CONFIG|FFXI_BRIDGE_HOST|FFXI_BRIDGE_PORT|FFXI_BRIDGE_TOKEN|FFXI_INPUT_ADAPTER|FFXI_PARALLELS_VM|LSB_API_URL)
         if [[ -z "${!key:-}" ]]; then
           printf -v "${key}" '%s' "${value}"
           export "${key}"

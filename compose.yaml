@@ -15,6 +15,9 @@ x-lsb-common: &lsb-common
     XI_NETWORK_HTTP_HOST: 0.0.0.0
     XI_NETWORK_ZONE_IP: ${LSB_ZONE_IP:-127.0.0.1}
     XI_LOGIN_ACCOUNT_CREATION: ${LSB_ACCOUNT_CREATION:-true}
+    # The upstream 2s default is too aggressive for the amd64 image under
+    # Apple-Silicon QEMU. Keep the watchdog enabled, but allow slow ticks.
+    XI_MAIN_INACTIVITY_WATCHDOG_PERIOD: ${LSB_WATCHDOG_PERIOD_MS:-30000}
   volumes:
     # xi_map builds and persists any navmesh missing from the mesh image.
     - navmeshes:/server/navmeshes
