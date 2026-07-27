@@ -23,6 +23,12 @@ export function distance2d(left, right) {
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
+export function reachesDestination(path, destination, maximumDistance = 3) {
+  const finalPoint = path.at(-1);
+  return Boolean(finalPoint)
+    && distance2d(finalPoint, destination) <= maximumDistance;
+}
+
 export async function planNavmeshPath({ meshPath, start, end }) {
   await init();
   const bytes = new Uint8Array(await fs.readFile(meshPath));
@@ -45,6 +51,13 @@ export async function planNavmeshPath({ meshPath, start, end }) {
   }
 
   const path = result.path.map(detourToFfxi);
+  if (!reachesDestination(path, end)) {
+    query.destroy();
+    navMesh.destroy();
+    throw new Error(
+      "Navmesh returned only a partial path to the edge of a disconnected corridor.",
+    );
+  }
   query.destroy();
   navMesh.destroy();
   return path;

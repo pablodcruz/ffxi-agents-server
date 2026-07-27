@@ -82,11 +82,16 @@ current client rendered both character creation and Bastok Markets.
 - Parallels full screen now presents Windows at 2560x1440.
 - The official FFXI configuration utility is set to borderless 2560x1440,
   2304x1296 UI resolution, and the High preset.
-- The background render buffer is also 2560x1440. The registry key was exported
-  to `C:\FFXI-Lab\backups` before correcting the High preset's lower background
-  buffer values.
+- A later 2560x1440 background-render override proved unstable: Ashita reached
+  `GameLoaded`, then the client unloaded cleanly in less than one second.
+  Restoring the exported High-preset values (`0003=0x400`, `0004=0x240`) kept
+  the 2560x1440 borderless display while returning the client to stable play.
+- The known-good registry export is
+  `C:\FFXI-Lab\backups\ffxi-graphics-before-native-render.reg`; the unstable
+  native-render values are preserved separately for comparison.
 - A Windows restart confirmed that the guest resolution and FFXI registry
-  values persist.
+  values persist, the game reaches South Gustaberg, and AgentBridge 0.9.2 is
+  reachable with writes disabled.
 - OBS uses the Parallels window for video and a separate macOS Desktop Audio
   Capture source. Its tested output is 1920x1080 at 30 FPS and 6000 kbps. A
   decoded local recording confirmed non-silent audio before streaming.

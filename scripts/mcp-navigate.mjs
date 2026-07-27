@@ -64,14 +64,24 @@ try {
     name: "ffxi_observe",
     arguments: { radius: 20, max_entities: 12, event_limit: 8 },
   });
+  const emergencyStop = await client.callTool({
+    name: "ffxi_emergency_stop",
+    arguments: {},
+  });
+  const finalStatus = await client.callTool({
+    name: "ffxi_control_status",
+    arguments: {},
+  });
   console.log(JSON.stringify({
     protocol: "mcp-stdio",
     waypoint: { x, y },
     movement: valueOf(movement),
     observation: valueOf(observation),
+    emergency_stop: valueOf(emergencyStop),
+    final_control: valueOf(finalStatus),
   }, null, 2));
 } finally {
-  await client.callTool({ name: "ffxi_stop_movement", arguments: {} })
+  await client.callTool({ name: "ffxi_emergency_stop", arguments: {} })
     .catch(() => {});
   await client.close();
 }
