@@ -684,6 +684,51 @@ to level 7 at 80/2,000 EXP. Maximum HP rose from 108 to 123, attack from 33 to
 correctly continued because retreat routing was not part of the selected
 policy, and the level-up restored Pablo to full HP.
 
+### Records of Eminence farming multiplier
+
+The 2026 new-player guide used for this experiment prompted a narrow Records
+of Eminence validation instead of a wholesale change to the progression plan.
+The pinned LandSandBoat revision `2949f26b97fb80c775019955d66dd2954d1673a0`
+has Records of Eminence enabled at 1.0 EXP and sparks rates. Its implemented
+records include the tutorial objectives and the general combat counters used
+below.
+
+Pablo navigated to Isakoth in Bastok Markets at
+`(-343.396, -171.542, -10.002)` using the existing navmesh runner. The initial
+objective was set through bounded MCP menu pulses:
+
+1. `Quests` -> `Objective List` -> `Tutorial` -> `Basics`;
+2. activate `First Step Forward`;
+3. close the menus and interact with exact server ID `17739953`; and
+4. advance the guarded dialogue until the menu closed.
+
+Screenshots were used only to read the highlighted menu row. Every navigation,
+selection, confirmation, and interaction was sent through the private MCP
+bridge. Authoritative events confirmed the first completion awarded 300 EXP,
+300 sparks of eminence, six Meat Jerky, and the Memorandoll key item. Pablo
+ended at Monk level 7 with 680/2,000 EXP and 300 sparks.
+
+Only objectives that compound the existing farming loop were then activated:
+
+- `Vanquish One Enemy`;
+- `Vanquish Multiple Enemies I`;
+- `Deal 10-20 Damage`;
+- `Total Damage I`;
+- `Total Damage Taken I`; and
+- `Weapon Skills I`.
+
+The current limited-time `Vanquish Beasts` challenge activated automatically.
+This is the preferred boundary for the first pass: resume combat and movement
+work now, let passive counters advance, and add spoils or ecosystem-specific
+objectives only when they match the current camp.
+
+Records of Eminence also creates a legitimate path to the 10,000-gil goal.
+The live sparks shop prices an Acheron Shield at 2,755 sparks, while this
+server's local `item_basic` table gives it a 27,550-gil base sell value. Pablo
+needs 2,455 more sparks before that conversion is available. Do not alter
+currency, teleport, or grant the item administratively; the objective events
+and normal NPC exchange remain the gameplay authority.
+
 ## Provenance and licensing
 
 - The Ashita `IAutoFollow` annotations are part of the official GPL-licensed
