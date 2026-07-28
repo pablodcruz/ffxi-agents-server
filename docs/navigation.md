@@ -441,6 +441,12 @@ another `/attack <t>`. A rejection after combat has begun is never retried.
 This keeps transient attack registration inside one deterministic handoff
 without permitting target substitution or an unbounded loop.
 
+The bounded retry was subsequently exercised live against Walking Sapling
+`17215661`: the first attack returned `Unable to see the Walking Sapling`,
+the helper recorded `retry_allowed: true`, re-followed and re-verified the same
+server ID, and the second attack defeated it for 160 EXP. No operator decision
+or target-selection round trip occurred between those stages.
+
 The normal `/follow <t>` fallback is monitored four times per second, stops
 inside the configured attack range, and fails closed if auto-follow stops,
 the exact entity disappears, login state changes, or the approach timeout
@@ -609,6 +615,36 @@ accept sequence was one bounded `up` followed by `confirm`. This item-selection
 state is observable through `selected_item`, but the highlighted Yes/No row is
 not yet exposed, so a one-time visual check was used. A future casket helper
 should encode the menu states and preserve exact-ID and bounded-input checks.
+
+Two more fresh caskets exposed `Prism Powder`, `Echo Drops`, and `Antidote`.
+For each temporary-item casket, the observed sequence was:
+
+1. exact-ID casket interaction;
+2. choose the non-`None` item row;
+3. confirm the resource-backed `selected_item`;
+4. advance to the final Yes/No query;
+5. move from the default `No` to `Yes`; and
+6. confirm and require an authoritative `obtains the temporary item` event.
+
+This stable sequence is a candidate for a narrow casket macro/helper. The item
+name must still be verified before the helper commits to the final query.
+
+### Level-7 farming milestone
+
+The resilient handoff completed three more committed fights without
+per-stage operator evaluation:
+
+- Vulture `17215663`: 160 EXP and a bird egg;
+- Walking Sapling `17215661`: 160 EXP after the live same-ID retry above;
+- Vulture `17215663`: 160 EXP and a bird feather; and
+- Rock Lizard `17215659`: 180 EXP and Monk level 7.
+
+The level-up changed the authoritative state from level 6 at 1,650/1,750 EXP
+to level 7 at 80/2,000 EXP. Maximum HP rose from 108 to 123, attack from 33 to
+34, and defense from 38 to 40. The client independently emitted
+`Pablo attains level 7!`. The lizard fight ended at 9% HP; committed mode
+correctly continued because retreat routing was not part of the selected
+policy, and the level-up restored Pablo to full HP.
 
 ## Provenance and licensing
 
