@@ -83,7 +83,7 @@ meaningful checkpoints such as a vendor sale rather than after every fight.
 ### Guarded private-server service teleport
 
 Unverified service travel now defaults to the dedicated
-`ffxi_service_teleport` MCP operation. AgentBridge 0.19.0 accepts typed
+`ffxi_service_teleport` MCP operation. AgentBridge 0.20.0 accepts typed
 coordinates, an explicit zone, an allowlisted service reason, and a hard
 confirmation phrase. It queues a validated LandSandBoat `!pos` command only
 after confirming the character is logged in, idle, and outside menus.

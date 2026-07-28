@@ -679,7 +679,7 @@ server.registerTool(
   {
     title: "Send bounded FFXI menu input",
     description:
-      "Send exactly one automatically released allowlisted DirectInput menu pulse through AgentBridge. Confirm, cancel, up, down, left, and right require an open menu; open_main_menu and show_interface require a closed menu. show_interface also requires read-only proof that the FFXI interface is hidden.",
+      "Send exactly one automatically released allowlisted DirectInput menu pulse through AgentBridge. Confirm, cancel, directional input, and open_context_menu require an open menu; open_main_menu and show_interface require a closed menu. show_interface also requires read-only proof that the FFXI interface is hidden.",
     inputSchema: {
       agent_id: agentIdSchema,
       action: z.enum([
@@ -689,6 +689,7 @@ server.registerTool(
         "down",
         "left",
         "right",
+        "open_context_menu",
         "open_main_menu",
         "show_interface",
       ]),

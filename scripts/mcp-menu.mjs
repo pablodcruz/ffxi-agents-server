@@ -17,13 +17,14 @@ const allowedActions = new Set([
   "down",
   "left",
   "right",
+  "open_context_menu",
   "open_main_menu",
   "show_interface",
 ]);
 
 if (!allowedActions.has(action)) {
   throw new Error(
-    "Menu input requires --action confirm|cancel|up|down|left|right|open_main_menu|show_interface.",
+    "Menu input requires --action confirm|cancel|up|down|left|right|open_context_menu|open_main_menu|show_interface.",
   );
 }
 if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {

@@ -36,7 +36,7 @@ pnpm mcp:teleport -- \
   --reason vendor
 ```
 
-AgentBridge 0.19.0 converts those axes to LandSandBoat's `!pos` argument order.
+AgentBridge 0.20.0 converts those axes to LandSandBoat's `!pos` argument order.
 It omits the zone argument for same-zone positioning, avoiding an unnecessary
 zone reload and preserving active Trusts. Cross-zone travel still supplies the
 explicit zone.
@@ -187,8 +187,9 @@ pnpm mcp:menu -- --action open_main_menu
 ```
 
 `open_main_menu` is accepted only while AgentBridge reports the menu closed;
-confirm, cancel, up, down, left, and right require it open. AgentBridge 0.16.0
-injects only
+confirm, cancel, up, down, left, right, and `open_context_menu` require it
+open. `open_context_menu` is the fixed numpad-plus input used by FFXI's item
+sorting menu. AgentBridge injects only
 the corresponding fixed DirectInput scan codes and releases each key
 automatically. This replaces the focus-sensitive Parallels key-event path.
 `show_interface` remains a separately named recovery action for Scroll Lock.
@@ -203,6 +204,32 @@ inventory and proved item ID 536 before any item confirmation. The legacy
 handoff window's empty slots and final action controls still do not expose
 distinct semantic labels, and the VM capture path omits that native layer.
 Do not infer those controls from remembered key counts.
+
+### Stackable loot and Beastmen's Seal storage
+
+FFXI's inventory context menu is observed as `menu    itmsort2`; choosing
+**Auto** opens the `menu    sortyn` confirmation. Auto-Sort was enabled live on
+2026-07-28. It did not retroactively merge the thirteen existing one-item
+Beastmen's Seal slots, and selecting **Manual** did not merge them either.
+Treat future item acquisition as the validation point: stackable drops should
+join an existing stack, while inventory is inspected between farming batches
+rather than after every fight.
+
+Beastmen's Seal is local item ID 1126, has a stack size of 99, and has no
+vendor value in the pinned LandSandBoat data. Shami in Port Jeuno (zone 246,
+exact server ID 17784905) is therefore the durable storage sink. The guarded
+helper verifies the zone, a six-yalm radius, exact NPC and item IDs, one-item
+consumption, and Shami's exact storage dialogue on every handoff:
+
+```sh
+pnpm mcp:store-seals -- --maximum 13
+```
+
+The first live batch stored all thirteen loose seals, reduced inventory from
+21/30 to 8/30, and produced Shami's authoritative balance message reporting
+fourteen stored Beastmen's Seals. The first test seal accounts for the
+difference. Do not run the helper against another NPC, item, zone, or open
+menu.
 
 For a single item handed to an NPC, the normal FFXI `/item` command is a
 camera-independent fallback that avoids the legacy Trade window's hidden

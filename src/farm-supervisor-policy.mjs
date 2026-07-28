@@ -85,6 +85,52 @@ export function targetDefeated(entity) {
     || [2, 3].includes(Number(entity.status));
 }
 
+export function shouldRetryRecoveryCommand({
+  observation,
+  minimumHpPercent,
+  lastCommandAt,
+  now = Date.now(),
+  retryAfterMs = 2000,
+}) {
+  return Number(observation?.player?.hp_percent) < Number(minimumHpPercent)
+    && Number(observation?.player?.status) === 0
+    && Number(now) - Number(lastCommandAt) >= Number(retryAfterMs);
+}
+
+export function shouldAutoCancelMenu({ menuName, reactiveThreat }) {
+  const normalizedMenuName = String(menuName || "").trim();
+  return Boolean(reactiveThreat)
+    || normalizedMenuName === "menu    inline"
+    || normalizedMenuName === "menu    playermo";
+}
+
+export function classifyReactiveTiming({
+  firstSeenAt,
+  now = Date.now(),
+  handoff = false,
+}) {
+  const elapsedMs = Number(now) - Number(firstSeenAt);
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return { aggroResponseMs: null, handoffQueueMs: null };
+  }
+  return handoff
+    ? { aggroResponseMs: null, handoffQueueMs: elapsedMs }
+    : { aggroResponseMs: elapsedMs, handoffQueueMs: null };
+}
+
+export function canStopAtFightLimit({
+  fightsCompleted,
+  maximumFights,
+  observation,
+  currentTarget,
+  reactiveThreat,
+}) {
+  return Number(fightsCompleted) >= Number(maximumFights)
+    && !currentTarget
+    && !reactiveThreat
+    && !hasLiveCombat(observation);
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

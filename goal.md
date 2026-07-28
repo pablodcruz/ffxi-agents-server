@@ -15,19 +15,31 @@ repository now exist.
 
 ## Current state
 
-- Character: Pablo, Hume male, Monk level 11.
-- Progress: 1,199/2,800 EXP.
-- Gil goal: 469/10,000 gil.
-- Records of Eminence: `Vanquish Multiple Enemies I` at 48/200. A completed
+- Character: Pablo, Hume male, Monk level 12.
+- Progress: 1,359/3,000 EXP.
+- Gil goal: 1,139/10,000 gil. The local stream overlay is synchronized to this
+  verified balance.
+- Records of Eminence: `Vanquish Multiple Enemies I` at 69/200. A completed
   objective awarded 1,500 bonus EXP and a Copper Voucher; the new sparks
   balance still needs an authoritative menu check.
 - Trust: Naji acquired and validated; he uses Provoke after Pablo engages.
-- Control: AgentBridge 0.19.0, guarded service travel, exact-ID combat,
+- Control: AgentBridge 0.20.0, guarded service travel, exact-ID combat,
   automatic Combo, allowlisted loot sales, and a bounded reactive aggro guard.
 - Travel: Metalworks Home Point #2 and Bastok Markets Home Point #3 are
   registered and cached.
 - Farming exclusions: no proactive worms, Stone Eaters, Huge Hornets, or
   Vultures.
+- Treasure Caskets are ignored during farming. Disposable casket prompts and
+  the player menu are canceled; caskets will be revisited only for a specific
+  quest or a known valuable reward.
+- Inventory is currently 8/30 after a batched allowlisted sale and Beastmen's
+  Seal storage. FFXI Auto-Sort is enabled for future stackable drops; the next
+  seal drop must verify that it joins one stack. Existing loose seals did not
+  merge immediately when Auto-Sort or Manual was selected.
+- Shami in Port Jeuno stores 14 Beastmen's Seals for Pablo. Deposit future
+  batches there instead of consuming inventory slots; his first Cloudy Orb
+  costs 20 stored seals. The guarded helper accepts only item 1126 and exact
+  Shami server ID 17784905.
 - Vulture finding: coarse positioning, facing, and a target-locked `/follow
   <t>` approach down to 1.13 yalms all failed to register combat against
   multiple exact IDs. The family stays excluded pending separate diagnosis.
@@ -86,17 +98,20 @@ whole encounter instead of competing scripts.
 ### Validation scoreboard
 
 - Consecutive approved unattended fights without a preventable death:
-  **11/30** across five bounded leases. The original three-fight lease had zero
-  errors. The next six fights recovered automatically from one line-of-sight
-  rejection, one registration timeout, and one exact-target verification miss;
-  all six still completed with no death, excluded pull, or forbidden action.
-  Lease `3e069267-5d80-4f5e-8b98-c6e2afbaca7b` also proved that approved
-  targets outrank closer excluded Vultures and Stone Eaters. Two subsequent
-  approved Sapling fights raised Pablo to level 11; the final one validated the
-  repaired heal-to-stable-idle handshake before positioning.
-- Controlled multi-enemy handoffs: **0/3**.
-- Reactive defense: **1 clean live win**. A Young Quadav that had already
-  aggroed Pablo was engaged in 551 ms, defeated, and awarded 80 EXP and 6 gil.
+  **30/30 — passed**. The final nineteen wins included automatic recovery,
+  bounded line-of-sight and registration retries, casket/menu dismissal, and
+  two add handoffs. No proactive excluded family was engaged, and no teleport
+  or recovery action ran during combat.
+- Controlled multi-enemy handoffs: **2/3**. A Young Quadav and a linked Rock
+  Lizard were queued while another target was active, then defeated without
+  disengaging.
+- Reactive defense: **validated with repeated sub-second samples** at 551 ms,
+  476 ms, and 206 ms. In the 206 ms Amber Quadav case, FFXI had already
+  selected the aggressor; the supervisor explicitly preserved that exact
+  target, issued attack, followed from 7.83 to 0.84 yalms, and won.
+- Reactive timing now reports queued-add wait separately from aggro response.
+  Finishing the current enemy before switching to an add is intentional queue
+  time and no longer pollutes the sub-second latency metric.
 - Automatic weapon skill: **validated** with two Combo uses in that reactive
   fight.
 - Safe recovery: **validated** from 38% to above 90% while idle. A level-up
@@ -109,8 +124,13 @@ whole encounter instead of competing scripts.
   fight-limit stop, heartbeat, counters, and structured logs.
 - Reward accounting: **validated** against FFXI control-byte suffixes and a
   clean per-lease event baseline.
-- Remaining Goal 1 gaps: 19 approved fights, three controlled add handoffs,
-  repeated sub-second reactive samples, and death/Home Point recovery.
+- Fight-limit safety: **validated live**. Lease
+  `c9713602-84a4-4383-9639-59affe30b6d3` defeated one Walking Sapling, returned
+  exactly to its safe-camp origin, observed no live combat, and only then
+  disabled control. This follows a live Amber Quadav aggro that occurred after
+  an older lease stopped beside an aggressive pocket.
+- Remaining Goal 1 gaps: one controlled add handoff and death/Home Point
+  recovery.
 
 ## Goal 2 — reach 10,000 gil while leveling
 

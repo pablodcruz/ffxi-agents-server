@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canStopAtFightLimit,
+  classifyReactiveTiming,
   excludedCombatPocket,
   hasLiveCombat,
   parseCombatRewards,
   safeCombatPosition,
   selectProactiveTarget,
+  shouldAutoCancelMenu,
+  shouldRetryRecoveryCommand,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
 
@@ -97,6 +101,97 @@ test("recognizes both observed corpse statuses and missing entities", () => {
   assert.equal(targetDefeated({ status: 2, hp_percent: 20 }), true);
   assert.equal(targetDefeated({ status: 3, hp_percent: 0 }), true);
   assert.equal(targetDefeated(null), true);
+});
+
+test("retries a missed recovery command only while idle and still below threshold", () => {
+  assert.equal(shouldRetryRecoveryCommand({
+    observation: observation({ player: { status: 0, hp_percent: 80 } }),
+    minimumHpPercent: 90,
+    lastCommandAt: 1000,
+    now: 3000,
+  }), true);
+  assert.equal(shouldRetryRecoveryCommand({
+    observation: observation({ player: { status: 33, hp_percent: 80 } }),
+    minimumHpPercent: 90,
+    lastCommandAt: 1000,
+    now: 3000,
+  }), false);
+  assert.equal(shouldRetryRecoveryCommand({
+    observation: observation({ player: { status: 0, hp_percent: 95 } }),
+    minimumHpPercent: 90,
+    lastCommandAt: 1000,
+    now: 3000,
+  }), false);
+  assert.equal(shouldRetryRecoveryCommand({
+    observation: observation({ player: { status: 0, hp_percent: 80 } }),
+    minimumHpPercent: 90,
+    lastCommandAt: 2000,
+    now: 3000,
+  }), false);
+});
+
+test("auto-cancels known disposable menus unless reactive defense needs it", () => {
+  assert.equal(shouldAutoCancelMenu({
+    menuName: "menu    inline  ",
+    reactiveThreat: null,
+  }), true);
+  assert.equal(shouldAutoCancelMenu({
+    menuName: "menu    playermo",
+    reactiveThreat: null,
+  }), true);
+  assert.equal(shouldAutoCancelMenu({
+    menuName: "menu    shopmain",
+    reactiveThreat: null,
+  }), false);
+  assert.equal(shouldAutoCancelMenu({
+    menuName: "menu    shopmain",
+    reactiveThreat: { server_id: 42 },
+  }), true);
+});
+
+test("separates immediate aggro latency from intentional add queue time", () => {
+  assert.deepEqual(classifyReactiveTiming({
+    firstSeenAt: 1000,
+    now: 1450,
+    handoff: false,
+  }), {
+    aggroResponseMs: 450,
+    handoffQueueMs: null,
+  });
+  assert.deepEqual(classifyReactiveTiming({
+    firstSeenAt: 1000,
+    now: 28000,
+    handoff: true,
+  }), {
+    aggroResponseMs: null,
+    handoffQueueMs: 27000,
+  });
+});
+
+test("fight limits stop only after current and reactive combat are drained", () => {
+  const idle = observation({ player: { status: 0, hp_percent: 90 } });
+  const fighting = observation({ player: { status: 1, hp_percent: 90 } });
+  assert.equal(canStopAtFightLimit({
+    fightsCompleted: 6,
+    maximumFights: 6,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+  }), true);
+  assert.equal(canStopAtFightLimit({
+    fightsCompleted: 6,
+    maximumFights: 6,
+    observation: fighting,
+    currentTarget: null,
+    reactiveThreat: { server_id: 42 },
+  }), false);
+  assert.equal(canStopAtFightLimit({
+    fightsCompleted: 5,
+    maximumFights: 6,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+  }), false);
 });
 
 test("excludes the unvalidated South Gustaberg multi-aggro pocket", () => {

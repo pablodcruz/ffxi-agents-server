@@ -10,7 +10,7 @@ command for vendor, registered travel-node, or stuck-recovery travel.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.19.0';
+addon.version = '0.20.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -83,6 +83,7 @@ local allowed_menu_actions =
     confirm = 0x1C,
     down = 0xD0,
     left = 0xCB,
+    open_context_menu = 0x4E,
     open_main_menu = 0x4A,
     right = 0xCD,
     show_interface = 0x46,

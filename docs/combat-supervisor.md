@@ -44,6 +44,9 @@ The guard:
   1000 TP;
 - re-arms its own guarded control lease before reactive writes so a separate
   high-level MCP action can still finish with its normal emergency stop;
+- treats the configured fight count as a proactive limit, drains any active
+  defensive threat, and returns to the lease's starting camp while idle before
+  stopping;
 - stops on logout, zoning, death, signal, or lease expiration;
 - performs an emergency stop when it exits.
 
@@ -72,8 +75,15 @@ The unified supervisor was validated live later on 2026-07-28:
   0.92, and 1.12 yalms before attack.
 - The clean lease counted 160 EXP; the Rock Lizard was too weak to award EXP.
 - A separate recovery test restored Pablo from 38% to above 90% while idle.
-- Five bounded leases have now produced 11 consecutive approved wins without a
-  preventable death. The latest live state is Monk level 11 at 1,199/2,800 EXP.
+- The reliability sequence reached 30 consecutive approved unattended wins
+  without a preventable death. Pablo reached Monk level 12.
+- Two controlled add handoffs were won without disengaging. One queued Rock
+  Lizard exposed a metrics issue: its 27-second wait was the intentional time
+  spent finishing the first target, not aggro-response latency. The supervisor
+  now records add queue time separately.
+- An Amber Quadav later aggroed while FFXI already had it selected. The
+  supervisor logged `reactive_target_preserved`, issued attack in 206 ms,
+  followed from 7.83 to 0.84 yalms, and won.
 
 Live failures also changed the policy:
 
@@ -84,6 +94,9 @@ Live failures also changed the policy:
   combat facing.
 - An aggro-selected exact target is preserved instead of cleared and
   reselected.
+- Treasure Caskets are not farming objectives. Known casket/inline prompts and
+  the accidental player menu are canceled so the combat loop can continue;
+  caskets remain reserved for explicit quests or known valuable rewards.
 - The game-command `/follow <t>` is tried first; if a hostile target does not
   move, a three-second AgentBridge `move_to_entity` lease runs directly toward
   it.
@@ -98,6 +111,12 @@ Live failures also changed the policy:
 - The high-elevation pocket near `(-380, -312)` remains diagnostic-only because
   direct target approach moved away from one Sapling. Avoid it in the clean
   baseline until collision-aware movement explains that behavior.
+- A fight-limited lease once stopped beside aggressive Quadavs, and an Amber
+  Quadav attacked afterward. The supervisor now checks for a live threat before
+  honoring the numeric fight limit and returns to the lease origin while idle.
+  Lease `c9713602-84a4-4383-9639-59affe30b6d3` validated the new path: one
+  Sapling was defeated, Pablo returned exactly to the safe-camp origin, no live
+  combat remained, and guarded control was then disabled.
 
 ## Usage
 

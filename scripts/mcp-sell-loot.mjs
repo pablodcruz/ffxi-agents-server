@@ -8,6 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectDir = path.resolve(import.meta.dirname, "..");
 const sellableItems = new Map([
   [847, "Bird Feather"],
+  [926, "Lizard Tail"],
   [953, "Treant Bulb"],
   [573, "Vegetable Seeds"],
   [575, "Grain Seeds"],
@@ -83,6 +84,17 @@ async function waitFor(predicate, attempts = 8) {
   return current;
 }
 
+async function moveToAllowlistedItem(current) {
+  for (const action of ["down", "up"]) {
+    for (let step = 0; step < 40; step += 1) {
+      if (sellableItems.has(current.selected_item?.item_id)) return current;
+      await input(action);
+      current = await state();
+    }
+  }
+  return current;
+}
+
 try {
   await client.connect(transport);
   const initial = await state();
@@ -107,11 +119,7 @@ try {
   for (let saleNumber = 0; saleNumber < maxSales; saleNumber += 1) {
     if (sellableUnits(current) === 0) break;
 
-    for (let step = 0; step < 40; step += 1) {
-      if (sellableItems.has(current.selected_item?.item_id)) break;
-      await input("down");
-      current = await state();
-    }
+    current = await moveToAllowlistedItem(current);
 
     const itemId = current.selected_item?.item_id;
     if (!sellableItems.has(itemId)) {

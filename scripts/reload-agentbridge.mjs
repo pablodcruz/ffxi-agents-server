@@ -29,7 +29,7 @@ const foregroundGameCheck = [
   "[uint32]$foregroundProcessId = 0;",
   "[void][Win32.NativeMethods]::GetWindowThreadProcessId($window, [ref]$foregroundProcessId);",
   "$foregroundProcess = Get-Process -Id $foregroundProcessId -ErrorAction SilentlyContinue;",
-  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -notin @('pol', 'xiloader')) { exit 42 }",
+  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -notin @('pol', 'xiloader')) { Write-Output ('foreground=' + $(if ($null -eq $foregroundProcess) { 'unknown' } else { $foregroundProcess.ProcessName })); exit 42 }",
 ].join(" ");
 
 function requireLiveBridge() {
@@ -39,7 +39,7 @@ function requireLiveBridge() {
     {
       cwd: projectDir,
       timeout: 10000,
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf8",
     },
   );
@@ -63,13 +63,14 @@ function requireForegroundGame() {
     ],
     {
       timeout: 5000,
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf8",
     },
   );
   if (child.error || child.status !== 0) {
+    const observed = child.stdout?.trim();
     throw new Error(
-      "Refusing to type the addon reload command because neither pol.exe nor the live xiloader.exe client is the foreground Windows process.",
+      `Refusing to type the addon reload command because neither pol.exe nor the live xiloader.exe client is the foreground Windows process${observed ? ` (${observed})` : ""}.`,
     );
   }
 }

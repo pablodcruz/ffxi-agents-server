@@ -89,7 +89,10 @@ try {
 
   let after;
   let afterValue;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  // Cross-zone loads on the Windows ARM client can take longer than the
+  // six-second same-zone window even when the server has already accepted the
+  // guarded command.
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     after = await client.callTool({
       name: "ffxi_observe",

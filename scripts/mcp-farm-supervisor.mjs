@@ -7,10 +7,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
 import {
+  canStopAtFightLimit,
+  classifyReactiveTiming,
   hasLiveCombat,
   parseCombatRewards,
   safeCombatPosition,
   selectProactiveTarget,
+  shouldAutoCancelMenu,
+  shouldRetryRecoveryCommand,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
 import {
@@ -110,6 +114,9 @@ const metrics = {
   aggro_response_samples: 0,
   last_aggro_response_ms: null,
   maximum_aggro_response_ms: null,
+  handoff_queue_samples: 0,
+  last_handoff_queue_ms: null,
+  maximum_handoff_queue_ms: null,
 };
 const startedAt = Date.now();
 const startedAtIso = new Date(startedAt).toISOString();
@@ -126,6 +133,7 @@ let lastStateWriteAt = 0;
 let missingTargetSamples = 0;
 let stopping = false;
 let recovering = false;
+let leaseOriginPosition = null;
 const cooldowns = new Map();
 const threatFirstSeen = new Map();
 
@@ -213,6 +221,13 @@ async function observe() {
     radius: scanRadius,
     max_entities: 64,
     event_limit: 30,
+  });
+}
+
+async function characterState() {
+  return call("ffxi_character_state", {
+    include_recasts: false,
+    max_items: 1,
   });
 }
 
@@ -451,16 +466,31 @@ async function engage(target, mode, {
   };
   currentMode = mode;
   missingTargetSamples = 0;
+  let aggroResponseMs = null;
+  let handoffQueueMs = null;
   if (mode === "reactive") {
     const firstSeen = threatFirstSeen.get(Number(target.server_id));
     if (firstSeen) {
-      const responseMs = Date.now() - firstSeen;
-      metrics.aggro_response_samples += 1;
-      metrics.last_aggro_response_ms = responseMs;
-      metrics.maximum_aggro_response_ms = Math.max(
-        Number(metrics.maximum_aggro_response_ms) || 0,
-        responseMs,
-      );
+      ({ aggroResponseMs, handoffQueueMs } = classifyReactiveTiming({
+        firstSeenAt: firstSeen,
+        handoff,
+      }));
+      if (aggroResponseMs !== null) {
+        metrics.aggro_response_samples += 1;
+        metrics.last_aggro_response_ms = aggroResponseMs;
+        metrics.maximum_aggro_response_ms = Math.max(
+          Number(metrics.maximum_aggro_response_ms) || 0,
+          aggroResponseMs,
+        );
+      }
+      if (handoffQueueMs !== null) {
+        metrics.handoff_queue_samples += 1;
+        metrics.last_handoff_queue_ms = handoffQueueMs;
+        metrics.maximum_handoff_queue_ms = Math.max(
+          Number(metrics.maximum_handoff_queue_ms) || 0,
+          handoffQueueMs,
+        );
+      }
       threatFirstSeen.delete(Number(target.server_id));
     }
   }
@@ -471,7 +501,8 @@ async function engage(target, mode, {
     name: target.name,
     server_id: target.server_id,
     distance: entityById(targeted, target.server_id)?.distance,
-    aggro_response_ms: metrics.last_aggro_response_ms,
+    aggro_response_ms: aggroResponseMs,
+    handoff_queue_ms: handoffQueueMs,
   });
   await transition("fighting");
   if (mode === "reactive") {
@@ -507,6 +538,7 @@ async function recover(observation) {
   });
   await armControl();
   await command("/heal");
+  let lastHealCommandAt = Date.now();
   recovering = true;
   counters.recoveries += 1;
   let recoveryThreat = null;
@@ -521,6 +553,18 @@ async function recover(observation) {
       if (threat || hasLiveCombat(observation)) {
         recoveryThreat = threat;
         break;
+      }
+      if (shouldRetryRecoveryCommand({
+        observation,
+        minimumHpPercent: minimumStartHpPercent,
+        lastCommandAt: lastHealCommandAt,
+      })) {
+        await command("/heal");
+        lastHealCommandAt = Date.now();
+        log("recovery_command_reissued", {
+          player_hp_percent: observation?.player?.hp_percent,
+        });
+        continue;
       }
       if (Number(observation?.player?.hp_percent) >= minimumStartHpPercent) {
         break;
@@ -597,6 +641,42 @@ async function positionNear(target, observation, {
   log("combat_position", {
     server_id: target.server_id,
     destination,
+    live_combat_after: hasLiveCombat(after),
+  });
+  return after;
+}
+
+async function returnToLeaseOrigin(observation) {
+  if (!leaseOriginPosition || hasLiveCombat(observation)) return observation;
+  const playerPosition = observation?.player?.position;
+  if (!playerPosition) return observation;
+  const horizontalDistance = Math.hypot(
+    Number(playerPosition.x) - Number(leaseOriginPosition.x),
+    Number(playerPosition.y) - Number(leaseOriginPosition.y),
+  );
+  if (horizontalDistance <= 3.5) return observation;
+
+  await transition("returning_to_camp", {
+    distance: horizontalDistance,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("camp_return_blocked", { reason: "live_combat" });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    x: Number(leaseOriginPosition.x),
+    y: Number(leaseOriginPosition.y),
+    z: Number(leaseOriginPosition.z),
+    zone_id: zoneId,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const after = await sample();
+  log("camp_return", {
+    destination: leaseOriginPosition,
     live_combat_after: hasLiveCombat(after),
   });
   return after;
@@ -862,16 +942,15 @@ try {
   });
 
   let observation = await observe();
+  leaseOriginPosition = observation?.player?.position
+    ? { ...observation.player.position }
+    : null;
   lastEventId = maxObservedEventId(observation);
   observeThreats(observation);
   await writeState();
   while (!stopping) {
     if (Date.now() - startedAt >= maximumSeconds * 1000) {
       stopReason = "time_limit";
-      break;
-    }
-    if (counters.fights_completed >= maximumFights) {
-      stopReason = "fight_limit";
       break;
     }
     if (await stopRequested()) break;
@@ -887,11 +966,54 @@ try {
     const reactiveThreat = selectReactiveThreat(observation, {
       maxDistance: threatDistance,
     });
+    const uiState = await characterState();
+    if (uiState?.menu_open) {
+      const menuName = String(uiState.menu_name || "").trim();
+      if (shouldAutoCancelMenu({ menuName, reactiveThreat })) {
+        await armControl();
+        await call("ffxi_menu_input", { action: "cancel" });
+        log("menu_cancelled", {
+          menu_name: menuName || "unknown",
+          reason: reactiveThreat ? "reactive_defense" : "known_disposable_menu",
+        });
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      stopReason = `menu_open:${menuName || "unknown"}`;
+      log("farm_supervisor_blocked", { reason: stopReason });
+      break;
+    }
     if (reactiveThreat) {
       await engage(reactiveThreat, "reactive", {
         handoff: previousTargetId !== null,
         observation,
       });
+      continue;
+    }
+    if (counters.fights_completed >= maximumFights) {
+      observation = await returnToLeaseOrigin(observation);
+      const remainingThreat = selectReactiveThreat(observation, {
+        maxDistance: threatDistance,
+      });
+      if (remainingThreat) {
+        await engage(remainingThreat, "reactive", {
+          handoff: true,
+          observation,
+        });
+        continue;
+      }
+      if (canStopAtFightLimit({
+        fightsCompleted: counters.fights_completed,
+        maximumFights,
+        observation,
+        currentTarget,
+        reactiveThreat: remainingThreat,
+      })) {
+        stopReason = "fight_limit";
+        break;
+      }
+      await transition("draining");
+      await new Promise((resolve) => setTimeout(resolve, 250));
       continue;
     }
 
