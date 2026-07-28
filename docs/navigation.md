@@ -383,6 +383,10 @@ bridge protocol. It:
 - approaches it with a leased entity-follow movement;
 - refuses to attack outside the configured range;
 - reacquires and verifies the exact server ID after movement;
+- issues `/check` and waits for an authoritative result in the same process;
+- rejects unknown and unsafe checks, and rejects caution unless explicitly
+  allowed;
+- catches the same exact entity again if it roams during `/check`;
 - sends only `/attack <t>`;
 - samples player and target HP once per second;
 - stops at a configurable player-HP floor, target defeat, logout, or timeout;
@@ -413,10 +417,23 @@ For an explicitly committed engagement:
 pnpm mcp:combat -- \
   --target "Walking Sapling" \
   --server-id 17215660 \
+  --allow-caution \
   --commit-once-engaged \
   --minimum-hp-percent 35 \
   --combat-timeout 120
 ```
+
+This is the preferred hunt handoff. It performs exact targeting, follow,
+close-range `/check`, optional catch-up, and attack without returning control
+between stages. `--allow-caution` admits a game-derived `decent challenge`
+result; omit it to require `easy prey` or `too weak`. `tough`, `very tough`,
+`incredibly tough`, and `even match` remain rejected.
+
+Normal FFXI macros are useful later for deterministic actions such as a weapon
+skill, healing, or a stable menu sequence. They are not the targeting layer:
+macros cannot pin a server ID, distinguish duplicate display names, or wait for
+and parse an asynchronous `/check` result. Keep exact selection and the combat
+gate in AgentBridge/MCP, then use narrowly scoped macros only after that gate.
 
 Use `--server-id` when multiple nearby entities share the same display name.
 The ID comes from `ffxi_observe`; the bridge still validates that the entity is
