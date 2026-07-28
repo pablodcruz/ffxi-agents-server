@@ -36,3 +36,25 @@ export function shouldRetryAttackRegistration({
 
   return currentPlayerHp >= startPlayerHp && currentTargetHp >= startTargetHp;
 }
+
+export function shouldUseWeaponSkill({
+  configured,
+  engagementObserved,
+  exactTargetSelected,
+  tp,
+  now,
+  lastAttemptAt,
+  minimumIntervalMs = 5000,
+}) {
+  const currentTp = finiteNumber(tp);
+  const currentTime = finiteNumber(now);
+  const previousAttempt = finiteNumber(lastAttemptAt);
+  return Boolean(configured)
+    && engagementObserved === true
+    && exactTargetSelected === true
+    && currentTp !== undefined
+    && currentTp >= 1000
+    && currentTime !== undefined
+    && previousAttempt !== undefined
+    && currentTime - previousAttempt >= minimumIntervalMs;
+}
