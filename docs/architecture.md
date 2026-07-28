@@ -39,6 +39,9 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_move_to_position` | Yes | Move toward one bounded world-coordinate waypoint |
 | `ffxi_directional_input` | Yes | Send one automatically released fallback input pulse |
 | `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command, including a standard NPC trade window |
+| `ffxi_farm_start` | Yes | Start one bounded local proactive/reactive combat lease |
+| `ffxi_farm_status` | No | Read the lease phase, target, counters, and latency metrics |
+| `ffxi_farm_stop` | Yes | Cooperatively stop the current exact lease |
 
 The MCP server marks observation tools read-only and uses write approvals for
 game actions. The Ashita addon repeats the command allowlist so bypassing the

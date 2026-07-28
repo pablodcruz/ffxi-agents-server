@@ -1,9 +1,17 @@
+import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { AgentRegistry } from "./agent-registry.mjs";
 import { BridgeError, validateGameplayCommand } from "./bridge-client.mjs";
+import {
+  FARM_CONFIRMATION,
+  farmStatus,
+  startFarm,
+  stopFarm,
+} from "./farm-supervisor-manager.mjs";
 
+const projectDir = path.resolve(import.meta.dirname, "..");
 const agents = new AgentRegistry();
 const lsbApiUrl = (process.env.LSB_API_URL || "http://127.0.0.1:8088/api").replace(/\/$/, "");
 const agentIdSchema = z
@@ -14,7 +22,7 @@ const agentIdSchema = z
 const server = new McpServer(
   {
     name: "ffxi-agent-control",
-    version: "0.6.0",
+    version: "0.7.0",
   },
   {
     instructions:
@@ -889,6 +897,120 @@ server.registerTool(
           { write: true },
         ),
       );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_farm_start",
+  {
+    title: "Start a bounded private-server farm supervisor",
+    description:
+      "Start one durable local lease that owns proactive checks, exact-ID attacks, reactive defense, safe recovery, and weapon skills for the selected private-server character.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      zone_id: z.number().int().min(1).max(298),
+      maximum_seconds: z.number().int().min(10).max(3600).default(900),
+      maximum_fights: z.number().int().min(1).max(200).default(30),
+      scan_radius: z.number().int().min(10).max(50).default(50),
+      minimum_start_hp_percent: z.number().int().min(50).max(100).default(90),
+      weapon_skill: z
+        .string()
+        .min(1)
+        .max(64)
+        .regex(/^[^"\r\n;|]+$/)
+        .default("Combo"),
+      confirmation: z.literal(FARM_CONFIRMATION),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    zone_id,
+    maximum_seconds,
+    maximum_fights,
+    scan_radius,
+    minimum_start_hp_percent,
+    weapon_skill,
+    confirmation,
+  }) => {
+    try {
+      return result(await startFarm({
+        projectDir,
+        agentId: agent_id || "primary",
+        zoneId: zone_id,
+        maximumSeconds: maximum_seconds,
+        maximumFights: maximum_fights,
+        scanRadius: scan_radius,
+        minimumStartHpPercent: minimum_start_hp_percent,
+        weaponSkill: weapon_skill,
+        confirmation,
+      }));
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_farm_status",
+  {
+    title: "Read the private-server farm supervisor",
+    description:
+      "Read the active lease, phase, counters, latency metrics, target, and stop reason without exposing the local process id.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id }) => {
+    try {
+      return result(await farmStatus({
+        projectDir,
+        agentId: agent_id || "primary",
+      }));
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_farm_stop",
+  {
+    title: "Stop the private-server farm supervisor",
+    description:
+      "Request a cooperative stop for the active bounded farm lease. An optional lease id prevents stopping a newer replacement lease.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      lease_id: z.string().uuid().optional(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, lease_id }) => {
+    try {
+      return result(await stopFarm({
+        projectDir,
+        agentId: agent_id || "primary",
+        leaseId: lease_id,
+      }));
     } catch (error) {
       return toolError(error);
     }

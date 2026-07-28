@@ -143,6 +143,36 @@ test("excludes Stone Eaters even when their entity remains observable", () => {
   assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
 });
 
+test("excludes Vultures after target-follow still failed live registration", () => {
+  const [mob] = rankNearbyMobs({
+    playerLevel: 10,
+    observation: {
+      player: { position: { z: 0 } },
+      nearby_entities: [{
+        server_id: 17215675,
+        name: "Vulture",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 2,
+        position: { z: 0 },
+      }],
+    },
+    metadata: [{
+      server_id: 17215675,
+      minimum_level: 3,
+      maximum_level: 4,
+      aggro: false,
+      links: true,
+      drops: [],
+      conservative_vendor_value: 1.7,
+    }],
+  });
+
+  assert.equal(mob.disposition, "avoid");
+  assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
+});
+
 test("temporarily cools down an exact server ID without hiding evidence", () => {
   const [mob] = rankNearbyMobs({
     playerLevel: 4,
