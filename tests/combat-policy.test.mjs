@@ -43,6 +43,7 @@ test("uses a weapon skill only after exact-target engagement with sufficient TP"
     engagementObserved: true,
     exactTargetSelected: true,
     tp: 1000,
+    targetHpPercent: 50,
     now: 6000,
     lastAttemptAt: 0,
   };
@@ -50,5 +51,6 @@ test("uses a weapon skill only after exact-target engagement with sufficient TP"
   assert.equal(shouldUseWeaponSkill({ ...ready, engagementObserved: false }), false);
   assert.equal(shouldUseWeaponSkill({ ...ready, exactTargetSelected: false }), false);
   assert.equal(shouldUseWeaponSkill({ ...ready, tp: 999 }), false);
+  assert.equal(shouldUseWeaponSkill({ ...ready, targetHpPercent: 9 }), false);
   assert.equal(shouldUseWeaponSkill({ ...ready, now: 4000 }), false);
 });

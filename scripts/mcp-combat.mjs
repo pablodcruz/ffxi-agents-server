@@ -512,6 +512,7 @@ try {
       engagementObserved,
       exactTargetSelected: observation.target?.server_id === target.server_id,
       tp: playerPartyMember?.tp,
+      targetHpPercent: observedTarget?.hp_percent,
       now: Date.now(),
       lastAttemptAt: lastWeaponSkillAt,
     })) {
