@@ -15,10 +15,12 @@ repository now exist.
 
 ## Current state
 
-- Character: Pablo, Hume male, Monk level 10.
-- Progress: 1,369/2,600 EXP.
+- Character: Pablo, Hume male, Monk level 11.
+- Progress: 1,199/2,800 EXP.
 - Gil goal: 469/10,000 gil.
-- Records of Eminence: 900 sparks; `Vanquish Multiple Enemies I` at 40/200.
+- Records of Eminence: `Vanquish Multiple Enemies I` at 48/200. A completed
+  objective awarded 1,500 bonus EXP and a Copper Voucher; the new sparks
+  balance still needs an authoritative menu check.
 - Trust: Naji acquired and validated; he uses Provoke after Pablo engages.
 - Control: AgentBridge 0.19.0, guarded service travel, exact-ID combat,
   automatic Combo, allowlisted loot sales, and a bounded reactive aggro guard.
@@ -31,6 +33,10 @@ repository now exist.
   multiple exact IDs. The family stays excluded pending separate diagnosis.
 - Known dangerous area: the western South Gustaberg Quadav pocket around
   `(10, -170)` is excluded until multi-aggro handling passes.
+- High-elevation pocket `(-380, -312)` is diagnostic-only: its first two
+  Saplings were defeatable, but target-follow moved away from another spawn and
+  exposed a heal-to-idle race. Do not use it for the clean baseline until the
+  movement behavior is understood.
 
 ## Goal 1 — validate and harden the new combat system
 
@@ -79,22 +85,31 @@ whole encounter instead of competing scripts.
 
 ### Validation scoreboard
 
-- Consecutive clean unattended fights: **3/30**. Lease
-  `840c0fee-3e26-4f79-9e25-b991dec0d691` defeated two Walking Saplings and one
-  Rock Lizard, stopped itself at the fight limit, and had zero rejected
-  attacks, target-cycle errors, deaths, excluded pulls, or forbidden actions.
+- Consecutive approved unattended fights without a preventable death:
+  **11/30** across five bounded leases. The original three-fight lease had zero
+  errors. The next six fights recovered automatically from one line-of-sight
+  rejection, one registration timeout, and one exact-target verification miss;
+  all six still completed with no death, excluded pull, or forbidden action.
+  Lease `3e069267-5d80-4f5e-8b98-c6e2afbaca7b` also proved that approved
+  targets outrank closer excluded Vultures and Stone Eaters. Two subsequent
+  approved Sapling fights raised Pablo to level 11; the final one validated the
+  repaired heal-to-stable-idle handshake before positioning.
 - Controlled multi-enemy handoffs: **0/3**.
 - Reactive defense: **1 clean live win**. A Young Quadav that had already
   aggroed Pablo was engaged in 551 ms, defeated, and awarded 80 EXP and 6 gil.
 - Automatic weapon skill: **validated** with two Combo uses in that reactive
   fight.
-- Safe recovery: **validated** from 38% to above 90% while idle. The supervisor
-  now waits for the post-rest stand-up state before service positioning.
+- Safe recovery: **validated** from 38% to above 90% while idle. A level-up
+  revealed that queued `/heal` toggles could briefly report a stale idle
+  snapshot; the supervisor now observes the live stance, sends the stand toggle
+  only when status 33 is present, and requires two fresh idle samples before
+  service positioning. Lease `1ef05ac3-6f0e-42a1-80f3-d849b2363636` validated
+  the repair in live play.
 - MCP lease controls: **validated** for start, status, cooperative stop,
   fight-limit stop, heartbeat, counters, and structured logs.
 - Reward accounting: **validated** against FFXI control-byte suffixes and a
   clean per-lease event baseline.
-- Remaining Goal 1 gaps: 27 clean fights, three controlled add handoffs,
+- Remaining Goal 1 gaps: 19 approved fights, three controlled add handoffs,
   repeated sub-second reactive samples, and death/Home Point recovery.
 
 ## Goal 2 — reach 10,000 gil while leveling

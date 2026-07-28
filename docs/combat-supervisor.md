@@ -72,6 +72,8 @@ The unified supervisor was validated live later on 2026-07-28:
   0.92, and 1.12 yalms before attack.
 - The clean lease counted 160 EXP; the Rock Lizard was too weak to award EXP.
 - A separate recovery test restored Pablo from 38% to above 90% while idle.
+- Five bounded leases have now produced 11 consecutive approved wins without a
+  preventable death. The latest live state is Monk level 11 at 1,199/2,800 EXP.
 
 Live failures also changed the policy:
 
@@ -87,6 +89,15 @@ Live failures also changed the policy:
   it.
 - FFXI reward messages are parsed despite trailing control bytes, and every
   lease baselines the existing event tail before counting rewards.
+- A level-up can restore HP while the initial `/heal` command is still queued.
+  Unconditionally sending another `/heal` may then put the character into
+  healing stance after recovery appears complete. The supervisor now samples
+  the live stance, sends the stand toggle only for status 33, and requires two
+  fresh idle samples before it resumes positioning. A one-fight lease validated
+  the repair.
+- The high-elevation pocket near `(-380, -312)` remains diagnostic-only because
+  direct target approach moved away from one Sapling. Avoid it in the clean
+  baseline until collision-aware movement explains that behavior.
 
 ## Usage
 

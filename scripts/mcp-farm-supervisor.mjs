@@ -489,7 +489,10 @@ async function engage(target, mode, {
 }
 
 async function recover(observation) {
-  if (Number(observation?.player?.hp_percent) >= minimumStartHpPercent) {
+  if (
+    Number(observation?.player?.hp_percent) >= minimumStartHpPercent
+    && Number(observation?.player?.status) !== 33
+  ) {
     return { observation, threat: null };
   }
   if (hasLiveCombat(observation)) {
@@ -506,34 +509,58 @@ async function recover(observation) {
   await command("/heal");
   recovering = true;
   counters.recoveries += 1;
+  let recoveryThreat = null;
   try {
     while (Date.now() - startedAt < maximumSeconds * 1000) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       observation = await sample();
-      if (!verifySession(observation)) return { observation, threat: null };
+      if (!verifySession(observation)) break;
       const threat = selectReactiveThreat(observation, {
         maxDistance: threatDistance,
       });
       if (threat || hasLiveCombat(observation)) {
-        return { observation, threat };
+        recoveryThreat = threat;
+        break;
       }
       if (Number(observation?.player?.hp_percent) >= minimumStartHpPercent) {
-        return { observation, threat: null };
+        break;
       }
-      if (await stopRequested()) return { observation, threat: null };
+      if (await stopRequested()) break;
     }
-    return { observation, threat: null };
   } finally {
-    await command("/heal").catch(() => {});
     recovering = false;
     const idleDeadline = Date.now() + 5000;
+    let idleSamples = 0;
+    let standCommandSent = false;
     while (Date.now() < idleDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       const standing = await sample().catch(() => null);
-      if (!standing || Number(standing?.player?.status) === 0) break;
-      if (selectReactiveThreat(standing, { maxDistance: threatDistance })) break;
+      if (!standing) break;
+      observation = standing;
+      const threat = selectReactiveThreat(standing, {
+        maxDistance: threatDistance,
+      });
+      if (threat || hasLiveCombat(standing)) {
+        recoveryThreat = threat;
+        break;
+      }
+      if (Number(standing?.player?.status) === 33) {
+        idleSamples = 0;
+        if (!standCommandSent) {
+          await command("/heal").catch(() => {});
+          standCommandSent = true;
+        }
+        continue;
+      }
+      if (Number(standing?.player?.status) === 0) {
+        idleSamples += 1;
+        if (idleSamples >= 2) break;
+      } else {
+        idleSamples = 0;
+      }
     }
   }
+  return { observation, threat: recoveryThreat };
 }
 
 async function positionNear(target, observation, {
@@ -876,6 +903,13 @@ try {
         handoff: previousTargetId !== null,
         observation,
       });
+      continue;
+    }
+    if (Number(observation?.player?.status) !== 0) {
+      await transition("settling", {
+        player_status: observation?.player?.status,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
       continue;
     }
 
