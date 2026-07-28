@@ -251,6 +251,48 @@ pnpm mcp:smoke
 This is a task tool-registry refresh issue, not an AgentBridge failure, when
 the direct smoke test succeeds.
 
+### NPC trade does not open with `/trade <t>`
+
+The client accepts `/trade <t>` as an allowlisted command but does not open the
+NPC item-handoff menu on the tested Ashita client. Use the normal FFXI main
+menu's **Trade** entry. AgentBridge 0.16.0 exposes fixed, automatically released
+DirectInput pulses for opening the main menu and moving or confirming one entry
+at a time. It also exposes the focused menu name and selected numeric item ID
+so each transition and item choice can be verified before confirmation.
+
+Do not use Parallels host key events for this gameplay path. They depend on VM
+focus and remembered menu position. Parallels key code 78 is Scroll Lock, which
+toggles the FFXI UI; keypad minus is key code 82. If the UI was hidden
+accidentally, close all menus before using the separately named
+`show_interface` recovery action. The action fails closed unless a guarded,
+read-only client-memory check proves the FFXI interface is hidden.
+
+After an addon reload, the write latch and local activity feed both return to
+their configured safe defaults. Re-enable the feed explicitly before a stream:
+
+```sh
+pnpm mcp:feed -- --enabled true
+```
+
+The enabled feed writes the same allowlisted summaries to local game chat and
+to a persistent six-line `AGENT ACTIVITY - LOCAL ONLY` Ashita overlay. The
+overlay exists because native chat fades and some VM capture paths omit FFXI's
+legacy menu layer; it never sends text to other players or the server.
+
+### Parallels steals focus during an addon reload
+
+The Parallels trial reminder can cover the VM and leave a Windows terminal as
+the guest's foreground window. A host-level key sequence intended for FFXI can
+then type `/addon reload agentbridge` into that terminal. The reload helper now
+fails closed unless `pol.exe` is the foreground Windows process.
+
+Do not dismiss this as a cosmetic popup. Keep OBS stopped, dismiss the reminder
+with **Continue Trial**, inspect the VM, restore the last known-good addon file
+while FFXI is closed, and relaunch the saved `AshitaAgentLab` task. Credentials
+remain a manual checkpoint. Direct AgentBridge gameplay input does not have
+this VM-focus dependency; the guard is specifically for the bootstrap/reload
+helper used before the bridge is available.
+
 ### The map process restarts during startup
 
 The tested LandSandBoat image executes x86-64 code through QEMU on this
@@ -472,6 +514,23 @@ LandSandBoat/Ashita/MCP experiment, links the public repository, states that it
 is a local non-commercial learning project, and says that credentials and
 private launcher screens are intentionally kept off-stream. Replace default
 titles such as `Clanker Site Live Stream` on archived FFXI sessions.
+
+OBS reporting **Stop Streaming** proves only that the encoder is transmitting;
+it does not prove that YouTube has an active public broadcast. For a stale or
+ended unscheduled stream:
+
+1. keep OBS stopped while launchers or credentials are visible;
+2. open YouTube Studio's **Go live** → **Stream** control room;
+3. verify the existing title, description, privacy, and default stream key;
+4. wait for **Connect your encoder to go live** or **No data**;
+5. start OBS; and
+6. require YouTube to show **live**, an increasing timer, **Excellent** stream
+   health, and an **End Stream** button.
+
+If Studio remains at **Preparing stream**, stop OBS, wait for the control room
+to return to **No data**, and start OBS again while that control room is open.
+This fresh handshake restored the tested stream without copying or displaying
+the stream key.
 
 Useful issue evidence includes timestamps, error codes, sanitized service
 logs, versions, architecture, and whether each expected listener exists.

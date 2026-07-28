@@ -45,13 +45,15 @@
 - [x] Implement a bounded entity-follow primitive with arrival, timeout,
   progress, target-loss, and logout stops.
 - [x] Validate bounded movement against the live Windows client.
-- [ ] Add a bounded MCP-native NPC interaction tool to replace the temporary
-  focused-window Enter-key fallback.
+- [x] Add bounded MCP-native NPC interaction and menu-input tools that do not
+  depend on VM focus.
 - [ ] Normalize status/job/zone identifiers into names.
 - [x] Add bounded inventory, recast, buffs/debuffs, and menu-state
   observations.
-- [ ] Validate detailed character observations against the live Windows
+- [x] Validate detailed character observations against the live Windows
   client.
+- [ ] Validate exact cursor and selected-item semantics inside FFXI's legacy
+  Trade window.
 - [ ] Add higher-level skills for travel, combat, recovery, and quest steps.
 - [x] Validate exact-ID `/check`, recovery, repeatable combat, and progression
   from Monk level 2 to level 3 against the live client.

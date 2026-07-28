@@ -5,6 +5,7 @@ import {
   distance2d,
   ffxiToDetour,
   reachesDestination,
+  subdividePath,
 } from "../src/navmesh-planner.mjs";
 
 test("converts between FFXI and Detour coordinate systems", () => {
@@ -16,6 +17,26 @@ test("converts between FFXI and Detour coordinate systems", () => {
 
 test("calculates horizontal FFXI waypoint distance", () => {
   assert.equal(distance2d({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
+});
+
+test("subdivides long route legs while preserving corners and elevation", () => {
+  assert.deepEqual(
+    subdividePath([
+      { x: 0, y: 0, z: 0 },
+      { x: 30, y: 0, z: 6 },
+      { x: 30, y: 10, z: 8 },
+    ], 20),
+    [
+      { x: 0, y: 0, z: 0 },
+      { x: 15, y: 0, z: 3 },
+      { x: 30, y: 0, z: 6 },
+      { x: 30, y: 10, z: 8 },
+    ],
+  );
+  assert.throws(
+    () => subdividePath([{ x: 0, y: 0, z: 0 }], 0),
+    /positive finite/,
+  );
 });
 
 test("rejects a partial path that ends at a disconnected corridor edge", () => {

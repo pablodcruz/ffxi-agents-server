@@ -19,6 +19,40 @@ const keyCodes = Object.freeze({
   t: 28,
 });
 const command = "/addon reload agentbridge";
+const foregroundGameCheck = [
+  "Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition",
+  "'[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
+  "[DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);';",
+  "$window = [Win32.NativeMethods]::GetForegroundWindow();",
+  "[uint32]$foregroundProcessId = 0;",
+  "[void][Win32.NativeMethods]::GetWindowThreadProcessId($window, [ref]$foregroundProcessId);",
+  "$foregroundProcess = Get-Process -Id $foregroundProcessId -ErrorAction SilentlyContinue;",
+  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -ne 'pol') { exit 42 }",
+].join(" ");
+
+function requireForegroundGame() {
+  const child = spawnSync(
+    "prlctl",
+    [
+      "exec",
+      vmName,
+      "powershell.exe",
+      "-NoProfile",
+      "-Command",
+      foregroundGameCheck,
+    ],
+    {
+      timeout: 5000,
+      stdio: ["ignore", "ignore", "pipe"],
+      encoding: "utf8",
+    },
+  );
+  if (child.error || child.status !== 0) {
+    throw new Error(
+      "Refusing to type the addon reload command because pol.exe is not the foreground Windows process.",
+    );
+  }
+}
 
 function sendKey(keyCode, delay = 35) {
   const child = spawnSync(
@@ -44,6 +78,7 @@ function sendKey(keyCode, delay = 35) {
 }
 
 // Escape any partially entered chat text, then type one fixed, non-chat command.
+requireForegroundGame();
 sendKey(9, 80);
 for (const character of command) {
   sendKey(keyCodes[character]);

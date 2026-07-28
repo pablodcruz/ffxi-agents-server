@@ -8,12 +8,13 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.10.0';
+addon.version = '0.16.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
 
 local ffi = require 'ffi';
+local fonts = require 'fonts';
 local json = require 'json';
 local socket = require 'socket';
 
@@ -33,6 +34,8 @@ local bridge =
     input_pulse = nil,
     heading_hold = nil,
     activity_feed_enabled = false,
+    activity_font = nil,
+    activity_lines = T{},
 };
 
 local allowed_commands =
@@ -67,6 +70,44 @@ local allowed_input_actions =
     camera_left = 0xCB,
     camera_right = 0xCD,
 };
+
+local allowed_menu_actions =
+{
+    cancel = 0x01,
+    confirm = 0x1C,
+    down = 0xD0,
+    left = 0xCB,
+    open_main_menu = 0x4A,
+    right = 0xCD,
+    show_interface = 0x46,
+    up = 0xC8,
+};
+
+local interface_hidden_signature = ashita.memory.find(
+    'FFXiMain.dll',
+    0,
+    '8B4424046A016A0050B9????????E8????????F6D81BC040C3',
+    0,
+    0
+);
+
+local function interface_visibility_snapshot()
+    if (interface_hidden_signature == 0) then
+        return { observable = false, hidden = false };
+    end
+    local ok, hidden = pcall(function ()
+        local ptr = ashita.memory.read_uint32(interface_hidden_signature + 10);
+        if (ptr == 0) then
+            error('interface visibility pointer is unavailable');
+        end
+        return ashita.memory.read_uint8(ptr + 0xB4) == 1;
+    end);
+    return
+    {
+        observable = ok,
+        hidden = ok and hidden or false,
+    };
+end
 
 local function close_client()
     if (bridge.client ~= nil) then
@@ -138,7 +179,17 @@ local function display_activity_event(message)
         display:find('^Agent .- pulse ') ~= nil or
         display:find('^Agent activity feed ') ~= nil;
     if (visible) then
-        print(('[Agent Activity] %s'):fmt(display:gsub('^Agent ', '')));
+        local summary = display:gsub('^Agent ', '');
+        print(('[Agent Activity] %s'):fmt(summary));
+        bridge.activity_lines:append(('[%s] %s'):fmt(os.date('%H:%M:%S'), summary));
+        while (#bridge.activity_lines > 6) do
+            table.remove(bridge.activity_lines, 1);
+        end
+        if (bridge.activity_font ~= nil) then
+            bridge.activity_font.text =
+                'AGENT ACTIVITY - LOCAL ONLY\n' ..
+                bridge.activity_lines:concat('\n');
+        end
     end
 end
 
@@ -255,6 +306,26 @@ local function control_snapshot()
         input_active = bridge.input_pulse ~= nil,
         heading_active = bridge.heading_hold ~= nil,
         activity_feed_enabled = bridge.activity_feed_enabled,
+    };
+end
+
+local function activity_overlay_snapshot()
+    local manager_visible = false;
+    local object_visible = false;
+    pcall(function ()
+        manager_visible = AshitaCore:GetFontManager():GetVisible();
+    end);
+    if (bridge.activity_font ~= nil) then
+        pcall(function ()
+            object_visible = bridge.activity_font.visible == true;
+        end);
+    end
+    return
+    {
+        present = bridge.activity_font ~= nil,
+        manager_visible = manager_visible,
+        object_visible = object_visible,
+        line_count = #bridge.activity_lines,
     };
 end
 
@@ -397,6 +468,27 @@ local function buff_name(resource_manager, id)
     return name:sub(1, 128);
 end
 
+-- Read the focused menu's internal name using the same pointer chain as
+-- Ashita v4's official autologin addon. This is observation only; failures
+-- return an empty string instead of exposing or dereferencing arbitrary data.
+local function current_menu_name()
+    local ok, value = pcall(function ()
+        local ptr = AshitaCore:GetPointerManager():Get('menu');
+        if (ptr == 0) then return ''; end
+        ptr = ashita.memory.read_uint32(ptr);
+        if (ptr == 0) then return ''; end
+        ptr = ashita.memory.read_uint32(ptr);
+        if (ptr == 0) then return ''; end
+        ptr = ashita.memory.read_uint32(ptr + 0x04);
+        if (ptr == 0) then return ''; end
+        return ashita.memory.read_string(ptr + 0x46, 16) or '';
+    end);
+    if (not ok or type(value) ~= 'string') then
+        return '';
+    end
+    return value:sub(1, 16);
+end
+
 local function character_state(params)
     local memory = AshitaCore:GetMemoryManager();
     local player = memory:GetPlayer();
@@ -407,6 +499,14 @@ local function character_state(params)
 
     local resources = AshitaCore:GetResourceManager();
     local target = memory:GetTarget();
+    local inventory = memory:GetInventory();
+    local menu_open = target:GetIsMenuOpen() ~= 0;
+    local selected_item_id = tonumber(inventory:GetSelectedItemId()) or 0;
+    local selected_item_index = tonumber(inventory:GetSelectedItemIndex()) or 0;
+    local selected_item_name = inventory:GetSelectedItemName() or '';
+    if (type(selected_item_name) ~= 'string') then
+        selected_item_name = '';
+    end
     local result =
     {
         observed_at = os.time(),
@@ -429,7 +529,17 @@ local function character_state(params)
             nation_id = tonumber(player:GetNation()),
             zoning = player:GetIsZoning() ~= 0,
         },
-        menu_open = target:GetIsMenuOpen() ~= 0,
+        menu_open = menu_open,
+        menu_name = menu_open and current_menu_name() or '',
+        interface_visibility = interface_visibility_snapshot(),
+        activity_overlay = activity_overlay_snapshot(),
+        selected_item =
+        {
+            active = menu_open and selected_item_id > 0,
+            item_id = selected_item_id,
+            slot = selected_item_index,
+            name = selected_item_name:sub(1, 128),
+        },
         statuses = T{},
     };
 
@@ -511,7 +621,6 @@ local function character_state(params)
         end
 
         local max_items = math.floor(math.clamp(tonumber(params.max_items) or 40, 1, 80));
-        local inventory = memory:GetInventory();
         local container_max = tonumber(inventory:GetContainerCountMax(container)) or 0;
         local snapshot =
         {
@@ -764,6 +873,68 @@ local function start_input_pulse(params)
         key = key,
         duration_ms = duration_ms,
         input_source = 'agentbridge_directinput',
+        control = control_snapshot(),
+    };
+end
+
+local function start_menu_pulse(params)
+    require_control_enabled();
+    stop_movement('menu_input');
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Cannot inject menu input until a character is logged in.');
+    end
+    if (bridge.input_pulse ~= nil) then
+        error('An input pulse is already active.');
+    end
+
+    local action = type(params.action) == 'string' and params.action:lower() or '';
+    local key = allowed_menu_actions[action];
+    if (key == nil) then
+        error('Menu input action is outside the AgentBridge allowlist.');
+    end
+
+    local menu_open = target:GetIsMenuOpen() ~= 0;
+    local requires_closed_menu =
+        action == 'open_main_menu' or action == 'show_interface';
+    if (requires_closed_menu and menu_open) then
+        error('Opening the main menu or showing the interface requires all menus to be closed.');
+    end
+    if (not requires_closed_menu and not menu_open) then
+        error('Confirm, cancel, up, down, left, and right require an open menu or dialogue.');
+    end
+    local interface_visibility = interface_visibility_snapshot();
+    if (action == 'show_interface') then
+        if (not interface_visibility.observable) then
+            error('Interface visibility is unavailable; refusing a blind Scroll Lock toggle.');
+        end
+        if (not interface_visibility.hidden) then
+            error('The FFXI interface is already visible.');
+        end
+    end
+
+    local now = socket.gettime();
+    bridge.input_pulse =
+    {
+        key = key,
+        action = 'menu ' .. action,
+        down_frames = 2,
+        deadline = now + 0.08,
+        release_frames = 2,
+        requested_at = now,
+    };
+    add_event(-1, ('Agent menu %s pulse queued.'):fmt(action));
+    return
+    {
+        queued = true,
+        action = action,
+        key = key,
+        input_source = 'agentbridge_directinput',
+        menu_open = menu_open,
+        interface_visibility = interface_visibility,
         control = control_snapshot(),
     };
 end
@@ -1050,12 +1221,18 @@ local function dispatch(request)
             add_event(-1, ('Agent activity feed %s.'):fmt(state));
         else
             print('[Agent Activity] feed disabled.');
+            bridge.activity_lines = T{};
+            if (bridge.activity_font ~= nil) then
+                bridge.activity_font.text = '';
+            end
             add_event(-1, ('Agent activity feed %s.'):fmt(state));
         end
         return
         {
             enabled = bridge.activity_feed_enabled,
             local_chat_only = true,
+            stream_overlay = true,
+            activity_overlay = activity_overlay_snapshot(),
             control = control_snapshot(),
         };
     elseif (request.operation == 'stop_movement') then
@@ -1078,6 +1255,8 @@ local function dispatch(request)
         return start_confirm_pulse(params);
     elseif (request.operation == 'input_action') then
         return start_input_pulse(params);
+    elseif (request.operation == 'menu_input') then
+        return start_menu_pulse(params);
     elseif (request.operation == 'move_to_entity') then
         return start_movement(params);
     elseif (request.operation == 'move_to_position') then
@@ -1166,6 +1345,21 @@ ashita.events.register('load', 'load_cb', function ()
     bridge.control_changed_at = os.time();
     bridge.control_reason = 'addon_load';
     bridge.activity_feed_enabled = bridge.config.activity_feed_enabled == true;
+    bridge.activity_lines = T{};
+    bridge.activity_font = fonts.new(
+    {
+        visible = true,
+        font_family = 'Arial',
+        font_height = 16,
+        color = 0xFFFFFFFF,
+        position_x = 16,
+        position_y = 520,
+        background =
+        {
+            visible = true,
+            color = 0xB0000000,
+        },
+    });
 
     local listener, listen_error = socket.bind(bridge.config.bind_host, bridge.config.bind_port);
     if (listener == nil) then
@@ -1183,6 +1377,10 @@ end);
 
 ashita.events.register('unload', 'unload_cb', function ()
     emergency_stop('addon_unload');
+    if (bridge.activity_font ~= nil) then
+        bridge.activity_font:destroy();
+        bridge.activity_font = nil;
+    end
     stop_listener();
 end);
 

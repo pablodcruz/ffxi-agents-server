@@ -16,6 +16,8 @@
     "mcp:gameplay-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --gameplay-cycle",
     "mcp:interact": "./scripts/run-node.sh scripts/mcp-interact.mjs",
     "mcp:menu": "./scripts/run-node.sh scripts/mcp-menu.mjs",
+    "mcp:prepare-trade": "./scripts/run-node.sh scripts/mcp-prepare-trade.mjs",
+    "mcp:select-item": "./scripts/run-node.sh scripts/mcp-select-item.mjs",
     "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",
     "mcp:feed": "./scripts/run-node.sh scripts/mcp-activity-feed.mjs",
     "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",

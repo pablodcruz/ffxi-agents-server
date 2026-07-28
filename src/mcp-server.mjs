@@ -3,10 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AgentRegistry } from "./agent-registry.mjs";
 import { BridgeError, validateGameplayCommand } from "./bridge-client.mjs";
-import { createInputAdapterFromEnv } from "./input-adapter.mjs";
 
 const agents = new AgentRegistry();
-const inputAdapter = createInputAdapterFromEnv();
 const lsbApiUrl = (process.env.LSB_API_URL || "http://127.0.0.1:8088/api").replace(/\/$/, "");
 const agentIdSchema = z
   .string()
@@ -581,7 +579,7 @@ server.registerTool(
   {
     title: "Interact with an FFXI target or dialogue",
     description:
-      "Inject one bounded Enter/confirm action. Target mode uses AgentBridge to select and interact with one exact NPC or world object within six units. Confirm mode uses the configured host input adapter only after AgentBridge proves control is armed and an in-game menu is open.",
+      "Inject one bounded Enter/confirm action through AgentBridge. Target mode selects and interacts with one exact NPC or world object within six units. Confirm mode requires an open in-game menu or dialogue.",
     inputSchema: {
       agent_id: agentIdSchema,
       mode: z.enum(["target", "confirm"]).default("target"),
@@ -605,43 +603,12 @@ server.registerTool(
         );
       }
       if (mode === "confirm") {
-        if (!inputAdapter) {
-          throw new BridgeError(
-            "Confirm mode requires a configured FFXI_INPUT_ADAPTER.",
-            "input_adapter_unavailable",
-          );
-        }
         return agentResult(
-          await agents.runExternalWrite(
+          await agents.request(
             agent_id,
-            "interact_confirm",
-            { mode: "confirm" },
-            async (bridge) => {
-              const control = await bridge.request("control_status");
-              if (!control.enabled) {
-                throw new BridgeError(
-                  "Agent writes are disabled. Explicitly enable control before confirming a menu.",
-                  "control_disabled",
-                );
-              }
-              const state = await bridge.request("character_state", {
-                include_recasts: false,
-              });
-              if (!state.menu_open) {
-                throw new BridgeError(
-                  "Confirm mode requires an open in-game menu or dialogue.",
-                  "menu_closed",
-                );
-              }
-              const input = await inputAdapter.sendMenuAction("confirm");
-              return {
-                queued: true,
-                mode: "confirm",
-                menu_open: true,
-                input,
-                control,
-              };
-            },
+            "menu_input",
+            { action: "confirm" },
+            { write: true },
           ),
         );
       }
@@ -669,10 +636,19 @@ server.registerTool(
   {
     title: "Send bounded FFXI menu input",
     description:
-      "Send exactly one allowlisted menu action through the configured host input adapter. AgentBridge must report that control is armed and an in-game menu or dialogue is open. Actions are confirm, cancel, up, or down.",
+      "Send exactly one automatically released allowlisted DirectInput menu pulse through AgentBridge. Confirm, cancel, up, down, left, and right require an open menu; open_main_menu and show_interface require a closed menu. show_interface also requires read-only proof that the FFXI interface is hidden.",
     inputSchema: {
       agent_id: agentIdSchema,
-      action: z.enum(["confirm", "cancel", "up", "down"]),
+      action: z.enum([
+        "confirm",
+        "cancel",
+        "up",
+        "down",
+        "left",
+        "right",
+        "open_main_menu",
+        "show_interface",
+      ]),
     },
     annotations: {
       readOnlyHint: false,
@@ -683,43 +659,12 @@ server.registerTool(
   },
   async ({ agent_id, action }) => {
     try {
-      if (!inputAdapter) {
-        throw new BridgeError(
-          "Menu input requires a configured FFXI_INPUT_ADAPTER.",
-          "input_adapter_unavailable",
-        );
-      }
       return agentResult(
-        await agents.runExternalWrite(
+        await agents.request(
           agent_id,
           "menu_input",
           { action },
-          async (bridge) => {
-            const control = await bridge.request("control_status");
-            if (!control.enabled) {
-              throw new BridgeError(
-                "Agent writes are disabled. Explicitly enable control before sending menu input.",
-                "control_disabled",
-              );
-            }
-            const state = await bridge.request("character_state", {
-              include_recasts: false,
-            });
-            if (!state.menu_open) {
-              throw new BridgeError(
-                "Menu input requires an open in-game menu or dialogue.",
-                "menu_closed",
-              );
-            }
-            const input = await inputAdapter.sendMenuAction(action);
-            return {
-              queued: true,
-              action,
-              menu_open: true,
-              input,
-              control,
-            };
-          },
+          { write: true },
         ),
       );
     } catch (error) {
