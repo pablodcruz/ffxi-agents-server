@@ -8,10 +8,21 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectDir = path.resolve(import.meta.dirname, "..");
 const actionIndex = process.argv.indexOf("--action");
 const action = actionIndex >= 0 ? process.argv[actionIndex + 1] : undefined;
-const allowedActions = new Set(["confirm", "cancel", "up", "down"]);
+const allowedActions = new Set([
+  "confirm",
+  "cancel",
+  "up",
+  "down",
+  "left",
+  "right",
+  "open_main_menu",
+  "show_interface",
+]);
 
 if (!allowedActions.has(action)) {
-  throw new Error("Menu input requires --action confirm|cancel|up|down.");
+  throw new Error(
+    "Menu input requires --action confirm|cancel|up|down|left|right|open_main_menu|show_interface.",
+  );
 }
 
 const transport = new StdioClientTransport({
@@ -62,12 +73,20 @@ try {
       action,
       before: {
         menu_open: valueOf(before).menu_open,
+        menu_name: valueOf(before).menu_name,
+        interface_visibility: valueOf(before).interface_visibility,
+        activity_overlay: valueOf(before).activity_overlay,
+        selected_item: valueOf(before).selected_item,
         player: valueOf(before).player,
       },
       enable: valueOf(enable),
       menu_input: valueOf(menuInput),
       after: {
         menu_open: valueOf(after).menu_open,
+        menu_name: valueOf(after).menu_name,
+        interface_visibility: valueOf(after).interface_visibility,
+        activity_overlay: valueOf(after).activity_overlay,
+        selected_item: valueOf(after).selected_item,
         player: valueOf(after).player,
       },
       recent_events: valueOf(events).data || valueOf(events),

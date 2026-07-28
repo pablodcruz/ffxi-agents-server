@@ -17,7 +17,8 @@ Square Enix services remain proprietary and are not included here.
 - An Ashita v4 addon that exposes client state over an authenticated,
   loopback-only JSON-lines socket.
 - Read-only character detail for stats, buffs, menu state, active recasts, and
-  one explicitly requested inventory container at a time.
+  one explicitly requested inventory container at a time, including the exact
+  focused-menu name and numeric ID of an item selected in an open menu.
 - A fail-closed write latch, emergency stop, and leased entity-follow movement
   with timeout and progress checks.
 - Camera-independent world-coordinate movement plus a host-side
@@ -25,6 +26,8 @@ Square Enix services remain proprietary and are not included here.
 - Guarded NPC interaction/dialogue helpers and a bounded combat orchestrator
   with exact-entity verification, pre-fight recovery, health-floor, timeout,
   `/attackoff`, and emergency-stop behavior.
+- Allowlisted, automatically released DirectInput menu pulses through
+  AgentBridge, avoiding VM focus and camera dependence.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
   fail-closed control, movement contracts, and command safety.
 
@@ -36,8 +39,11 @@ from 7.52 to 2.67 units from that NPC, stopped on arrival, and finished with
 control disabled by the emergency stop. A later navmesh run completed 21
 waypoints to Nbu Latteh, accepted **Mom, the Adventurer?**, obtained the quest's
 Fire Crystal, crossed the Bastok Markets zone line, loaded South Gustaberg, and
-navigated near level-one Huge Hornets without camera steering. Four bounded
-MCP fights then earned 640 EXP and raised Pablo from Monk level 1 to level 2.
+navigated near level-one Huge Hornets without camera steering. Later bounded
+fights raised Pablo to Monk level 3. A subdivided navmesh route then crossed
+from South Gustaberg back into Bastok Markets and reached Reet without camera
+steering. The local-only activity feed now gives a stream audience sanitized
+summaries of navigation, combat, and menu actions without sending server chat.
 
 ## Architecture
 
@@ -156,7 +162,8 @@ This prototype is for an isolated private-server lab only.
 - GM, chat, console, addon-management, script, packet-injection, and chained
   commands are not exposed to the agent.
 - The optional stream activity feed writes sanitized summaries only to the
-  local game chat window; it cannot send server chat or arbitrary text.
+  local game chat window and a six-line Ashita overlay captured by OBS; it
+  cannot send server chat or arbitrary text.
 - Agent writes start disabled and must be explicitly armed after every addon
   load or emergency stop.
 - Bounded movement automatically stops on arrival, timeout, lack of progress,

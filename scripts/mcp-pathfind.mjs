@@ -4,7 +4,11 @@ import path from "node:path";
 import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { distance2d, planNavmeshPath } from "../src/navmesh-planner.mjs";
+import {
+  distance2d,
+  planNavmeshPath,
+  subdividePath,
+} from "../src/navmesh-planner.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -26,6 +30,7 @@ const meshName = argument("--mesh", "Bastok_Markets.nav");
 const meshPath = path.resolve(projectDir, "runtime", "navmeshes", meshName);
 const planOnly = hasFlag("--plan-only");
 const maxReplans = Number(argument("--max-replans", "2"));
+const maximumSegmentDistance = Number(argument("--maximum-segment-distance", "20"));
 
 if (Object.values(destination).some((value) => !Number.isFinite(value))) {
   throw new Error("Pathfinding requires finite --x, --y, and --z coordinates.");
@@ -35,6 +40,13 @@ if (path.basename(meshName) !== meshName || !meshName.endsWith(".nav")) {
 }
 if (!Number.isInteger(maxReplans) || maxReplans < 0 || maxReplans > 3) {
   throw new Error("--max-replans must be an integer from 0 through 3.");
+}
+if (
+  !Number.isFinite(maximumSegmentDistance)
+  || maximumSegmentDistance < 5
+  || maximumSegmentDistance > 50
+) {
+  throw new Error("--maximum-segment-distance must be between 5 and 50 yalms.");
 }
 
 const transport = new StdioClientTransport({
@@ -81,11 +93,15 @@ try {
   const start = initial.player?.position;
   if (!start) throw new Error("Player position is unavailable.");
 
-  const initialPathPoints = await planNavmeshPath({
+  const initialRawPathPoints = await planNavmeshPath({
     meshPath,
     start,
     end: destination,
   });
+  const initialPathPoints = subdividePath(
+    initialRawPathPoints,
+    maximumSegmentDistance,
+  );
   let route = initialPathPoints.slice(1);
   const completed = [];
 
@@ -96,6 +112,7 @@ try {
       mesh: meshName,
       start,
       destination,
+      maximum_segment_distance: maximumSegmentDistance,
       planned_waypoints: route.length,
       route: route.map((waypoint, index) => {
         const previous = index === 0 ? start : route[index - 1];
@@ -169,11 +186,15 @@ try {
       });
       if (remaining > 2) {
         if (replanCount < maxReplans) {
-          const replannedPath = await planNavmeshPath({
+          const replannedRawPath = await planNavmeshPath({
             meshPath,
             start: after.player.position,
             end: destination,
           });
+          const replannedPath = subdividePath(
+            replannedRawPath,
+            maximumSegmentDistance,
+          );
           replanCount += 1;
           route = replannedPath.slice(1);
           index = 0;

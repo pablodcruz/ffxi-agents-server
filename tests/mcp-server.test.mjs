@@ -27,6 +27,7 @@ async function createMockBridge(token) {
         "set_heading",
         "target_entity",
         "interact",
+        "menu_input",
         "move_to_entity",
         "move_to_position",
         "set_activity_feed",
@@ -228,6 +229,13 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   assert.equal(activityFeed.isError, undefined);
   assert.equal(activityFeed.structuredContent.enabled, true);
   assert.equal(activityFeed.structuredContent.local_chat_only, true);
+
+  const menuInput = await client.callTool({
+    name: "ffxi_menu_input",
+    arguments: { action: "open_main_menu" },
+  });
+  assert.equal(menuInput.isError, undefined);
+  assert.equal(menuInput.structuredContent.operation, "menu_input");
 
   const movement = await client.callTool({
     name: "ffxi_move_to_entity",

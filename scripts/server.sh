@@ -148,12 +148,19 @@ case "${command_name}" in
     printf '\n'
     curl --fail --silent --show-error http://127.0.0.1:8088/api/sessions
     printf '\n'
-    map_logs="$(run_compose logs --no-color --tail 400 map 2>&1)"
-    if [[ "${map_logs}" != *"map-server is ready to work"* ]]; then
-      printf '%s\n' "Map process is alive but has not completed zone initialization." >&2
+    map_container_id="$(run_compose ps -q map)"
+    if [[ -z "${map_container_id}" ]]; then
+      printf '%s\n' "Map container is not running." >&2
       exit 1
     fi
-    printf '%s\n' "Map process completed zone initialization."
+    map_health="$(docker inspect --format \
+      '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+      "${map_container_id}")"
+    if [[ "${map_health}" != "healthy" ]]; then
+      printf 'Map container is not healthy: %s\n' "${map_health}" >&2
+      exit 1
+    fi
+    printf '%s\n' "Map container is healthy."
     ;;
   backup)
     [[ -f "${ENV_FILE}" ]] || {

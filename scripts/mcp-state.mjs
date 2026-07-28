@@ -56,6 +56,10 @@ try {
     observed_at: value.observed_at,
     player: value.player,
     menu_open: value.menu_open,
+    menu_name: value.menu_name,
+    interface_visibility: value.interface_visibility,
+    activity_overlay: value.activity_overlay,
+    selected_item: value.selected_item,
     statuses: value.statuses?.filter(
       (status) =>
         status.buff_id > 0 ||

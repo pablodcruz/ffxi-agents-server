@@ -92,6 +92,72 @@ five guarded confirm steps. The game closed the dialogue and reported
 `Obtained: Fire crystal`, validating acceptance of the Bastok quest
 **Mom, the Adventurer?**
 
+## Observable item menus
+
+AgentBridge 0.16.0 exposes Ashita's read-only interface-visibility flag,
+focused-menu name, and selected-item fields alongside `menu_open`: item ID,
+inventory slot, display name, and whether the selection is active. The
+focused-menu pointer follows the guarded
+read chain used by Ashita v4's official `autologin` addon. This lets an agent
+validate menu transitions instead of guessing from screenshots or injecting
+trade packets. Names remain untrusted display data; item decisions key on the
+numeric item ID.
+
+With an inventory-style menu already open, move down one bounded key event at
+a time until an exact item ID is selected:
+
+```sh
+pnpm mcp:prepare-trade -- \
+  --target Reet \
+  --server-id 17739836 \
+  --item-id 536
+
+pnpm mcp:select-item -- --item-id 536
+```
+
+The trade preparation helper proves and selects the exact nearby NPC and
+proves the requested inventory item, then disarms without opening a menu.
+The selection helper requires the game to expose an active item selection. It
+stops without confirming the item, emergency-disarms control, and reports
+every observed selection. A separate
+`mcp:menu -- --action confirm` call is required for the consequential step.
+Shop stock can be selected by numeric ID with
+`--allow-not-in-inventory`, but the same separate-confirm boundary remains.
+
+FFXI does not open an NPC item handoff through `/trade <t>` on this client.
+The normal main menu can therefore be opened with one separately gated
+AgentBridge DirectInput pulse:
+
+```sh
+pnpm mcp:menu -- --action open_main_menu
+```
+
+`open_main_menu` is accepted only while AgentBridge reports the menu closed;
+confirm, cancel, up, down, left, and right require it open. AgentBridge 0.16.0
+injects only
+the corresponding fixed DirectInput scan codes and releases each key
+automatically. This replaces the focus-sensitive Parallels key-event path.
+`show_interface` remains a separately named recovery action for Scroll Lock.
+It requires all menus to be closed and a guarded memory read proving that the
+interface is hidden, so it cannot accidentally hide a visible interface.
+
+Live menu identity checks mapped `menu    menuwind` to the main menu,
+`menu    region` to Region Info, and `menu    link5` to the Trade window.
+The legacy Trade window did not populate Ashita's selected-item fields during
+the first cursor probes, so the coupon handoff remains intentionally
+unconfirmed. Do not infer the Trade cursor from remembered key counts.
+
+Long straight Detour route legs are also subdivided into 20-yalm leases by
+default. `--maximum-segment-distance` accepts 5 through 50 yalms. This keeps
+every movement command well inside AgentBridge's 100-yalm start bound and
+makes progress observable even when Detour returns only a start and endpoint.
+
+The return route from South Gustaberg to Reet completed without camera
+steering after subdivision. Teleportation, GM movement, and packet injection
+are therefore unnecessary for the current vertical slice. Keep teleportation
+only as an explicitly enabled private-test recovery tool if later zones prove
+unrouteable; it should never silently replace a failed normal route.
+
 The next route crossed Bastok Markets to its southwest boundary. Detour ended
 at the last walkable polygon; a short second path around the wall reached the
 zone line and produced:
