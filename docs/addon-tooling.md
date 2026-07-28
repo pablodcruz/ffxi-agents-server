@@ -21,6 +21,7 @@ they are not the machine-control boundary.
 | [MobDB](https://github.com/ThornyFFXI/mobdb) | On-screen mob ID, level range, aggro/link flags, position, resistances, and drops; it can generate data for an exact LSB private server | Best visual pilot. Use as a read-only mirror after pinning and reviewing the source; do not make MCP depend on its UI |
 | [Ashita distance addon](https://github.com/AshitaXI/Ashita-v4beta/tree/main/addons/distance) | Target distance overlay | Optional stream/operator aid; AgentBridge already returns exact numeric distance |
 | Ashita minimap plugin | Human spatial context and nearby dots | Optional stream/operator aid; it does not provide route planning or a stable agent API |
+| [xathei/Pathfinder](https://github.com/xathei/Pathfinder) | Build and test FFXI Recast navmeshes; inspect line of sight and distance to a mesh edge | Useful historical design reference, not an integration candidate; retain the maintained LandSandBoat meshes and MCP-native mover |
 | [Shorthand](https://github.com/ThornyFFXI/Shorthand) | Convenient partial-name commands | Do not use for autonomous targeting because “best matching” names weaken exact-ID disambiguation |
 | Find / FindAll | Inventory lookup | Useful later for inventory management, not for finding mobs or moving |
 | Allmaps / remastered map DATs | Better human map labels | Optional human aid; visual-only and unnecessary for the MCP route planner |
@@ -56,7 +57,7 @@ The scout:
 - constrains the export to that zone's 0x1000 entity-ID block (LSB `groupid`
   values are reused across zones), then joins exact server IDs;
 - rejects inactive entities, vertical separation, missing metadata,
-  aggressive/linking mobs, and the current hornet family exclusion;
+  aggressive mobs, unapproved linking mobs, hornets, and worm-family targets;
 - distinguishes a conservative low-risk level range from a target that still
   needs extra caution;
 - estimates vendor value only from explicit nonzero drop and group rates; and
@@ -66,33 +67,22 @@ Every actionable recommendation still requires the ordinary exact-ID
 `mcp:check-target` result immediately before combat. Database level ranges are
 planning hints, not a substitute for the live game verdict.
 
-Tunnel Worms periodically burrow and become temporarily untargetable even
-while their entity may remain observable. For a nearby exact worm, let the
-check helper retry short target-selection attempts while control is disarmed
-between attempts:
+Tunnel Worms and Stone Eaters periodically burrow and become temporarily
+untargetable even while their entity may remain observable. The farming policy
+now excludes them entirely because repeated targetability probes are not worth
+the unattended-loop cost.
+
+`mcp:attack-nearby` scans the full 360-degree entity set rather than the camera
+view, chooses the highest-ranked approved target by exact server ID, and then
+delegates to the existing `/check`, approach, and combat gates:
 
 ```sh
-pnpm mcp:check-target -- \
-  --target "Tunnel Worm" \
-  --server-id 17215531 \
-  --maximum-distance 8 \
-  --targetability-timeout 20 \
-  --retry-seconds 2
+pnpm mcp:attack-nearby
 ```
 
-Do not interpret one refused selection as a wall, and do not chase the worm
-until the bounded targetability wait has expired. A kill still has a separate
-respawn delay.
-
-The higher-level loop should retain a temporary cooldown for an exact ID that
-exhausted the targetability wait. The scout accepts repeatable cooldown IDs and
-keeps them visible with an explicit rejection reason:
-
-```sh
-pnpm mcp:scout -- \
-  --radius 50 \
-  --exclude-server-id 17215658
-```
+Walking Saplings, Vultures, and Rock Lizards are the explicitly approved
+linked low-level targets. Naji cannot be commanded to pull an idle mob; his
+Trust AI uses Provoke after Pablo engages it.
 
 Time-gated mobs such as Ding Bats can also despawn after the initial scan.
 Always refresh the scan at the route endpoint; discovery is not a reservation.
@@ -127,6 +117,42 @@ and Ashita's world-vector movement, so it is camera-independent and
 machine-readable. Its known weakness is client/server collision mismatch at a
 few edges, which is visible and fail-closed. A minimap makes that easier for a
 human to understand but does not fix it.
+
+### Pathfinder source assessment
+
+The public `xathei/Pathfinder` source was reviewed on 2026-07-28. It is a
+Windows Forms test application last changed in July 2020, not an Ashita addon
+or an MCP server. Its runtime loop calls `FFXINAV.dll` for Recast/Detour
+waypoints, then moves through EliteMMO's auto-follow coordinate interface. That
+is the same basic planner/mover split already implemented by
+`navmesh-planner.mjs` and AgentBridge.
+
+Pathfinder exposes useful diagnostics and authoring concepts:
+
+- configurable Recast agent radius, climb, slope, and cell settings;
+- line-of-sight and distance-to-navmesh-edge queries;
+- OBJ collision export and navmesh building; and
+- hand-authored off-mesh links or edited tiles for doors and broken
+  connections.
+
+It does not use its distance-to-wall result to avoid walls; the navigation
+state only logs the value. Stuck recovery is a blind alternating
+45-degree keyboard wiggle. Installing it therefore would not resolve the
+observed Port Bastok railing or South Gustaberg collision mismatches.
+
+The repository also has no declared license or published release and includes
+opaque x86 `EliteAPI`, `EliteMMO.API`, and `FFXINAV` binaries. Do not vendor or
+redistribute those files in this public project.
+
+The maintained replacement is the GPL-licensed
+[LandSandBoat/xiNavmeshes](https://github.com/LandSandBoat/xiNavmeshes)
+collection, which is already the source of the `.nav` files copied from the
+pinned map container. The host's MIT-licensed `recast-navigation` library
+already exposes nearest-polygon, move-along-surface, and short navmesh-raycast
+queries. The next bounded experiment is to use those calls for waypoint
+edge-clearance diagnostics, then persist client-proven blocked edges or local
+corrected waypoints. Rebuild or add off-mesh links only for a reproducible bad
+mesh; do not add a second movement authority.
 
 The new scout addresses the separate discovery problem: it converts an
 unlabeled radius scan into explainable candidates before the agent spends time

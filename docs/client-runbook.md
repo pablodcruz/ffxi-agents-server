@@ -90,6 +90,24 @@ The token files are mode `0600`, ignored by Git, and generated with:
 Use `--rotate` only if the token is exposed, then replace both the Windows JSON
 and Mac runtime environment together.
 
+### Enable guarded service travel for the dedicated agent
+
+The service-teleport operation requires GM level 1 on the dedicated local
+agent character. Set it only in the private LandSandBoat database:
+
+```sql
+UPDATE chars SET gmlevel = 1 WHERE charname = 'Pablo';
+```
+
+Replace `Pablo` with the dedicated agent character's exact name. Log the
+character out and back in after this change; the live map-server session caches
+the GM level at login.
+
+This does not expose arbitrary GM commands through MCP. AgentBridge accepts
+only typed coordinates, an explicit zone, one of the fixed service reasons,
+and the exact teleport confirmation phrase. Do not grant this permission to a
+retail character or reuse this bridge outside the isolated private-server lab.
+
 ## 4. Connect the loopback bridge
 
 AgentBridge deliberately refuses LAN binding. If Windows is a separate host,

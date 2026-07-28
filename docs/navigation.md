@@ -4,6 +4,60 @@ Status: world-coordinate movement, navmesh routing, NPC interaction, a
 multi-zone transition, bounded combat, recovery, and level progression are
 validated.
 
+## Default service travel: guarded private-server teleport
+
+Until a route has completed reliably and is cached, agent service travel
+defaults to the dedicated `ffxi_service_teleport` MCP operation. This avoids
+spending an open-ended number of movement probes on decorative collision,
+canals, disconnected navmesh corridors, and camera-relative recovery.
+
+Use teleport for only four allowlisted reasons:
+
+- `combat_position`;
+- `vendor`;
+- `travel_node`; or
+- `stuck_recovery`.
+
+Until short-range approach is reliable, field target acquisition may teleport
+to a bounded safe offset from one policy-approved mob. It does not teleport
+during an active fight or alter combat results. A verified normal route remains
+useful for gameplay testing, but unverified navigation is no longer the
+default way to reach a merchant, registered travel node, or approved target.
+
+The host helper accepts AgentBridge coordinates, where `x` and `y` are the
+horizontal plane and `z` is elevation:
+
+```sh
+pnpm mcp:teleport -- \
+  --x -304 \
+  --y -161.5 \
+  --z -10.32 \
+  --zone 235 \
+  --reason vendor
+```
+
+AgentBridge 0.19.0 converts those axes to LandSandBoat's `!pos` argument order.
+It omits the zone argument for same-zone positioning, avoiding an unnecessary
+zone reload and preserving active Trusts. Cross-zone travel still supplies the
+explicit zone.
+The operation requires:
+
+- the normal private-server control latch;
+- the exact `TELEPORT PRIVATE SERVER CHARACTER` confirmation;
+- an idle, logged-in character with menus closed;
+- finite bounded coordinates and an explicit zone;
+- one allowlisted service reason; and
+- GM level 1 on the local LandSandBoat character.
+
+The addon never accepts arbitrary GM command text. The existing gameplay
+command allowlist continues to reject GM, chat, addon, console, script, and
+chained commands. After granting GM level 1 in the database, log the character
+out and back in once so the live map-server session reloads the permission.
+The helper polls until the character reaches the exact zone and converges
+horizontally on the destination. Elevation is reported separately because a
+cross-zone `!pos` can safely snap the requested Z value to terrain. It fails if
+the character did not actually arrive within the bounded transition window.
+
 ## Why camera input is not the navigation layer
 
 FFXI's normal forward key is camera-relative. It is useful for a manual fallback
@@ -748,6 +802,60 @@ server's local `item_basic` table gives it a 27,550-gil base sell value. Pablo
 now has 900 sparks and needs 1,855 more before that conversion is available.
 Do not alter currency, teleport, or grant the item administratively; the
 objective events and normal NPC exchange remain the gameplay authority.
+
+### Verified travel-node cache
+
+Nearby travel discovery is now persistent without making remembered locations
+implicitly usable. `mcp:travel-scan` observes up to 50 yalms, accepts only
+exact server object names, and writes character-specific state to the ignored
+`runtime/travel-nodes.json` file:
+
+```sh
+pnpm mcp:travel-scan -- --radius 50
+```
+
+The version-controlled classifier recognizes `Home Point #1` through `#5`,
+`Survival Guide`, `Waypoint`, `Proto-Waypoint`, and `Outpost Gate`. Home
+Points, Survival Guides, and normal Waypoints are safe first-interaction
+attunements. Proto-Waypoints can require quest or key-item state. Outposts are
+not simple proximity attunements: LandSandBoat stores nation-specific outpost
+bits and normally unlocks them through conquest supply quests. An observed
+Outpost Gate is therefore cached as discovered but is never auto-interacted
+with or treated as an unlocked route.
+
+When a safe node is already within six yalms, the guarded registrar can perform
+the exact interaction:
+
+```sh
+pnpm mcp:travel-register -- --max-distance 6
+```
+
+It requires an idle logged-in character and closed menu, targets the exact
+server ID and name, records strict post-interaction system evidence, cancels
+any menu it opened, and always emergency-disarms control. An interaction with
+no registration evidence remains `interaction_completed`; it is excluded from
+route planning. `routeEligibleTravelNodes` returns only `registered` entries.
+The host can also promote a node after authoritative database verification:
+
+```sh
+pnpm mcp:travel-scan -- \
+  --verified-server-id 17739862 \
+  --verification landsandboat:char_unlocks.homepoints
+```
+
+The first live pass registered and verified Metalworks Home Point #2 and
+Bastok Markets Home Point #3. The game emitted the new-home-point system event,
+and `char_unlocks.homepoints` changed before Home Point #3 entered the usable
+route set. A South Gustaberg scan found no eligible travel object within 50
+yalms and correctly performed no interaction.
+
+Metalworks also exposed a reusable transit detail. Its two elevators are
+LandSandBoat `TIMED_AUTOMATIC` elevators; the lower-floor `Small Switch` is not
+an upper call button. `mcp:elevator` now accepts `--board-x` and `--board-y`,
+retries the closed door with bounded one-second no-progress attempts, waits for
+vertical movement, exits only after crossing the requested height, and
+emergency-stops. The live north-elevator run boarded at `(-56.2, 12)`, rode
+from z `-10` to z `2`, and exited at `(-60.26, 12)`.
 
 ## Provenance and licensing
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   shouldRetryAttackRegistration,
+  shouldSkipPreCombatRecovery,
   shouldUseWeaponSkill,
 } from "../src/combat-policy.mjs";
 
@@ -34,6 +35,29 @@ test("rejects exhausted and incomplete attack retry evidence", () => {
   assert.equal(shouldRetryAttackRegistration({
     ...idleRejection,
     currentTargetHpPercent: undefined,
+  }), false);
+});
+
+test("skips pre-combat recovery when the exact selected target is engaged", () => {
+  assert.equal(shouldSkipPreCombatRecovery({
+    explicitlySkipped: false,
+    exactTargetSelected: true,
+    targetStatus: 1,
+  }), true);
+  assert.equal(shouldSkipPreCombatRecovery({
+    explicitlySkipped: true,
+    exactTargetSelected: false,
+    targetStatus: 0,
+  }), true);
+  assert.equal(shouldSkipPreCombatRecovery({
+    explicitlySkipped: false,
+    exactTargetSelected: true,
+    targetStatus: 0,
+  }), false);
+  assert.equal(shouldSkipPreCombatRecovery({
+    explicitlySkipped: false,
+    exactTargetSelected: false,
+    targetStatus: 1,
   }), false);
 });
 

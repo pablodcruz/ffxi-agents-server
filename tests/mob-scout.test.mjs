@@ -35,7 +35,7 @@ test("computes only conservative nonzero vendor-value drop rates", () => {
   ]), 11);
 });
 
-test("ranks passive low-risk value before check-required and excluded mobs", () => {
+test("ranks approved linked mobs before excluded hornets and worms", () => {
   const ranked = rankNearbyMobs({
     playerLevel: 4,
     observation: {
@@ -104,12 +104,43 @@ test("ranks passive low-risk value before check-required and excluded mobs", () 
   assert.deepEqual(
     ranked.map((mob) => [mob.server_id, mob.disposition]),
     [
-      [1, "low_risk_candidate"],
       [2, "requires_exact_check"],
       [3, "avoid"],
+      [1, "avoid"],
     ],
   );
+  assert.deepEqual(ranked[1].reasons, ["excluded_mob_policy"]);
   assert.deepEqual(ranked[2].reasons, ["excluded_mob_policy"]);
+});
+
+test("excludes Stone Eaters even when their entity remains observable", () => {
+  const [mob] = rankNearbyMobs({
+    playerLevel: 9,
+    observation: {
+      player: { position: { z: 0 } },
+      nearby_entities: [{
+        server_id: 17215658,
+        name: "Stone Eater",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 5,
+        position: { z: 0 },
+      }],
+    },
+    metadata: [{
+      server_id: 17215658,
+      minimum_level: 2,
+      maximum_level: 3,
+      aggro: false,
+      links: false,
+      drops: [],
+      conservative_vendor_value: 3,
+    }],
+  });
+
+  assert.equal(mob.disposition, "avoid");
+  assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
 });
 
 test("temporarily cools down an exact server ID without hiding evidence", () => {
@@ -140,5 +171,8 @@ test("temporarily cools down an exact server ID without hiding evidence", () => 
   });
 
   assert.equal(mob.disposition, "avoid");
-  assert.deepEqual(mob.reasons, ["temporary_target_cooldown"]);
+  assert.deepEqual(mob.reasons, [
+    "excluded_mob_policy",
+    "temporary_target_cooldown",
+  ]);
 });

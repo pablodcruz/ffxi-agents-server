@@ -37,6 +37,18 @@ export function shouldRetryAttackRegistration({
   return currentPlayerHp >= startPlayerHp && currentTargetHp >= startTargetHp;
 }
 
+export function shouldSkipPreCombatRecovery({
+  explicitlySkipped,
+  exactTargetSelected,
+  targetStatus,
+}) {
+  return explicitlySkipped === true
+    || (
+      exactTargetSelected === true
+      && Number(targetStatus) === 1
+    );
+}
+
 export function shouldUseWeaponSkill({
   configured,
   engagementObserved,

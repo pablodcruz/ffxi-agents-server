@@ -125,7 +125,11 @@ try {
     metadata_generated_at: metadata.generated_at,
     safety: {
       authoritative_combat_gate: "fresh exact-ID /check is still required",
-      excluded_policy: ["mob names matching /hornet/i"],
+      excluded_policy: [
+        "mob names matching /hornet/i",
+        "worm-family mobs matching /\\b(?:worm|stone eater)\\b/i",
+      ],
+      allowed_linked_policy: ["Walking Sapling", "Vulture", "Rock Lizard"],
       temporary_target_cooldowns: [...excludedServerIds],
       maximum_elevation_difference: maximumElevationDifference,
     },

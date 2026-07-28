@@ -8,6 +8,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectDir = path.resolve(import.meta.dirname, "..");
 const actionIndex = process.argv.indexOf("--action");
 const action = actionIndex >= 0 ? process.argv[actionIndex + 1] : undefined;
+const repeatIndex = process.argv.indexOf("--repeat");
+const repeat = repeatIndex >= 0 ? Number(process.argv[repeatIndex + 1]) : 1;
 const allowedActions = new Set([
   "confirm",
   "cancel",
@@ -23,6 +25,9 @@ if (!allowedActions.has(action)) {
   throw new Error(
     "Menu input requires --action confirm|cancel|up|down|left|right|open_main_menu|show_interface.",
   );
+}
+if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {
+  throw new Error("--repeat must be an integer from 1 through 20.");
 }
 
 const transport = new StdioClientTransport({
@@ -44,7 +49,7 @@ try {
     name: "ffxi_character_state",
     arguments: { include_recasts: false },
   });
-  let menuInput;
+  const menuInputs = [];
   let after;
   let events;
   try {
@@ -52,10 +57,15 @@ try {
       name: "ffxi_enable_control",
       arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
     });
-    menuInput = await client.callTool({
-      name: "ffxi_menu_input",
-      arguments: { action },
-    });
+    for (let index = 0; index < repeat; index += 1) {
+      menuInputs.push(await client.callTool({
+        name: "ffxi_menu_input",
+        arguments: { action },
+      }));
+      if (index + 1 < repeat) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 900));
     [after, events] = await Promise.all([
       client.callTool({
@@ -71,6 +81,7 @@ try {
     console.log(JSON.stringify({
       protocol: "mcp-stdio",
       action,
+      repeat,
       before: {
         menu_open: valueOf(before).menu_open,
         menu_name: valueOf(before).menu_name,
@@ -81,7 +92,7 @@ try {
         player: valueOf(before).player,
       },
       enable: valueOf(enable),
-      menu_input: valueOf(menuInput),
+      menu_inputs: menuInputs.map(valueOf),
       after: {
         menu_open: valueOf(after).menu_open,
         menu_name: valueOf(after).menu_name,
@@ -104,7 +115,12 @@ try {
     }
   }
 
-  if (before.isError || menuInput?.isError || after?.isError || events?.isError) {
+  if (
+    before.isError
+    || menuInputs.some((input) => input?.isError)
+    || after?.isError
+    || events?.isError
+  ) {
     process.exitCode = 1;
   }
 } finally {

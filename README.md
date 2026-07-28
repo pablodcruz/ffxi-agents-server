@@ -135,6 +135,8 @@ The movement primitives, mesh provenance, live route results, and remaining
 quest/combat work are in [docs/navigation.md](docs/navigation.md).
 The addon comparison and MCP-native read-only mob scout are in
 [docs/addon-tooling.md](docs/addon-tooling.md).
+The researched bot architecture, bounded aggro guard, and shared-server
+limitations are in [docs/combat-supervisor.md](docs/combat-supervisor.md).
 
 1. Install and update FFXI through an authorized Square Enix path.
 2. Confirm the client connects to the private server with current `xiloader`
@@ -165,8 +167,10 @@ This prototype is for an isolated private-server lab only.
 - Never point the agent bridge at retail FFXI.
 - Never distribute the FFXI client, DAT files, credentials, or copyrighted game
   assets.
-- GM, chat, console, addon-management, script, packet-injection, and chained
-  commands are not exposed to the agent.
+- Arbitrary GM, chat, console, addon-management, script, packet-injection, and
+  chained commands are not exposed to the agent. One guarded private-server
+  service-teleport operation accepts only typed coordinates, an explicit zone,
+  an allowlisted service reason, and a hard confirmation phrase.
 - The optional stream activity feed writes sanitized summaries only to the
   local game chat window and a six-line Ashita overlay captured by OBS; it
   cannot send server chat or arbitrary text.
