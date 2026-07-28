@@ -2,13 +2,15 @@
 AgentBridge exposes a narrow, localhost-only JSON-lines interface for an AI
 agent operating on a private LandSandBoat server.
 
-It intentionally does not support GM commands, chat, arbitrary console
-commands, scripts, packet injection, or remote network binding.
+It intentionally does not support arbitrary GM commands, chat, arbitrary
+console commands, scripts, packet injection, or remote network binding. One
+dedicated service-teleport operation can queue a validated LandSandBoat !pos
+command for vendor, registered travel-node, or stuck-recovery travel.
 --]]
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.17.0';
+addon.version = '0.19.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -85,6 +87,14 @@ local allowed_menu_actions =
     right = 0xCD,
     show_interface = 0x46,
     up = 0xC8,
+};
+
+local allowed_teleport_reasons =
+{
+    combat_position = true,
+    vendor = true,
+    travel_node = true,
+    stuck_recovery = true,
 };
 
 local interface_hidden_signature = ashita.memory.find(
@@ -1167,6 +1177,97 @@ local function start_position_movement(params)
     };
 end
 
+local function service_teleport(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Service teleport requires a logged-in private-server character.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Service teleport requires all in-game menus and dialogue to be closed.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    ) then
+        error('Service teleport requires the character to be idle.');
+    end
+    if (params.confirmation ~= 'TELEPORT PRIVATE SERVER CHARACTER') then
+        error('Service teleport requires the exact confirmation phrase.');
+    end
+
+    local reason = type(params.reason) == 'string' and params.reason:lower() or '';
+    if (not allowed_teleport_reasons[reason]) then
+        error('Service teleport reason is not allowlisted.');
+    end
+
+    local x = tonumber(params.x);
+    local horizontal_y = tonumber(params.y);
+    local elevation = tonumber(params.z);
+    local zone_id = tonumber(params.zone_id);
+    if (
+        x == nil or horizontal_y == nil or elevation == nil or zone_id == nil or
+        x ~= x or horizontal_y ~= horizontal_y or elevation ~= elevation or zone_id ~= zone_id or
+        math.abs(x) > 10000 or math.abs(horizontal_y) > 10000 or math.abs(elevation) > 10000 or
+        zone_id < 0 or zone_id > 298 or zone_id ~= math.floor(zone_id)
+    ) then
+        error('Service teleport coordinates or zone are invalid.');
+    end
+
+    stop_movement('service_teleport');
+    stop_input_pulse('service_teleport');
+    stop_heading_hold('service_teleport');
+    target:SetTarget(0, true);
+
+    -- LandSandBoat !pos uses x, elevation, horizontal-y, zone while
+    -- AgentBridge observations expose x/y as the horizontal plane and z as
+    -- elevation.
+    local current_zone_id = party:GetMemberZone(0);
+    local same_zone = current_zone_id == zone_id;
+    local command;
+    if (same_zone) then
+        command = ('!pos %.3f %.3f %.3f'):fmt(
+            x,
+            elevation,
+            horizontal_y
+        );
+    else
+        command = ('!pos %.3f %.3f %.3f %u'):fmt(
+            x,
+            elevation,
+            horizontal_y,
+            zone_id
+        );
+    end
+    AshitaCore:GetChatManager():QueueCommand(1, command);
+    add_event(
+        -1,
+        ('Agent private-server service teleport queued (%s, zone %u, %s).'):fmt(
+            reason,
+            zone_id,
+            same_zone and 'same-zone' or 'cross-zone'
+        )
+    );
+    return
+    {
+        queued = true,
+        destination = { x = x, y = horizontal_y, z = elevation },
+        zone_id = zone_id,
+        same_zone = same_zone,
+        reason = reason,
+        private_server_only = true,
+        control = control_snapshot(),
+    };
+end
+
 local function monitor_movement()
     if (bridge.movement == nil) then
         return;
@@ -1365,6 +1466,8 @@ local function dispatch(request)
         return start_movement(params);
     elseif (request.operation == 'move_to_position') then
         return start_position_movement(params);
+    elseif (request.operation == 'service_teleport') then
+        return service_teleport(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);

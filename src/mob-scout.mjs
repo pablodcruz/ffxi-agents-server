@@ -1,5 +1,12 @@
 const defaultExcludedNamePatterns = Object.freeze([
   /hornet/i,
+  /\b(?:worm|stone eater)\b/i,
+]);
+
+const defaultAllowedLinkedNamePatterns = Object.freeze([
+  /^walking sapling$/i,
+  /^vulture$/i,
+  /^rock lizard$/i,
 ]);
 
 function finiteNumber(value, fallback = 0) {
@@ -115,6 +122,7 @@ export function classifyMob({
   playerLevel,
   maximumElevationDifference = 4,
   excludedNamePatterns = defaultExcludedNamePatterns,
+  allowedLinkedNamePatterns = defaultAllowedLinkedNamePatterns,
   excludedServerIds = new Set(),
 }) {
   const reasons = [];
@@ -137,7 +145,12 @@ export function classifyMob({
     reasons.push("temporary_target_cooldown");
   }
   if (metadata?.aggro) reasons.push("aggressive");
-  if (metadata?.links) reasons.push("links");
+  if (
+    metadata?.links
+    && !allowedLinkedNamePatterns.some((pattern) => pattern.test(entity?.name || ""))
+  ) {
+    reasons.push("links");
+  }
 
   let disposition = "avoid";
   if (reasons.length === 0) {
@@ -164,6 +177,7 @@ export function rankNearbyMobs({
   playerLevel,
   maximumElevationDifference = 4,
   excludedNamePatterns = defaultExcludedNamePatterns,
+  allowedLinkedNamePatterns = defaultAllowedLinkedNamePatterns,
   excludedServerIds = new Set(),
 }) {
   const byId = new Map(
@@ -186,6 +200,7 @@ export function rankNearbyMobs({
         playerLevel,
         maximumElevationDifference,
         excludedNamePatterns,
+        allowedLinkedNamePatterns,
         excludedServerIds,
       });
       return {

@@ -7,6 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
 import {
   shouldRetryAttackRegistration,
+  shouldSkipPreCombatRecovery,
   shouldUseWeaponSkill,
 } from "../src/combat-policy.mjs";
 
@@ -30,6 +31,7 @@ const attackAttemptsLimit = Number(argument("--attack-attempts", "3"));
 const weaponSkill = argument("--weapon-skill");
 const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
 const allowCaution = process.argv.includes("--allow-caution");
+const skipRecovery = process.argv.includes("--skip-recovery");
 
 if (!targetName) {
   throw new Error("Combat requires --target with one exact nearby entity name.");
@@ -333,7 +335,24 @@ try {
     name: "ffxi_enable_control",
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
   });
-  const recovery = await recoverHp();
+  const preRecoveryObservation = await observe();
+  const preRecoveryTarget = preRecoveryObservation.target?.server_id
+    === targetServerId
+    ? preRecoveryObservation.target
+    : null;
+  const recoverySkipped = shouldSkipPreCombatRecovery({
+    explicitlySkipped: skipRecovery,
+    exactTargetSelected: Boolean(preRecoveryTarget),
+    targetStatus: preRecoveryTarget?.status,
+  });
+  const recoverySkipReason = skipRecovery
+    ? "explicit"
+    : recoverySkipped
+      ? "exact_target_engaged"
+      : null;
+  const recovery = recoverySkipped
+    ? { rested: false, samples: [] }
+    : await recoverHp();
   const initialSelection = await selectExactTarget(
     targetServerId,
     maxStartDistance,
@@ -408,6 +427,7 @@ try {
   let reason = "timeout";
   let rejectionEvent;
   let engagementObserved = false;
+  let attackIssuedAt = Date.now();
   let lastWeaponSkillAt = 0;
   const weaponSkillAttempts = [];
 
@@ -483,6 +503,7 @@ try {
       attackAttempts += 1;
       rejectionEvent = undefined;
       await command("/attack <t>");
+      attackIssuedAt = Date.now();
       continue;
     }
     engagementObserved ||= (
@@ -505,6 +526,10 @@ try {
     }
     if (observation.login_status !== 2) {
       reason = "not_logged_in";
+      break;
+    }
+    if (!engagementObserved && Date.now() - attackIssuedAt >= 8000) {
+      reason = "engagement_stalled";
       break;
     }
     if (shouldUseWeaponSkill({
@@ -547,6 +572,8 @@ try {
       approach_timeout_seconds: approachTimeoutSeconds,
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,
+      recovery_skipped: recoverySkipped,
+      recovery_skip_reason: recoverySkipReason,
       attack_attempts_limit: attackAttemptsLimit,
       weapon_skill: weaponSkill || null,
     },

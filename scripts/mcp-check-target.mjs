@@ -15,7 +15,9 @@ function argument(name, fallback) {
 
 const targetName = argument("--target");
 const serverId = Number(argument("--server-id"));
-const maximumDistance = Number(argument("--maximum-distance", "20"));
+const maximumDistance = Number(
+  argument("--maximum-distance", argument("--max-distance", "20")),
+);
 const targetabilityTimeoutSeconds = Number(
   argument("--targetability-timeout", "0"),
 );

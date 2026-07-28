@@ -77,25 +77,26 @@ pnpm mcp:goal -- --enabled true --current-gil 80 --target-gil 10000
 It accepts no arbitrary message text and never sends server chat. Update it at
 meaningful checkpoints such as a vendor sale rather than after every fight.
 
-### Development teleport boundary
+### Guarded private-server service teleport
 
-Normal agent play should use navmesh/world-coordinate movement and standard
-travel menus. If client collision blocks prototype work for an extended
-period, a future recovery-only teleport may use LandSandBoat's server
-administration path, but it must remain separate from
-`ffxi_gameplay_command`. The intended design requires all of the following:
+Unverified service travel now defaults to the dedicated
+`ffxi_service_teleport` MCP operation. AgentBridge 0.19.0 accepts typed
+coordinates, an explicit zone, an allowlisted service reason, and a hard
+confirmation phrase. It queues a validated LandSandBoat `!pos` command only
+after confirming the character is logged in, idle, and outside menus.
 
-- disabled by default behind an explicit development setting;
-- a dedicated private-server test character with audited GM privilege;
-- fixed allowlisted zones and recovery coordinates, never arbitrary player
-  input;
-- no use for combat, loot, quest completion, or progression shortcuts;
-- an operator-visible audit event and stream disclosure; and
-- automatic return to ordinary movement after recovery.
+This capability remains separate from `ffxi_gameplay_command`: no arbitrary GM
+command string crosses MCP, and the normal command validator still rejects GM,
+chat, addon, console, script, and chained commands. The local character has
+audited GM level 1 only so LandSandBoat will accept this dedicated operation.
 
-No teleport is enabled in the current gameplay interface. Movement is still
-making measurable progress, so the prototype continues to validate authentic
-navigation and records collision corrections instead.
+The allowlisted reasons are vendor travel, registered travel-node travel,
+bounded pre-combat positioning, and stuck recovery. Pre-combat positioning
+places the character at a safe offset from one policy-approved target; it does
+not run during an active fight or change combat outcomes. Same-zone positioning
+omits LandSandBoat's zone argument so it does not reload the area or dismiss
+Trusts. Normal movement remains available for routes that have already
+completed reliably and been cached.
 
 ## Trust boundaries
 
@@ -112,7 +113,8 @@ assets.
 - Accepts one JSON-lines request per connection.
 - Caps request size and observation result size.
 - Does not expose raw packet injection, Lua evaluation, arbitrary files, chat,
-  console commands, scripts, or GM commands.
+  console commands, scripts, or arbitrary GM commands. The guarded service
+  teleport is the sole dedicated GM-backed operation.
 
 If Codex is not on the Windows client host, the preferred order is:
 

@@ -845,6 +845,56 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  "ffxi_service_teleport",
+  {
+    title: "Teleport the private-server character for service travel",
+    description:
+      "Queue one guarded LandSandBoat !pos command for the local private-server character. Coordinates use AgentBridge world axes: x/y are horizontal and z is elevation. This is for vendor, registered travel-node, short combat positioning, or stuck-recovery travel only; arbitrary GM command text is never accepted.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      x: z.number().min(-10000).max(10000),
+      y: z.number().min(-10000).max(10000),
+      z: z.number().min(-10000).max(10000),
+      zone_id: z.number().int().min(0).max(298),
+      reason: z.enum([
+        "vendor",
+        "travel_node",
+        "combat_position",
+        "stuck_recovery",
+      ]),
+      confirmation: z.literal("TELEPORT PRIVATE SERVER CHARACTER"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, x, y, z: elevation, zone_id, reason, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "service_teleport",
+          {
+            x,
+            y,
+            z: elevation,
+            zone_id,
+            reason,
+            confirmation,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
