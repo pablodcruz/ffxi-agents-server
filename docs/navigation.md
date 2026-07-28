@@ -722,12 +722,32 @@ This is the preferred boundary for the first pass: resume combat and movement
 work now, let passive counters advance, and add spoils or ecosystem-specific
 objectives only when they match the current camp.
 
+The first live farming pass validated that boundary. The committed combat
+helper defeated two Walking Saplings, two Vultures, and one Rock Lizard while
+automatically using Combo at 1,000 TP. `Vanquish One Enemy` awarded its
+first-time 300 sparks and 500 EXP after the first sapling. Ten qualifying
+hits then completed `Deal 10-20 Damage`, awarding another 300 sparks and
+2,500 EXP. The final Vulture's normal 130 EXP and that objective reward moved
+Pablo directly from Monk level 7 at 1,750/2,000 EXP to level 9 at 129/2,400
+EXP. The selected general combat objectives advanced without reopening the
+quest menu.
+
+This pass also established the movement fallback rule. Exact-ID target and
+`/follow` should remain the fast path in open terrain. One Rock Lizard could
+not be selected while it was about 30 yalms away; moving to a nearby open-field
+coordinate made the same ID targetable at 12 yalms. A later Vulture follow
+reported `no_progress` and timed out without attacking. A four-segment
+navmesh route cleared that obstruction, after which the unchanged exact-ID
+combat command completed the fight. Future orchestration should invoke that
+bounded coordinate/navmesh fallback automatically after measured target-range
+or no-progress failures, not poll the camera continuously.
+
 Records of Eminence also creates a legitimate path to the 10,000-gil goal.
 The live sparks shop prices an Acheron Shield at 2,755 sparks, while this
 server's local `item_basic` table gives it a 27,550-gil base sell value. Pablo
-needs 2,455 more sparks before that conversion is available. Do not alter
-currency, teleport, or grant the item administratively; the objective events
-and normal NPC exchange remain the gameplay authority.
+now has 900 sparks and needs 1,855 more before that conversion is available.
+Do not alter currency, teleport, or grant the item administratively; the
+objective events and normal NPC exchange remain the gameplay authority.
 
 ## Provenance and licensing
 
