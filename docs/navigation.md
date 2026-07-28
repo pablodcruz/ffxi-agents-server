@@ -460,15 +460,20 @@ the final short gap to a moving exact-ID target.
 during approach, `/check`, or attack-registration retry. The helper waits
 until player or target HP proves that combat has begun, requires the active
 target to remain the pinned server ID, requires at least 1,000 TP, and rate
-limits attempts to one every five seconds. This keeps deterministic action
-timing local while MCP retains exact target selection, safety policy, and the
-structured result. For the level-7 Monk loop, the intended value is `Combo`.
+limits attempts to one every five seconds. It also withholds the action below
+10% target HP rather than waste TP on a normal-hit finisher. This keeps
+deterministic action timing local while MCP retains exact target selection,
+safety policy, and the structured result. For the level-7 Monk loop, the
+intended value is `Combo`.
 
 The first live `Combo` validation targeted Rock Lizard `17215659`. Combat
 reduced the lizard to 84%, which proved engagement; the helper observed 3,000
 TP and the same active server ID, then queued one `/ws`. The client reported
 `Pablo readies Combo` followed by 95 damage and target defeat. Pablo took no
 damage, gained 160 EXP, and the full invocation completed in about 14 seconds.
+A later sapling test reached 1,000 TP only after the target fell to 3%; its
+normal hit landed first and the queued Combo was rejected. The 10% finisher
+guard was added from that evidence.
 
 Normal FFXI macros are useful later for deterministic actions such as a weapon
 skill, healing, or a stable menu sequence. They are not the targeting layer:

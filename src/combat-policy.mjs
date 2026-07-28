@@ -42,11 +42,14 @@ export function shouldUseWeaponSkill({
   engagementObserved,
   exactTargetSelected,
   tp,
+  targetHpPercent,
   now,
   lastAttemptAt,
   minimumIntervalMs = 5000,
+  minimumTargetHpPercent = 10,
 }) {
   const currentTp = finiteNumber(tp);
+  const currentTargetHp = finiteNumber(targetHpPercent);
   const currentTime = finiteNumber(now);
   const previousAttempt = finiteNumber(lastAttemptAt);
   return Boolean(configured)
@@ -54,6 +57,8 @@ export function shouldUseWeaponSkill({
     && exactTargetSelected === true
     && currentTp !== undefined
     && currentTp >= 1000
+    && currentTargetHp !== undefined
+    && currentTargetHp >= minimumTargetHpPercent
     && currentTime !== undefined
     && previousAttempt !== undefined
     && currentTime - previousAttempt >= minimumIntervalMs;
