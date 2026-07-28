@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { parseCheckVerdict } from "../src/check-verdict.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -22,6 +23,7 @@ const minimumHpPercent = Number(argument("--minimum-hp-percent", "35"));
 const minimumStartHpPercent = Number(argument("--minimum-start-hp-percent", "90"));
 const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
 const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
+const allowCaution = process.argv.includes("--allow-caution");
 
 if (!targetName) {
   throw new Error("Combat requires --target with one exact nearby entity name.");
@@ -171,6 +173,19 @@ async function waitForMovement(timeoutSeconds) {
   throw new Error("Approach movement did not finish within its timeout.");
 }
 
+async function waitForCheckVerdict(afterEventId) {
+  const deadline = Date.now() + 3000;
+  let observation;
+  let verdict = parseCheckVerdict([], { afterEventId });
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    observation = await observe();
+    verdict = parseCheckVerdict(observation.recent_events, { afterEventId });
+    if (verdict.verdict !== "unknown") return { observation, verdict };
+  }
+  return { observation, verdict };
+}
+
 function targetDefeated(observation, serverId) {
   const entity = observation.nearby_entities?.find(
     (candidate) => candidate.server_id === serverId,
@@ -259,13 +274,59 @@ try {
     throw new Error(`${targetName} is not within safe attack range after approach.`);
   }
 
-  const attackSelection = await selectExactTarget(
+  let attackSelection = await selectExactTarget(
     target.server_id,
     stopDistance + 2,
   );
-  const attackBaselineEventId = Math.max(
+  const checkBaselineEventId = Math.max(
     0,
     ...(approached.recent_events || []).map((event) => Number(event.id) || 0),
+  );
+  await command("/check <t>");
+  const checked = await waitForCheckVerdict(checkBaselineEventId);
+  const checkVerdict = checked.verdict;
+  if (checkVerdict.verdict === "unknown") {
+    throw new Error(`No authoritative /check result arrived for ${targetName}.`);
+  }
+  if (
+    checkVerdict.verdict === "unsafe"
+    || (checkVerdict.verdict === "caution" && !allowCaution)
+  ) {
+    throw new Error(
+      `${targetName} check verdict ${checkVerdict.verdict} is not allowed.`,
+    );
+  }
+
+  let attackObservation = checked.observation;
+  const checkedTarget = attackObservation.nearby_entities?.find(
+    (entity) => entity.server_id === target.server_id,
+  );
+  if (!checkedTarget || checkedTarget.distance > stopDistance + 2) {
+    const catchup = await client.callTool({
+      name: "ffxi_move_to_entity",
+      arguments: {
+        server_id: target.server_id,
+        max_start_distance: maxStartDistance,
+        stop_distance: stopDistance,
+        timeout_seconds: approachTimeoutSeconds,
+        stuck_seconds: 3,
+      },
+    });
+    if (catchup.isError) {
+      throw new Error(`Could not catch ${targetName} after /check.`);
+    }
+    await waitForMovement(approachTimeoutSeconds);
+    attackObservation = await observe();
+    attackSelection = await selectExactTarget(
+      target.server_id,
+      stopDistance + 2,
+    );
+  }
+  const attackBaselineEventId = Math.max(
+    0,
+    ...(attackObservation.recent_events || []).map(
+      (event) => Number(event.id) || 0,
+    ),
   );
 
   await command("/attack <t>");
@@ -330,12 +391,14 @@ try {
       minimum_hp_percent: minimumHpPercent,
       minimum_start_hp_percent: minimumStartHpPercent,
       commit_once_engaged: commitOnceEngaged,
+      allow_caution: allowCaution,
       approach_timeout_seconds: approachTimeoutSeconds,
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,
     },
     reason,
     rejection_event: rejectionEvent || null,
+    check: checkVerdict,
     recovery,
     before: beforeState.player,
     after: afterState.player,
