@@ -89,6 +89,14 @@ try {
     });
     if (enable.isError) throw new Error("Could not arm private-server control.");
 
+    const clearTarget = await client.callTool({
+      name: "ffxi_clear_target",
+      arguments: {},
+    });
+    if (clearTarget.isError || !valueOf(clearTarget).cleared) {
+      throw new Error("Could not normalize the client target state.");
+    }
+
     selectedTarget = await client.callTool({
       name: "ffxi_target_entity",
       arguments: {

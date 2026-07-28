@@ -11,9 +11,18 @@ const targetArgumentIndex = process.argv.indexOf("--target");
 const targetName = targetArgumentIndex >= 0
   ? process.argv[targetArgumentIndex + 1]
   : undefined;
+const serverIdArgumentIndex = process.argv.indexOf("--server-id");
+const serverId = serverIdArgumentIndex >= 0
+  ? Number(process.argv[serverIdArgumentIndex + 1])
+  : undefined;
 
-if (!confirmMode && !targetName) {
-  throw new Error("Target interaction requires --target with one exact nearby entity name.");
+if (!confirmMode && !targetName && !serverId) {
+  throw new Error(
+    "Target interaction requires --target or --server-id for one exact nearby entity.",
+  );
+}
+if (serverId !== undefined && (!Number.isInteger(serverId) || serverId <= 0)) {
+  throw new Error("--server-id must be one exact positive entity ID.");
 }
 
 const transport = new StdioClientTransport({
@@ -52,6 +61,25 @@ function summarizeState(response) {
   };
 }
 
+async function waitForExactTarget() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const observation = await client.callTool({
+      name: "ffxi_observe",
+      arguments: { radius: 10, max_entities: 12, event_limit: 10 },
+    });
+    if (observation.isError) throw new Error("FFXI observation failed.");
+    const observedTarget = valueOf(observation).target;
+    if (
+      (serverId && observedTarget?.server_id === serverId)
+      || (!serverId && observedTarget?.name === targetName)
+    ) {
+      return observedTarget;
+    }
+  }
+  return null;
+}
+
 try {
   await client.connect(transport);
   const before = await client.callTool({
@@ -71,12 +99,33 @@ try {
       name: "ffxi_enable_control",
       arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
     });
+    if (!confirmMode) {
+      const clearTarget = await client.callTool({
+        name: "ffxi_clear_target",
+        arguments: {},
+      });
+      if (clearTarget.isError || !valueOf(clearTarget).cleared) {
+        throw new Error("Could not normalize the client target state.");
+      }
+      const targetSelection = await client.callTool({
+        name: "ffxi_target_entity",
+        arguments: {
+          server_id: serverId,
+          name: targetName,
+          max_distance: 6,
+        },
+      });
+      if (targetSelection.isError || !(await waitForExactTarget())) {
+        throw new Error("The client did not accept the exact interaction target.");
+      }
+    }
     interaction = await client.callTool({
       name: "ffxi_interact",
       arguments: confirmMode
         ? { mode: "confirm" }
         : {
             mode: "target",
+            server_id: serverId,
             name: targetName,
             max_distance: 6,
           },

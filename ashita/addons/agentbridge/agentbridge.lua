@@ -8,7 +8,7 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.16.0';
+addon.version = '0.16.1';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -397,6 +397,11 @@ local function party_snapshot(party)
     return result;
 end
 
+local function current_target(target)
+    local slot = target:GetIsSubTargetActive() ~= 0 and 1 or 0;
+    return tonumber(target:GetTargetIndex(slot)) or 0, slot;
+end
+
 local function observe(params)
     local memory = AshitaCore:GetMemoryManager();
     local player = memory:GetPlayer();
@@ -408,7 +413,7 @@ local function observe(params)
     local max_entities = math.floor(math.clamp(tonumber(params.max_entities) or 32, 1, 64));
     local event_limit = math.floor(math.clamp(tonumber(params.event_limit) or 10, 0, 50));
     local player_index = party:GetMemberTargetIndex(0);
-    local target_index = target:GetTargetIndex(0);
+    local target_index, target_slot = current_target(target);
     local nearby = T{};
     local entity_map_size = entities:GetEntityMapSize();
 
@@ -437,6 +442,8 @@ local function observe(params)
         login_status = player:GetLoginStatus(),
         player = entity_snapshot(player_index, entities),
         target = entity_snapshot(target_index, entities),
+        target_slot = target_slot,
+        subtarget_active = target:GetIsSubTargetActive() ~= 0,
         party = party_snapshot(party),
         nearby_entities = nearby,
         recent_events = recent_events(event_limit),
@@ -698,11 +705,14 @@ local function clear_target()
     stop_movement('target_clear');
     local target = AshitaCore:GetMemoryManager():GetTarget();
     target:SetTarget(0, true);
+    local target_index, target_slot = current_target(target);
     add_event(-1, 'Agent target lock cleared.');
     return
     {
-        cleared = target:GetTargetIndex(0) == 0,
-        target_index = tonumber(target:GetTargetIndex(0)),
+        cleared = target_index == 0,
+        target_index = target_index,
+        target_slot = target_slot,
+        subtarget_active = target:GetIsSubTargetActive() ~= 0,
         control = control_snapshot(),
     };
 end

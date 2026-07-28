@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 const vmName = process.env.FFXI_PARALLELS_VM || "Windows 11";
+const projectDir = path.resolve(import.meta.dirname, "..");
 const keyCodes = Object.freeze({
   "/": 61,
   " ": 65,
@@ -27,8 +29,26 @@ const foregroundGameCheck = [
   "[uint32]$foregroundProcessId = 0;",
   "[void][Win32.NativeMethods]::GetWindowThreadProcessId($window, [ref]$foregroundProcessId);",
   "$foregroundProcess = Get-Process -Id $foregroundProcessId -ErrorAction SilentlyContinue;",
-  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -ne 'pol') { exit 42 }",
+  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -notin @('pol', 'xiloader')) { exit 42 }",
 ].join(" ");
+
+function requireLiveBridge() {
+  const child = spawnSync(
+    path.join(projectDir, "scripts", "run-node.sh"),
+    [path.join(projectDir, "src", "doctor.mjs"), "--bridge-only"],
+    {
+      cwd: projectDir,
+      timeout: 10000,
+      stdio: ["ignore", "ignore", "pipe"],
+      encoding: "utf8",
+    },
+  );
+  if (child.error || child.status !== 0) {
+    throw new Error(
+      "Refusing to type the addon reload command because a logged-in AgentBridge client is not healthy.",
+    );
+  }
+}
 
 function requireForegroundGame() {
   const child = spawnSync(
@@ -49,7 +69,7 @@ function requireForegroundGame() {
   );
   if (child.error || child.status !== 0) {
     throw new Error(
-      "Refusing to type the addon reload command because pol.exe is not the foreground Windows process.",
+      "Refusing to type the addon reload command because neither pol.exe nor the live xiloader.exe client is the foreground Windows process.",
     );
   }
 }
@@ -78,6 +98,7 @@ function sendKey(keyCode, delay = 35) {
 }
 
 // Escape any partially entered chat text, then type one fixed, non-chat command.
+requireLiveBridge();
 requireForegroundGame();
 sendKey(9, 80);
 for (const character of command) {

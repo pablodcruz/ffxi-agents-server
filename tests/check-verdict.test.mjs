@@ -12,10 +12,23 @@ test("parses safe, caution, and unsafe check messages", () => {
   assert.deepEqual(parseCheckVerdict([
     {
       id: 3,
-      message: "The Stone Eater seems tough.\u0007It seems to have high defense.\u007f1",
+      message: "The Vulture seems like an even match.\u0007It seems to have high defense.\u007f1",
     },
   ]), {
     event_id: 3,
+    message: "The Vulture seems like an even match. It seems to have high defense. 1",
+    difficulty: "even_match",
+    verdict: "unsafe",
+    high_defense: true,
+    high_evasion: false,
+  });
+  assert.deepEqual(parseCheckVerdict([
+    {
+      id: 4,
+      message: "The Stone Eater seems tough.\u0007It seems to have high defense.\u007f1",
+    },
+  ]), {
+    event_id: 4,
     message: "The Stone Eater seems tough. It seems to have high defense. 1",
     difficulty: "tough",
     verdict: "unsafe",

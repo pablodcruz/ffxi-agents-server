@@ -15,7 +15,7 @@ const difficultyPatterns = Object.freeze([
     verdict: "unsafe",
   },
   {
-    pattern: /seems evenly matched/i,
+    pattern: /seems (?:evenly matched|like an even match)/i,
     difficulty: "even_match",
     verdict: "unsafe",
   },

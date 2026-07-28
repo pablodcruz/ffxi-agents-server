@@ -25,8 +25,11 @@ const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
 if (!targetName) {
   throw new Error("Combat requires --target with one exact nearby entity name.");
 }
-if (!Number.isInteger(targetServerId) || targetServerId < 0) {
-  throw new Error("--server-id must be a positive integer when provided.");
+if (targetName.length > 64 || /["\r\n;|]/.test(targetName)) {
+  throw new Error("--target contains characters unsafe for a gameplay command.");
+}
+if (!Number.isInteger(targetServerId) || targetServerId <= 0) {
+  throw new Error("Combat requires --server-id with the exact positive ID from observation.");
 }
 if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 40) {
   throw new Error("--max-start-distance must be a number from 2 through 40.");
@@ -112,6 +115,46 @@ async function command(text) {
   return valueOf(response);
 }
 
+async function waitForExactTarget(serverId) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const observation = await observe();
+    if (observation.target?.server_id === serverId) return observation;
+  }
+  return null;
+}
+
+async function selectExactTarget(serverId, maxDistance) {
+  const cleared = await client.callTool({
+    name: "ffxi_clear_target",
+    arguments: {},
+  });
+  if (cleared.isError || !valueOf(cleared).cleared) {
+    throw new Error("Could not normalize the client target state.");
+  }
+  const response = await client.callTool({
+    name: "ffxi_target_entity",
+    arguments: {
+      name: targetName,
+      server_id: serverId,
+      max_distance: maxDistance,
+    },
+  });
+  if (response.isError) throw new Error(`Could not target ${targetName}.`);
+
+  let method = "bridge_target_setter";
+  let observation = await waitForExactTarget(serverId);
+  if (!observation) {
+    await command(`/target "${targetName}"`);
+    method = "gameplay_target_command";
+    observation = await waitForExactTarget(serverId);
+  }
+  if (!observation) {
+    throw new Error(`Client target verification failed for ${targetName}.`);
+  }
+  return { target: valueOf(response), method };
+}
+
 async function waitForMovement(timeoutSeconds) {
   const deadline = Date.now() + (timeoutSeconds * 1000) + 1000;
   while (Date.now() < deadline) {
@@ -188,16 +231,11 @@ try {
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
   });
   const recovery = await recoverHp();
-  const targetResponse = await client.callTool({
-    name: "ffxi_target_entity",
-    arguments: {
-      name: targetName,
-      ...(targetServerId > 0 ? { server_id: targetServerId } : {}),
-      max_distance: maxStartDistance,
-    },
-  });
-  if (targetResponse.isError) throw new Error(`Could not target ${targetName}.`);
-  const target = valueOf(targetResponse);
+  const initialSelection = await selectExactTarget(
+    targetServerId,
+    maxStartDistance,
+  );
+  const target = initialSelection.target;
 
   const movementResponse = await client.callTool({
     name: "ffxi_move_to_entity",
@@ -220,28 +258,21 @@ try {
     throw new Error(`${targetName} is not within safe attack range after approach.`);
   }
 
-  const retargetResponse = await client.callTool({
-    name: "ffxi_target_entity",
-    arguments: {
-      name: targetName,
-      server_id: target.server_id,
-      max_distance: stopDistance + 2,
-    },
-  });
-  if (retargetResponse.isError) {
-    throw new Error(`Could not reacquire ${targetName} after approach.`);
-  }
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const armedObservation = await observe();
-  if (armedObservation.target?.server_id !== target.server_id) {
-    throw new Error(`Client target verification failed for ${targetName}.`);
-  }
+  const attackSelection = await selectExactTarget(
+    target.server_id,
+    stopDistance + 2,
+  );
+  const attackBaselineEventId = Math.max(
+    0,
+    ...(approached.recent_events || []).map((event) => Number(event.id) || 0),
+  );
 
   await command("/attack <t>");
 
   const deadline = Date.now() + (combatTimeoutSeconds * 1000);
   const samples = [];
   let reason = "timeout";
+  let rejectionEvent;
 
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -255,6 +286,15 @@ try {
     });
     if (samples.length > 12) samples.shift();
 
+    rejectionEvent = observation.recent_events?.find((event) => (
+      (Number(event.id) || 0) > attackBaselineEventId
+      && Number(event.mode) === 122
+      && /^Unable to (?:see|attack)\b/i.test(event.message || "")
+    ));
+    if (rejectionEvent) {
+      reason = "attack_rejected_visibility";
+      break;
+    }
     if ((observation.player?.hp_percent ?? 0) <= minimumHpPercent) {
       reason = "low_hp";
       break;
@@ -279,6 +319,8 @@ try {
     target: {
       name: target.name,
       server_id: target.server_id,
+      initial_selection_method: initialSelection.method,
+      attack_selection_method: attackSelection.method,
     },
     safety: {
       minimum_hp_percent: minimumHpPercent,
@@ -288,6 +330,7 @@ try {
       recovery_timeout_seconds: recoveryTimeoutSeconds,
     },
     reason,
+    rejection_event: rejectionEvent || null,
     recovery,
     before: beforeState.player,
     after: afterState.player,
@@ -304,6 +347,7 @@ try {
 
 if (result) {
   console.log(JSON.stringify(result, null, 2));
+  if (result.reason !== "target_defeated") process.exitCode = 1;
 }
 if (failure) {
   throw failure;

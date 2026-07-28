@@ -42,8 +42,12 @@ Fire Crystal, crossed the Bastok Markets zone line, loaded South Gustaberg, and
 navigated near level-one Huge Hornets without camera steering. Later bounded
 fights raised Pablo to Monk level 3. A subdivided navmesh route then crossed
 from South Gustaberg back into Bastok Markets and reached Reet without camera
-steering. The local-only activity feed now gives a stream audience sanitized
-summaries of navigation, combat, and menu actions without sending server chat.
+steering. An exact-ID `/item` handoff then exchanged the Adventurer Coupon for
+50 gil through guarded dialogue. Three more exact-ID, game-rated easy-prey
+Tunnel Worm fights advanced Pablo to 610/1000 EXP at Monk level 3 while
+geometry-blocked targets and an even-match Vulture failed closed. The
+local-only activity feed gives a stream audience sanitized summaries of
+navigation, combat, and menu actions without sending server chat.
 
 ## Architecture
 
@@ -129,6 +133,8 @@ Failures encountered on the tested path and their verified fixes are in
 [docs/troubleshooting.md](docs/troubleshooting.md).
 The movement primitives, mesh provenance, live route results, and remaining
 quest/combat work are in [docs/navigation.md](docs/navigation.md).
+The addon comparison and MCP-native read-only mob scout are in
+[docs/addon-tooling.md](docs/addon-tooling.md).
 
 1. Install and update FFXI through an authorized Square Enix path.
 2. Confirm the client connects to the private server with current `xiloader`
