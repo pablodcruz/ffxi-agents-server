@@ -45,9 +45,9 @@ if (!Number.isFinite(stopDistance) || stopDistance < 1 || stopDistance > 6) {
 if (
   !Number.isFinite(approachTimeoutSeconds) ||
   approachTimeoutSeconds < 1 ||
-  approachTimeoutSeconds > 30
+  approachTimeoutSeconds > 20
 ) {
-  throw new Error("--approach-timeout must be a number from 1 through 30.");
+  throw new Error("--approach-timeout must be a number from 1 through 20.");
 }
 if (
   !Number.isFinite(combatTimeoutSeconds) ||
