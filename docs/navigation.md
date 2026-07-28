@@ -535,6 +535,22 @@ reported `no_progress`. A one-second reverse pulse freed the character, and a
 yalms. This is the preferred camera-independent recovery path; repeated visual
 wall inspection should be treated as a debugging fallback.
 
+A later route south exposed a second collision mismatch near `(407, -519)`,
+where the navmesh crossed between crates and a structure. The safe local detour
+was to back north to approximately `(400, -510)`, move west to `(390, -510)`,
+cross south near `(390, -526)`, and then resume the navmesh route. The
+remaining 75 yalms completed with 10 of 10 waypoints, no replans, and 0.73
+yalms of final error.
+
+That detour also exposed an aggro-monitoring failure: an Amethyst Quadav and a
+linked Young Quadav attacked during repeated collision recovery, while the
+scout summary omitted player HP and events. Pablo was defeated before a later
+separation command began. Coordinate and navmesh movement now sample live
+player state during every lease and abort immediately on HP loss, defeat, or
+login-state change. The read-only scout now includes the full bounded player
+summary and recent events, and it suppresses target recommendations while the
+player is defeated or otherwise non-operational.
+
 Recovery can also be run independently:
 
 ```sh
