@@ -22,6 +22,7 @@
     "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",
     "mcp:doorway": "./scripts/run-node.sh scripts/mcp-doorway.mjs",
     "mcp:feed": "./scripts/run-node.sh scripts/mcp-activity-feed.mjs",
+    "mcp:goal": "./scripts/run-node.sh scripts/mcp-goal-overlay.mjs",
     "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",
     "mcp:check-target": "./scripts/run-node.sh scripts/mcp-check-target.mjs",
     "mcp:direction": "./scripts/run-node.sh scripts/mcp-direction.mjs",

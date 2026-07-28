@@ -8,7 +8,7 @@ commands, scripts, packet injection, or remote network binding.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.16.1';
+addon.version = '0.17.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -36,6 +36,10 @@ local bridge =
     activity_feed_enabled = false,
     activity_font = nil,
     activity_lines = T{},
+    goal_overlay_enabled = false,
+    goal_font = nil,
+    goal_current_gil = 0,
+    goal_target_gil = 10000,
 };
 
 local allowed_commands =
@@ -193,6 +197,32 @@ local function display_activity_event(message)
     end
 end
 
+local function format_integer(value)
+    local text = tostring(math.floor(value));
+    while (true) do
+        local updated, count = text:gsub('^(-?%d+)(%d%d%d)', '%1,%2');
+        text = updated;
+        if (count == 0) then
+            return text;
+        end
+    end
+end
+
+local function refresh_goal_overlay()
+    if (bridge.goal_font == nil) then
+        return;
+    end
+    bridge.goal_font.visible = bridge.goal_overlay_enabled;
+    if (not bridge.goal_overlay_enabled) then
+        bridge.goal_font.text = '';
+        return;
+    end
+    bridge.goal_font.text =
+        'CURRENT GOAL: EARN ' .. format_integer(bridge.goal_target_gil) .. ' GIL BEFORE QUESTING\n' ..
+        'PROGRESS: ' .. format_integer(bridge.goal_current_gil) .. ' / ' ..
+        format_integer(bridge.goal_target_gil) .. ' GIL';
+end
+
 local function add_event(mode, message)
     if (type(message) ~= 'string' or #message == 0) then
         return;
@@ -326,6 +356,29 @@ local function activity_overlay_snapshot()
         manager_visible = manager_visible,
         object_visible = object_visible,
         line_count = #bridge.activity_lines,
+    };
+end
+
+local function goal_overlay_snapshot()
+    local manager_visible = false;
+    local object_visible = false;
+    pcall(function ()
+        manager_visible = AshitaCore:GetFontManager():GetVisible();
+    end);
+    if (bridge.goal_font ~= nil) then
+        pcall(function ()
+            object_visible = bridge.goal_font.visible == true;
+        end);
+    end
+    return
+    {
+        present = bridge.goal_font ~= nil,
+        enabled = bridge.goal_overlay_enabled,
+        manager_visible = manager_visible,
+        object_visible = object_visible,
+        current_gil = bridge.goal_current_gil,
+        target_gil = bridge.goal_target_gil,
+        local_overlay_only = true,
     };
 end
 
@@ -540,6 +593,7 @@ local function character_state(params)
         menu_name = menu_open and current_menu_name() or '',
         interface_visibility = interface_visibility_snapshot(),
         activity_overlay = activity_overlay_snapshot(),
+        goal_overlay = goal_overlay_snapshot(),
         selected_item =
         {
             active = menu_open and selected_item_id > 0,
@@ -1245,6 +1299,46 @@ local function dispatch(request)
             activity_overlay = activity_overlay_snapshot(),
             control = control_snapshot(),
         };
+    elseif (request.operation == 'set_goal_overlay') then
+        require_control_enabled();
+        if (type(params.enabled) ~= 'boolean') then
+            error('Goal overlay enabled must be true or false.');
+        end
+        local current_gil = tonumber(params.current_gil);
+        local target_gil = tonumber(params.target_gil);
+        if (
+            current_gil == nil or current_gil ~= math.floor(current_gil) or
+            current_gil < 0 or current_gil > 999999999
+        ) then
+            error('Goal overlay current_gil must be an integer between 0 and 999999999.');
+        end
+        if (
+            target_gil == nil or target_gil ~= math.floor(target_gil) or
+            target_gil < 1 or target_gil > 999999999
+        ) then
+            error('Goal overlay target_gil must be an integer between 1 and 999999999.');
+        end
+        bridge.goal_overlay_enabled = params.enabled;
+        bridge.goal_current_gil = current_gil;
+        bridge.goal_target_gil = target_gil;
+        refresh_goal_overlay();
+        add_event(
+            -1,
+            ('Agent gil goal overlay %s at %s of %s.'):fmt(
+                params.enabled and 'enabled' or 'disabled',
+                format_integer(current_gil),
+                format_integer(target_gil)
+            )
+        );
+        return
+        {
+            enabled = bridge.goal_overlay_enabled,
+            current_gil = bridge.goal_current_gil,
+            target_gil = bridge.goal_target_gil,
+            local_overlay_only = true,
+            goal_overlay = goal_overlay_snapshot(),
+            control = control_snapshot(),
+        };
     elseif (request.operation == 'stop_movement') then
         stop_movement('requested');
         return control_snapshot();
@@ -1370,6 +1464,21 @@ ashita.events.register('load', 'load_cb', function ()
             color = 0xB0000000,
         },
     });
+    bridge.goal_font = fonts.new(
+    {
+        visible = false,
+        font_family = 'Arial',
+        font_height = 18,
+        color = 0xFFFFD966,
+        position_x = 16,
+        position_y = 465,
+        background =
+        {
+            visible = true,
+            color = 0xC0000000,
+        },
+    });
+    refresh_goal_overlay();
 
     local listener, listen_error = socket.bind(bridge.config.bind_host, bridge.config.bind_port);
     if (listener == nil) then
@@ -1390,6 +1499,10 @@ ashita.events.register('unload', 'unload_cb', function ()
     if (bridge.activity_font ~= nil) then
         bridge.activity_font:destroy();
         bridge.activity_font = nil;
+    end
+    if (bridge.goal_font ~= nil) then
+        bridge.goal_font:destroy();
+        bridge.goal_font = nil;
     end
     stop_listener();
 end);

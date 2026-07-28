@@ -196,6 +196,41 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_set_goal_overlay",
+  {
+    title: "Set the local FFXI gil-goal overlay",
+    description:
+      "Show or hide a fixed-purpose local stream overlay with current and target gil. It accepts no arbitrary text and never sends server chat.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      enabled: z.boolean(),
+      current_gil: z.number().int().min(0).max(999_999_999),
+      target_gil: z.number().int().min(1).max(999_999_999),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, enabled, current_gil, target_gil }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "set_goal_overlay",
+          { enabled, current_gil, target_gil },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_emergency_stop",
   {
     title: "Emergency-stop FFXI agent",
