@@ -381,6 +381,8 @@ bridge protocol. It:
 - selects one exact nearby entity;
 - rests to a configurable minimum starting HP when necessary;
 - approaches it with a leased entity-follow movement;
+- if Ashita immediately cancels that low-level lease, uses the normal bounded
+  `/follow <t>` command against the already verified exact target;
 - refuses to attack outside the configured range;
 - reacquires and verifies the exact server ID after movement;
 - issues `/check` and waits for an authoritative result in the same process;
@@ -388,6 +390,8 @@ bridge protocol. It:
   allowed;
 - catches the same exact entity again if it roams during `/check`;
 - sends only `/attack <t>`;
+- on a pre-engagement visibility rejection, re-follows and retries that same
+  exact server ID up to the configured bounded attempt limit;
 - samples player and target HP once per second;
 - stops at a configurable player-HP floor, target defeat, logout, or timeout;
 - sends `/attackoff`; and
@@ -419,6 +423,7 @@ pnpm mcp:combat -- \
   --server-id 17215660 \
   --allow-caution \
   --commit-once-engaged \
+  --attack-attempts 3 \
   --minimum-hp-percent 35 \
   --combat-timeout 120
 ```
@@ -428,6 +433,19 @@ close-range `/check`, optional catch-up, and attack without returning control
 between stages. `--allow-caution` admits a game-derived `decent challenge`
 result; omit it to require `easy prey` or `too weak`. `tough`, `very tough`,
 `incredibly tough`, and `even match` remain rejected.
+
+`--attack-attempts` defaults to `3` and is capped at `3`. A server-side
+`Unable to see` or `Unable to attack` response before either combatant takes
+damage triggers a short same-ID re-follow, exact-target verification, and
+another `/attack <t>`. A rejection after combat has begun is never retried.
+This keeps transient attack registration inside one deterministic handoff
+without permitting target substitution or an unbounded loop.
+
+The normal `/follow <t>` fallback is monitored four times per second, stops
+inside the configured attack range, and fails closed if auto-follow stops,
+the exact entity disappears, login state changes, or the approach timeout
+expires. It does not replace navmesh routing for long travel; it only closes
+the final short gap to a moving exact-ID target.
 
 Normal FFXI macros are useful later for deterministic actions such as a weapon
 skill, healing, or a stable menu sequence. They are not the targeting layer:
@@ -576,6 +594,21 @@ After that server fix, four Huge Hornet encounters validated the full loop:
   maximum HP.
 
 The client event stream independently reported `Pablo attains level 2!`.
+
+### Treasure-casket timing and menu evidence
+
+Treasure Caskets are timed side objectives and should be handled immediately
+after combat. A casket can disappear visually while its old entity slot still
+looks active in memory; exact targeting correctly rejects that stale state.
+Do not spend repeated target attempts on a model that is no longer visible.
+
+A later Walking Sapling victory spawned a fresh casket in the same server-ID
+slot. Exact-ID interaction succeeded and exposed a temporary `Potion +1`.
+The final `Obtain this temporary item?` query defaulted to `No`; the verified
+accept sequence was one bounded `up` followed by `confirm`. This item-selection
+state is observable through `selected_item`, but the highlighted Yes/No row is
+not yet exposed, so a one-time visual check was used. A future casket helper
+should encode the menu states and preserve exact-ID and bounded-input checks.
 
 ## Provenance and licensing
 

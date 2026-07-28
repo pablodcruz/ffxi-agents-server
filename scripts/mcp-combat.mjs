@@ -5,6 +5,7 @@ import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
+import { shouldRetryAttackRegistration } from "../src/combat-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -22,6 +23,7 @@ const combatTimeoutSeconds = Number(argument("--combat-timeout", "120"));
 const minimumHpPercent = Number(argument("--minimum-hp-percent", "35"));
 const minimumStartHpPercent = Number(argument("--minimum-start-hp-percent", "90"));
 const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
+const attackAttemptsLimit = Number(argument("--attack-attempts", "3"));
 const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
 const allowCaution = process.argv.includes("--allow-caution");
 
@@ -76,6 +78,13 @@ if (
   recoveryTimeoutSeconds > 180
 ) {
   throw new Error("--recovery-timeout must be a number from 5 through 180.");
+}
+if (
+  !Number.isInteger(attackAttemptsLimit) ||
+  attackAttemptsLimit < 1 ||
+  attackAttemptsLimit > 3
+) {
+  throw new Error("--attack-attempts must be an integer from 1 through 3.");
 }
 
 const transport = new StdioClientTransport({
@@ -173,6 +182,70 @@ async function waitForMovement(timeoutSeconds) {
   throw new Error("Approach movement did not finish within its timeout.");
 }
 
+async function followWithGameplayCommand(serverId, timeoutSeconds) {
+  await selectExactTarget(serverId, maxStartDistance);
+  await command("/follow <t>");
+  const startedAt = Date.now();
+  const deadline = startedAt + (timeoutSeconds * 1000);
+  try {
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const observation = await observe();
+      const entity = observation.nearby_entities?.find(
+        (candidate) => candidate.server_id === serverId,
+      );
+      if (!entity) throw new Error(`${targetName} was lost during /follow.`);
+      if (entity.distance <= stopDistance + 2) return observation;
+      if (observation.login_status !== 2) {
+        throw new Error("Login state changed during /follow.");
+      }
+      if (Date.now() - startedAt >= 750) {
+        const status = await client.callTool({
+          name: "ffxi_control_status",
+          arguments: {},
+        });
+        if (status.isError || !valueOf(status).auto_running) {
+          throw new Error(`/follow stopped before reaching ${targetName}.`);
+        }
+      }
+    }
+    throw new Error(`/follow did not reach ${targetName} within its timeout.`);
+  } finally {
+    await client.callTool({ name: "ffxi_stop_movement", arguments: {} })
+      .catch(() => {});
+  }
+}
+
+async function approachExactTarget(serverId, timeoutSeconds) {
+  const movementResponse = await client.callTool({
+    name: "ffxi_move_to_entity",
+    arguments: {
+      server_id: serverId,
+      max_start_distance: maxStartDistance,
+      stop_distance: stopDistance,
+      timeout_seconds: timeoutSeconds,
+      stuck_seconds: 3,
+    },
+  });
+  if (movementResponse.isError) throw new Error(`Could not approach ${targetName}.`);
+  await waitForMovement(timeoutSeconds);
+
+  let observation = await observe();
+  const entity = observation.nearby_entities?.find(
+    (candidate) => candidate.server_id === serverId,
+  );
+  if (entity && entity.distance <= stopDistance + 2) return observation;
+
+  observation = await followWithGameplayCommand(serverId, timeoutSeconds);
+  const followedEntity = observation.nearby_entities?.find(
+    (candidate) => candidate.server_id === serverId,
+  );
+  if (!followedEntity || followedEntity.distance > stopDistance + 2) {
+    throw new Error(`${targetName} is not within safe attack range after /follow.`);
+  }
+  return observation;
+}
+
 async function waitForCheckVerdict(afterEventId) {
   const deadline = Date.now() + 3000;
   let observation;
@@ -253,20 +326,10 @@ try {
   );
   const target = initialSelection.target;
 
-  const movementResponse = await client.callTool({
-    name: "ffxi_move_to_entity",
-    arguments: {
-      server_id: target.server_id,
-      max_start_distance: maxStartDistance,
-      stop_distance: stopDistance,
-      timeout_seconds: approachTimeoutSeconds,
-      stuck_seconds: 3,
-    },
-  });
-  if (movementResponse.isError) throw new Error(`Could not approach ${targetName}.`);
-  await waitForMovement(approachTimeoutSeconds);
-
-  const approached = await observe();
+  const approached = await approachExactTarget(
+    target.server_id,
+    approachTimeoutSeconds,
+  );
   const approachedTarget = approached.nearby_entities?.find(
     (entity) => entity.server_id === target.server_id,
   );
@@ -302,32 +365,27 @@ try {
     (entity) => entity.server_id === target.server_id,
   );
   if (!checkedTarget || checkedTarget.distance > stopDistance + 2) {
-    const catchup = await client.callTool({
-      name: "ffxi_move_to_entity",
-      arguments: {
-        server_id: target.server_id,
-        max_start_distance: maxStartDistance,
-        stop_distance: stopDistance,
-        timeout_seconds: approachTimeoutSeconds,
-        stuck_seconds: 3,
-      },
-    });
-    if (catchup.isError) {
-      throw new Error(`Could not catch ${targetName} after /check.`);
-    }
-    await waitForMovement(approachTimeoutSeconds);
-    attackObservation = await observe();
+    attackObservation = await approachExactTarget(
+      target.server_id,
+      approachTimeoutSeconds,
+    );
     attackSelection = await selectExactTarget(
       target.server_id,
       stopDistance + 2,
     );
   }
-  const attackBaselineEventId = Math.max(
+  let attackBaselineEventId = Math.max(
     0,
     ...(attackObservation.recent_events || []).map(
       (event) => Number(event.id) || 0,
     ),
   );
+  const attackStartPlayerHp = attackObservation.player?.hp_percent;
+  const attackStartTargetHp = attackObservation.nearby_entities?.find(
+    (entity) => entity.server_id === target.server_id,
+  )?.hp_percent;
+  let attackAttempts = 1;
+  const rejectedAttempts = [];
 
   await command("/attack <t>");
 
@@ -354,8 +412,59 @@ try {
       && /^Unable to (?:see|attack)\b/i.test(event.message || "")
     ));
     if (rejectionEvent) {
-      reason = "attack_rejected_visibility";
-      break;
+      const observedTarget = observation.nearby_entities?.find(
+        (entity) => entity.server_id === target.server_id,
+      );
+      const retryAllowed = shouldRetryAttackRegistration({
+        attempts: attackAttempts,
+        attemptLimit: attackAttemptsLimit,
+        startPlayerHpPercent: attackStartPlayerHp,
+        currentPlayerHpPercent: observation.player?.hp_percent,
+        startTargetHpPercent: attackStartTargetHp,
+        currentTargetHpPercent: observedTarget?.hp_percent,
+      });
+      rejectedAttempts.push({
+        attempt: attackAttempts,
+        event: rejectionEvent,
+        retry_allowed: retryAllowed,
+      });
+      if (!retryAllowed) {
+        reason = "attack_rejected_visibility";
+        break;
+      }
+
+      await command("/attackoff").catch(() => {});
+      let retryObservation;
+      try {
+        retryObservation = await approachExactTarget(
+          target.server_id,
+          approachTimeoutSeconds,
+        );
+      } catch {
+        reason = "attack_retry_approach_failed";
+        break;
+      }
+      attackSelection = await selectExactTarget(
+        target.server_id,
+        stopDistance + 2,
+      );
+      const retryTarget = retryObservation.nearby_entities?.find(
+        (entity) => entity.server_id === target.server_id,
+      );
+      if (!retryTarget || retryTarget.distance > stopDistance + 2) {
+        reason = "attack_retry_out_of_range";
+        break;
+      }
+      attackBaselineEventId = Math.max(
+        0,
+        ...(retryObservation.recent_events || []).map(
+          (event) => Number(event.id) || 0,
+        ),
+      );
+      attackAttempts += 1;
+      rejectionEvent = undefined;
+      await command("/attack <t>");
+      continue;
     }
     if (
       !commitOnceEngaged
@@ -386,6 +495,7 @@ try {
       server_id: target.server_id,
       initial_selection_method: initialSelection.method,
       attack_selection_method: attackSelection.method,
+      attack_attempts: attackAttempts,
     },
     safety: {
       minimum_hp_percent: minimumHpPercent,
@@ -395,9 +505,11 @@ try {
       approach_timeout_seconds: approachTimeoutSeconds,
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,
+      attack_attempts_limit: attackAttemptsLimit,
     },
     reason,
     rejection_event: rejectionEvent || null,
+    rejected_attempts: rejectedAttempts,
     check: checkVerdict,
     recovery,
     before: beforeState.player,
