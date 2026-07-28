@@ -29,8 +29,10 @@ const destination = {
 const meshName = argument("--mesh", "Bastok_Markets.nav");
 const meshPath = path.resolve(projectDir, "runtime", "navmeshes", meshName);
 const planOnly = hasFlag("--plan-only");
+const recoverStuck = hasFlag("--recover-stuck");
 const maxReplans = Number(argument("--max-replans", "2"));
 const maximumSegmentDistance = Number(argument("--maximum-segment-distance", "20"));
+const recoveryPulseMs = Number(argument("--recovery-pulse-ms", "750"));
 
 if (Object.values(destination).some((value) => !Number.isFinite(value))) {
   throw new Error("Pathfinding requires finite --x, --y, and --z coordinates.");
@@ -47,6 +49,13 @@ if (
   || maximumSegmentDistance > 50
 ) {
   throw new Error("--maximum-segment-distance must be between 5 and 50 yalms.");
+}
+if (
+  !Number.isInteger(recoveryPulseMs)
+  || recoveryPulseMs < 50
+  || recoveryPulseMs > 1000
+) {
+  throw new Error("--recovery-pulse-ms must be an integer from 50 through 1000.");
 }
 
 const transport = new StdioClientTransport({
@@ -113,6 +122,8 @@ try {
       start,
       destination,
       maximum_segment_distance: maximumSegmentDistance,
+      recover_stuck: recoverStuck,
+      recovery_pulse_ms: recoveryPulseMs,
       planned_waypoints: route.length,
       route: route.map((waypoint, index) => {
         const previous = index === 0 ? start : route[index - 1];
@@ -140,6 +151,7 @@ try {
 
     let index = 0;
     let replanCount = 0;
+    const recoveries = [];
     while (index < route.length) {
       const before = await observe();
       const waypoint = route[index];
@@ -186,9 +198,34 @@ try {
       });
       if (remaining > 2) {
         if (replanCount < maxReplans) {
+          let replanStart = after.player.position;
+          if (recoverStuck) {
+            const recovery = await client.callTool({
+              name: "ffxi_directional_input",
+              arguments: {
+                action: "backward",
+                duration_ms: recoveryPulseMs,
+              },
+            });
+            if (recovery.isError) {
+              throw new Error(
+                `Navigation recovery failed after waypoint ${index + 1}.`,
+              );
+            }
+            const recovered = await observe();
+            replanStart = recovered.player.position;
+            recoveries.push({
+              plan: replanCount + 1,
+              waypoint_index: index + 1,
+              action: "backward",
+              duration_ms: recoveryPulseMs,
+              before: after.player.position,
+              after: replanStart,
+            });
+          }
           const replannedRawPath = await planNavmeshPath({
             meshPath,
-            start: after.player.position,
+            start: replanStart,
             end: destination,
           });
           const replannedPath = subdividePath(
@@ -216,6 +253,8 @@ try {
       destination,
       initial_planned_waypoints: initialPathPoints.length - 1,
       replans: replanCount,
+      recover_stuck: recoverStuck,
+      recoveries,
       completed,
       final_position: finalObservation.player.position,
       remaining: distance2d(finalObservation.player.position, destination),

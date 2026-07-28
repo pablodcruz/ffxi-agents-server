@@ -7,10 +7,14 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 const targetIndex = process.argv.indexOf("--target");
+const serverIdIndex = process.argv.indexOf("--server-id");
 const maxStartIndex = process.argv.indexOf("--max-start-distance");
 const stopDistanceIndex = process.argv.indexOf("--stop-distance");
 const timeoutIndex = process.argv.indexOf("--timeout");
 const targetName = targetIndex >= 0 ? process.argv[targetIndex + 1] : undefined;
+const targetServerId = serverIdIndex >= 0
+  ? Number(process.argv[serverIdIndex + 1])
+  : undefined;
 const maxStartDistance = maxStartIndex >= 0
   ? Number(process.argv[maxStartIndex + 1])
   : 40;
@@ -23,6 +27,12 @@ const timeoutSeconds = timeoutIndex >= 0
 
 if (!targetName) {
   throw new Error("Waypoint movement requires --target with one exact entity name.");
+}
+if (
+  targetServerId !== undefined
+  && (!Number.isInteger(targetServerId) || targetServerId <= 0)
+) {
+  throw new Error("--server-id must be one positive exact entity ID.");
 }
 if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 40) {
   throw new Error("--max-start-distance must be a number from 2 through 40.");
@@ -78,7 +88,11 @@ try {
 
     target = await client.callTool({
       name: "ffxi_target_entity",
-      arguments: { name: targetName, max_distance: maxStartDistance },
+      arguments: {
+        name: targetName,
+        ...(targetServerId === undefined ? {} : { server_id: targetServerId }),
+        max_distance: maxStartDistance,
+      },
     });
     if (target.isError) {
       throw new Error(`Could not target ${targetName}.`);
@@ -110,6 +124,7 @@ try {
   console.log(JSON.stringify({
     protocol: "mcp-stdio",
     waypoint: targetName,
+    requested_server_id: targetServerId ?? null,
     before: summarizeObservation(before),
     target: valueOf(target),
     movement: valueOf(movement),
