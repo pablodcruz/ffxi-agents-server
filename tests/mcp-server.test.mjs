@@ -31,6 +31,7 @@ async function createMockBridge(token) {
         "move_to_entity",
         "move_to_position",
         "set_activity_feed",
+        "set_goal_overlay",
         "gameplay_command",
       ].includes(request.operation);
       let ok = authenticated;
@@ -59,6 +60,13 @@ async function createMockBridge(token) {
         result = {
           enabled: request.params.enabled,
           local_chat_only: true,
+        };
+      } else if (request.operation === "set_goal_overlay") {
+        result = {
+          enabled: request.params.enabled,
+          current_gil: request.params.current_gil,
+          target_gil: request.params.target_gil,
+          local_overlay_only: true,
         };
       } else {
         result = {
@@ -154,6 +162,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_recent_events",
       "ffxi_server_status",
       "ffxi_set_activity_feed",
+      "ffxi_set_goal_overlay",
       "ffxi_stop_movement",
       "ffxi_target_entity",
     ].sort(),
@@ -215,6 +224,12 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(disarmedFeed.isError, true);
 
+  const disarmedGoal = await client.callTool({
+    name: "ffxi_set_goal_overlay",
+    arguments: { enabled: true, current_gil: 80, target_gil: 10000 },
+  });
+  assert.equal(disarmedGoal.isError, true);
+
   const enabled = await client.callTool({
     name: "ffxi_enable_control",
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
@@ -229,6 +244,16 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   assert.equal(activityFeed.isError, undefined);
   assert.equal(activityFeed.structuredContent.enabled, true);
   assert.equal(activityFeed.structuredContent.local_chat_only, true);
+
+  const goalOverlay = await client.callTool({
+    name: "ffxi_set_goal_overlay",
+    arguments: { enabled: true, current_gil: 80, target_gil: 10000 },
+  });
+  assert.equal(goalOverlay.isError, undefined);
+  assert.equal(goalOverlay.structuredContent.enabled, true);
+  assert.equal(goalOverlay.structuredContent.current_gil, 80);
+  assert.equal(goalOverlay.structuredContent.target_gil, 10000);
+  assert.equal(goalOverlay.structuredContent.local_overlay_only, true);
 
   const menuInput = await client.callTool({
     name: "ffxi_menu_input",

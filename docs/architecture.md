@@ -31,6 +31,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_recent_events` | No | Read a bounded event tail |
 | `ffxi_enable_control` | Yes | Explicitly arm private-server client writes |
 | `ffxi_set_activity_feed` | Yes | Toggle sanitized action summaries in local game chat only |
+| `ffxi_set_goal_overlay` | Yes | Display numeric gil-goal progress in a fixed-purpose local overlay |
 | `ffxi_emergency_stop` | Yes | Disarm writes, movement, and combat immediately |
 | `ffxi_stop_movement` | Yes | Cancel a movement lease |
 | `ffxi_target_entity` | Yes | Select one nearby entity |
@@ -65,6 +66,16 @@ pulses, heading changes, and only the verb of an allowlisted gameplay command.
 It accepts no arbitrary message string, strips control characters, truncates
 output, and never sends `/say`, `/tell`, linkshell, or any other server chat.
 Normal combat, EXP, and `/check` results remain the game's own chat events.
+
+The separate goal banner above the activity feed displays only numeric gil
+progress with a fixed label:
+
+```sh
+pnpm mcp:goal -- --enabled true --current-gil 80 --target-gil 10000
+```
+
+It accepts no arbitrary message text and never sends server chat. Update it at
+meaningful checkpoints such as a vendor sale rather than after every fight.
 
 ### Development teleport boundary
 

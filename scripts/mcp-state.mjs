@@ -59,6 +59,7 @@ try {
     menu_name: value.menu_name,
     interface_visibility: value.interface_visibility,
     activity_overlay: value.activity_overlay,
+    goal_overlay: value.goal_overlay,
     selected_item: value.selected_item,
     statuses: value.statuses?.filter(
       (status) =>
