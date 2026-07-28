@@ -5,7 +5,10 @@ import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
-import { shouldRetryAttackRegistration } from "../src/combat-policy.mjs";
+import {
+  shouldRetryAttackRegistration,
+  shouldUseWeaponSkill,
+} from "../src/combat-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -24,6 +27,7 @@ const minimumHpPercent = Number(argument("--minimum-hp-percent", "35"));
 const minimumStartHpPercent = Number(argument("--minimum-start-hp-percent", "90"));
 const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
 const attackAttemptsLimit = Number(argument("--attack-attempts", "3"));
+const weaponSkill = argument("--weapon-skill");
 const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
 const allowCaution = process.argv.includes("--allow-caution");
 
@@ -32,6 +36,16 @@ if (!targetName) {
 }
 if (targetName.length > 64 || /["\r\n;|]/.test(targetName)) {
   throw new Error("--target contains characters unsafe for a gameplay command.");
+}
+if (
+  weaponSkill !== undefined
+  && (
+    weaponSkill.length < 1
+    || weaponSkill.length > 64
+    || /["\r\n;|]/.test(weaponSkill)
+  )
+) {
+  throw new Error("--weapon-skill contains characters unsafe for a gameplay command.");
 }
 if (!Number.isInteger(targetServerId) || targetServerId <= 0) {
   throw new Error("Combat requires --server-id with the exact positive ID from observation.");
@@ -393,16 +407,24 @@ try {
   const samples = [];
   let reason = "timeout";
   let rejectionEvent;
+  let engagementObserved = false;
+  let lastWeaponSkillAt = 0;
+  const weaponSkillAttempts = [];
 
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const observation = await observe();
+    const observedTarget = observation.nearby_entities?.find(
+      (entity) => entity.server_id === target.server_id,
+    );
+    const playerPartyMember = observation.party?.find(
+      (member) => member.server_id === observation.player?.server_id,
+    ) || observation.party?.find((member) => member.slot === 0);
     samples.push({
       at: observation.observed_at,
       player_hp_percent: observation.player?.hp_percent,
-      target_hp_percent: observation.nearby_entities?.find(
-        (entity) => entity.server_id === target.server_id,
-      )?.hp_percent,
+      target_hp_percent: observedTarget?.hp_percent,
+      player_tp: playerPartyMember?.tp,
     });
     if (samples.length > 12) samples.shift();
 
@@ -412,9 +434,6 @@ try {
       && /^Unable to (?:see|attack)\b/i.test(event.message || "")
     ));
     if (rejectionEvent) {
-      const observedTarget = observation.nearby_entities?.find(
-        (entity) => entity.server_id === target.server_id,
-      );
       const retryAllowed = shouldRetryAttackRegistration({
         attempts: attackAttempts,
         attemptLimit: attackAttemptsLimit,
@@ -466,6 +485,13 @@ try {
       await command("/attack <t>");
       continue;
     }
+    engagementObserved ||= (
+      Number.isFinite(attackStartPlayerHp)
+      && (observation.player?.hp_percent ?? attackStartPlayerHp) < attackStartPlayerHp
+    ) || (
+      Number.isFinite(attackStartTargetHp)
+      && (observedTarget?.hp_percent ?? attackStartTargetHp) < attackStartTargetHp
+    );
     if (
       !commitOnceEngaged
       && (observation.player?.hp_percent ?? 0) <= minimumHpPercent
@@ -480,6 +506,21 @@ try {
     if (observation.login_status !== 2) {
       reason = "not_logged_in";
       break;
+    }
+    if (shouldUseWeaponSkill({
+      configured: Boolean(weaponSkill),
+      engagementObserved,
+      exactTargetSelected: observation.target?.server_id === target.server_id,
+      tp: playerPartyMember?.tp,
+      now: Date.now(),
+      lastAttemptAt: lastWeaponSkillAt,
+    })) {
+      await command(`/ws "${weaponSkill}" <t>`);
+      lastWeaponSkillAt = Date.now();
+      weaponSkillAttempts.push({
+        at: observation.observed_at,
+        tp: playerPartyMember.tp,
+      });
     }
   }
 
@@ -506,10 +547,12 @@ try {
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,
       attack_attempts_limit: attackAttemptsLimit,
+      weapon_skill: weaponSkill || null,
     },
     reason,
     rejection_event: rejectionEvent || null,
     rejected_attempts: rejectedAttempts,
+    weapon_skill_attempts: weaponSkillAttempts,
     check: checkVerdict,
     recovery,
     before: beforeState.player,

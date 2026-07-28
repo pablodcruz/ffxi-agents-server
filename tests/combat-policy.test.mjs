@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shouldRetryAttackRegistration } from "../src/combat-policy.mjs";
+import {
+  shouldRetryAttackRegistration,
+  shouldUseWeaponSkill,
+} from "../src/combat-policy.mjs";
 
 const idleRejection = {
   attempts: 1,
@@ -32,4 +35,20 @@ test("rejects exhausted and incomplete attack retry evidence", () => {
     ...idleRejection,
     currentTargetHpPercent: undefined,
   }), false);
+});
+
+test("uses a weapon skill only after exact-target engagement with sufficient TP", () => {
+  const ready = {
+    configured: true,
+    engagementObserved: true,
+    exactTargetSelected: true,
+    tp: 1000,
+    now: 6000,
+    lastAttemptAt: 0,
+  };
+  assert.equal(shouldUseWeaponSkill(ready), true);
+  assert.equal(shouldUseWeaponSkill({ ...ready, engagementObserved: false }), false);
+  assert.equal(shouldUseWeaponSkill({ ...ready, exactTargetSelected: false }), false);
+  assert.equal(shouldUseWeaponSkill({ ...ready, tp: 999 }), false);
+  assert.equal(shouldUseWeaponSkill({ ...ready, now: 4000 }), false);
 });

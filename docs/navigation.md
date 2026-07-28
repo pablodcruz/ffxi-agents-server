@@ -393,6 +393,8 @@ bridge protocol. It:
 - on a pre-engagement visibility rejection, re-follows and retries that same
   exact server ID up to the configured bounded attempt limit;
 - samples player and target HP once per second;
+- optionally triggers one configured weapon skill when combat is proven active,
+  the exact target remains selected, and TP is at least 1,000;
 - stops at a configurable player-HP floor, target defeat, logout, or timeout;
 - sends `/attackoff`; and
 - always invokes the emergency stop before exit.
@@ -424,6 +426,7 @@ pnpm mcp:combat -- \
   --allow-caution \
   --commit-once-engaged \
   --attack-attempts 3 \
+  --weapon-skill "Combo" \
   --minimum-hp-percent 35 \
   --combat-timeout 120
 ```
@@ -452,6 +455,20 @@ inside the configured attack range, and fails closed if auto-follow stops,
 the exact entity disappears, login state changes, or the approach timeout
 expires. It does not replace navmesh routing for long travel; it only closes
 the final short gap to a moving exact-ID target.
+
+`--weapon-skill` is an optional macro-like combat action. It is never sent
+during approach, `/check`, or attack-registration retry. The helper waits
+until player or target HP proves that combat has begun, requires the active
+target to remain the pinned server ID, requires at least 1,000 TP, and rate
+limits attempts to one every five seconds. This keeps deterministic action
+timing local while MCP retains exact target selection, safety policy, and the
+structured result. For the level-7 Monk loop, the intended value is `Combo`.
+
+The first live `Combo` validation targeted Rock Lizard `17215659`. Combat
+reduced the lizard to 84%, which proved engagement; the helper observed 3,000
+TP and the same active server ID, then queued one `/ws`. The client reported
+`Pablo readies Combo` followed by 95 damage and target defeat. Pablo took no
+damage, gained 160 EXP, and the full invocation completed in about 14 seconds.
 
 Normal FFXI macros are useful later for deterministic actions such as a weapon
 skill, healing, or a stable menu sequence. They are not the targeting layer:
