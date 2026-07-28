@@ -207,13 +207,23 @@ Do not infer those controls from remembered key counts.
 
 ### Stackable loot and Beastmen's Seal storage
 
-FFXI's inventory context menu is observed as `menu    itmsort2`; choosing
-**Auto** opens the `menu    sortyn` confirmation. Auto-Sort was enabled live on
-2026-07-28. It did not retroactively merge the thirteen existing one-item
-Beastmen's Seal slots, and selecting **Manual** did not merge them either.
-Treat future item acquisition as the validation point: stackable drops should
-join an existing stack, while inventory is inspected between farming batches
-rather than after every fight.
+FFXI has two related controls that should not be confused:
+
+- `Config -> Gameplay -> Inventory -> Sort: ON` is the persistent setting that
+  stacks compatible items as new drops enter inventory. The selected value is
+  shown by the red underline; merely putting the cursor on **ON** does not
+  enable it.
+- `Items -> Sort -> Auto` is a one-time sort pass. The inventory context menu
+  is observed as `menu    itmsort2`; choosing **Auto** opens the
+  `menu    sortyn` confirmation, which defaults to **No**.
+
+Both paths were validated live on 2026-07-28. Persistent Auto-Sort was changed
+from **OFF** to **ON**. The one-time Auto pass then combined two loose
+Beastmen's Seals into one stack of two and two loose Treant Bulbs into one
+stack of two, reducing inventory from 12/30 to 10/30. Selecting **Manual**
+only enters rearrangement mode and does not stack items. Inspect inventory
+between farming batches rather than after every fight, and open inventory
+menus only in a safe city or service area.
 
 Beastmen's Seal is local item ID 1126, has a stack size of 99, and has no
 vendor value in the pinned LandSandBoat data. Shami in Port Jeuno (zone 246,

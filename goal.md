@@ -15,11 +15,11 @@ repository now exist.
 
 ## Current state
 
-- Character: Pablo, Hume male, Monk level 12.
-- Progress: 1,359/3,000 EXP.
-- Gil goal: 1,139/10,000 gil. The local stream overlay is synchronized to this
+- Character: Pablo, Hume male, Monk level 13.
+- Progress: 1,719/3,200 EXP.
+- Gil goal: 1,145/10,000 gil. The local stream overlay is synchronized to this
   verified balance.
-- Records of Eminence: `Vanquish Multiple Enemies I` at 69/200. A completed
+- Records of Eminence: `Vanquish Multiple Enemies I` at 82/200. A completed
   objective awarded 1,500 bonus EXP and a Copper Voucher; the new sparks
   balance still needs an authoritative menu check.
 - Trust: Naji acquired and validated; he uses Provoke after Pablo engages.
@@ -32,10 +32,12 @@ repository now exist.
 - Treasure Caskets are ignored during farming. Disposable casket prompts and
   the player menu are canceled; caskets will be revisited only for a specific
   quest or a known valuable reward.
-- Inventory is currently 8/30 after a batched allowlisted sale and Beastmen's
-  Seal storage. FFXI Auto-Sort is enabled for future stackable drops; the next
-  seal drop must verify that it joins one stack. Existing loose seals did not
-  merge immediately when Auto-Sort or Manual was selected.
+- Inventory is currently 10/30 after a batched allowlisted sale, Beastmen's
+  Seal storage, and a verified inventory sort. Persistent Auto-Sort is enabled
+  under `Config -> Gameplay -> Inventory -> Sort: ON`. A one-time
+  `Items -> Sort -> Auto` pass combined two loose seals into one
+  `Beastmen's Seal x2` stack and two loose bulbs into one `Treant Bulb x2`
+  stack, reducing inventory from 12/30 to 10/30.
 - Shami in Port Jeuno stores 14 Beastmen's Seals for Pablo. Deposit future
   batches there instead of consuming inventory slots; his first Cloudy Orb
   costs 20 stored seals. The guarded helper accepts only item 1126 and exact
@@ -52,7 +54,7 @@ repository now exist.
 
 ## Goal 1 — validate and harden the new combat system
 
-Status: **active**
+Status: **completed**
 
 Keep testing combat before expanding the progression route. Combine proactive
 mob selection with the reactive aggro guard so one local supervisor owns the
@@ -102,9 +104,11 @@ whole encounter instead of competing scripts.
   bounded line-of-sight and registration retries, casket/menu dismissal, and
   two add handoffs. No proactive excluded family was engaged, and no teleport
   or recovery action ran during combat.
-- Controlled multi-enemy handoffs: **2/3**. A Young Quadav and a linked Rock
-  Lizard were queued while another target was active, then defeated without
-  disengaging.
+- Controlled multi-enemy handoffs: **3/3 — passed**. A Young Quadav, a linked
+  Rock Lizard, and a linked Walking Sapling were queued while another target
+  was active. The final flat-terrain Sapling pair was won in 36 seconds with
+  one proactive and one reactive engagement, no attack rejection, death,
+  excluded pull, target-cycle error, combat teleport, or combat recovery.
 - Reactive defense: **validated with repeated sub-second samples** at 551 ms,
   476 ms, and 206 ms. In the 206 ms Amber Quadav case, FFXI had already
   selected the aggressor; the supervisor explicitly preserved that exact
@@ -129,12 +133,25 @@ whole encounter instead of competing scripts.
   exactly to its safe-camp origin, observed no live combat, and only then
   disabled control. This follows a live Amber Quadav aggro that occurred after
   an older lease stopped beside an aggressive pocket.
-- Remaining Goal 1 gaps: one controlled add handoff and death/Home Point
-  recovery.
+- Death/Home Point recovery: **validated end to end**. Lease
+  `a1681beb-34ad-4748-b3f8-8546d5c933af` encountered a linked lizard that
+  remained invisible to melee at 1.07 yalms, detected Pablo's real defeat,
+  navigated only the exact observed `dead` and `comyn` menus, selected the
+  safety-defaulted confirmation once, returned to registered Bastok Markets,
+  verified 100% HP, and stopped with `deaths: 1`, `home_point_returns: 1`, and
+  no combat teleport.
+- Reactive handoff race: **repaired and live-validated**. A first `/attack`
+  can register while target-follow closes distance; the supervisor now samples
+  the fresh stance before deciding whether to reissue, avoiding a second
+  `/attack` that would toggle combat off. The final Sapling handoff recorded
+  `reactive_attack_registered_during_follow` and won.
+- Line-of-sight recovery: a bounded non-teleport nudge through the exact live
+  target is implemented for fresh `cannot see` events. It is unit-tested but
+  awaits a repeat of that geometry in normal farming for live validation.
 
 ## Goal 2 — reach 10,000 gil while leveling
 
-Status: queued behind Goal 1
+Status: **active**
 
 - Continue selling only fixed allowlisted loot in sensible batches.
 - Check inventory between farming batches, not after every fight.

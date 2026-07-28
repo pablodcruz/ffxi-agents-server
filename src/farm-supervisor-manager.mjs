@@ -100,6 +100,7 @@ export async function startFarm({
       weapon_skills: 0,
       recoveries: 0,
       deaths: 0,
+      home_point_returns: 0,
       gil_earned: 0,
       exp_earned: 0,
       excluded_pulls: 0,

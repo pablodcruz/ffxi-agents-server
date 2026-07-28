@@ -85,6 +85,74 @@ export function targetDefeated(entity) {
     || [2, 3].includes(Number(entity.status));
 }
 
+export function playerDefeated(observation) {
+  return Number(observation?.player?.hp_percent) <= 0
+    || Number(observation?.player?.status) === 3;
+}
+
+export function shouldReissueReactiveAttack({
+  observation,
+  targetServerId,
+}) {
+  return !(
+    Number(observation?.player?.status) === 1
+    && Number(observation?.target?.server_id) === Number(targetServerId)
+    && Number(observation?.target?.status) === 1
+    && Number(observation?.target?.hp_percent) > 0
+  );
+}
+
+export function latestLineOfSightFailure(events, {
+  afterEventId = 0,
+} = {}) {
+  return (events || [])
+    .filter((event) => (
+      Number(event?.id) > Number(afterEventId)
+      && Number(event?.mode) === 122
+      && /(?:unable to|cannot) see\b/i.test(
+        String(event?.message || "").replace(/[^\x20-\x7e]+/g, " ").trim(),
+      )
+    ))
+    .sort((left, right) => Number(right.id) - Number(left.id))[0]
+    || null;
+}
+
+export function lineOfSightNudgeDestination({
+  player,
+  target,
+  beyondDistance = 2.5,
+  maximumTargetDistance = 4,
+  requireEngaged = true,
+}) {
+  if (
+    (
+      requireEngaged
+      && (
+        Number(player?.status) !== 1
+        || Number(target?.status) !== 1
+      )
+    )
+    || Number(target?.hp_percent) <= 0
+  ) {
+    return null;
+  }
+  const playerX = Number(player?.position?.x);
+  const playerY = Number(player?.position?.y);
+  const targetX = Number(target?.position?.x);
+  const targetY = Number(target?.position?.y);
+  if (![playerX, playerY, targetX, targetY].every(Number.isFinite)) return null;
+  const deltaX = targetX - playerX;
+  const deltaY = targetY - playerY;
+  const targetDistance = Math.hypot(deltaX, deltaY);
+  if (targetDistance < 0.05 || targetDistance > Number(maximumTargetDistance)) {
+    return null;
+  }
+  return {
+    x: targetX + ((deltaX / targetDistance) * Number(beyondDistance)),
+    y: targetY + ((deltaY / targetDistance) * Number(beyondDistance)),
+  };
+}
+
 export function shouldRetryRecoveryCommand({
   observation,
   minimumHpPercent,

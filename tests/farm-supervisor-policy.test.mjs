@@ -5,10 +5,14 @@ import {
   classifyReactiveTiming,
   excludedCombatPocket,
   hasLiveCombat,
+  latestLineOfSightFailure,
+  lineOfSightNudgeDestination,
   parseCombatRewards,
+  playerDefeated,
   safeCombatPosition,
   selectProactiveTarget,
   shouldAutoCancelMenu,
+  shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
@@ -101,6 +105,126 @@ test("recognizes both observed corpse statuses and missing entities", () => {
   assert.equal(targetDefeated({ status: 2, hp_percent: 20 }), true);
   assert.equal(targetDefeated({ status: 3, hp_percent: 0 }), true);
   assert.equal(targetDefeated(null), true);
+});
+
+test("recognizes defeated players from HP or the dead stance", () => {
+  assert.equal(playerDefeated(observation({
+    player: { status: 3, hp_percent: 0 },
+  })), true);
+  assert.equal(playerDefeated(observation({
+    player: { status: 3, hp_percent: 1 },
+  })), true);
+  assert.equal(playerDefeated(observation({
+    player: { status: 0, hp_percent: 0 },
+  })), true);
+  assert.equal(playerDefeated(observation({
+    player: { status: 0, hp_percent: 90 },
+  })), false);
+});
+
+test("does not toggle a reactive attack off when it registered during follow", () => {
+  assert.equal(shouldReissueReactiveAttack({
+    observation: observation({
+      player: { status: 1, hp_percent: 80 },
+      target: {
+        server_id: 42,
+        status: 1,
+        hp_percent: 100,
+      },
+    }),
+    targetServerId: 42,
+  }), false);
+  assert.equal(shouldReissueReactiveAttack({
+    observation: observation({
+      player: { status: 0, hp_percent: 80 },
+      target: {
+        server_id: 42,
+        status: 1,
+        hp_percent: 100,
+      },
+    }),
+    targetServerId: 42,
+  }), true);
+  assert.equal(shouldReissueReactiveAttack({
+    observation: observation({
+      player: { status: 1, hp_percent: 80 },
+      target: {
+        server_id: 43,
+        status: 1,
+        hp_percent: 100,
+      },
+    }),
+    targetServerId: 42,
+  }), true);
+});
+
+test("identifies only fresh line-of-sight failures from the system channel", () => {
+  assert.deepEqual(latestLineOfSightFailure([
+    { id: 10, mode: 122, message: "Unable to see the Rock Lizard.\u007f1" },
+    { id: 11, mode: 28, message: "The Rock Lizard hits Pablo." },
+    { id: 12, mode: 122, message: "You cannot see the Rock Lizard.\u007f1" },
+  ], { afterEventId: 10 }), {
+    id: 12,
+    mode: 122,
+    message: "You cannot see the Rock Lizard.\u007f1",
+  });
+  assert.equal(latestLineOfSightFailure([
+    { id: 10, mode: 122, message: "Unable to attack the Rock Lizard." },
+  ], { afterEventId: 9 }), null);
+});
+
+test("nudges through only a nearby live engaged target", () => {
+  assert.deepEqual(lineOfSightNudgeDestination({
+    player: {
+      status: 1,
+      position: { x: 0, y: 0 },
+    },
+    target: {
+      status: 1,
+      hp_percent: 100,
+      position: { x: 0, y: 1 },
+    },
+  }), {
+    x: 0,
+    y: 3.5,
+  });
+  assert.equal(lineOfSightNudgeDestination({
+    player: {
+      status: 0,
+      position: { x: 0, y: 0 },
+    },
+    target: {
+      status: 1,
+      hp_percent: 100,
+      position: { x: 0, y: 1 },
+    },
+  }), null);
+  assert.deepEqual(lineOfSightNudgeDestination({
+    player: {
+      status: 0,
+      position: { x: 0, y: 0 },
+    },
+    target: {
+      status: 0,
+      hp_percent: 100,
+      position: { x: 1, y: 0 },
+    },
+    requireEngaged: false,
+  }), {
+    x: 3.5,
+    y: 0,
+  });
+  assert.equal(lineOfSightNudgeDestination({
+    player: {
+      status: 1,
+      position: { x: 0, y: 0 },
+    },
+    target: {
+      status: 1,
+      hp_percent: 100,
+      position: { x: 0, y: 5 },
+    },
+  }), null);
 });
 
 test("retries a missed recovery command only while idle and still below threshold", () => {

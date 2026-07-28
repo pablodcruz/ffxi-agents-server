@@ -10,10 +10,14 @@ import {
   canStopAtFightLimit,
   classifyReactiveTiming,
   hasLiveCombat,
+  latestLineOfSightFailure,
+  lineOfSightNudgeDestination,
   parseCombatRewards,
+  playerDefeated,
   safeCombatPosition,
   selectProactiveTarget,
   shouldAutoCancelMenu,
+  shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
@@ -102,6 +106,7 @@ const counters = {
   weapon_skills: 0,
   recoveries: 0,
   deaths: 0,
+  home_point_returns: 0,
   gil_earned: 0,
   exp_earned: 0,
   excluded_pulls: 0,
@@ -231,6 +236,25 @@ async function characterState() {
   });
 }
 
+async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
+  const deadline = Date.now() + timeoutMilliseconds;
+  let uiState = null;
+  while (Date.now() < deadline) {
+    uiState = await characterState();
+    if (
+      uiState?.menu_open
+      && String(uiState?.menu_name || "").trim() === expectedMenu
+    ) {
+      return uiState;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  const observedMenu = String(uiState?.menu_name || "").trim();
+  throw new Error(
+    `Expected ${expectedMenu}; observed ${observedMenu || "closed"} after timeout.`,
+  );
+}
+
 async function command(text) {
   return call("ffxi_gameplay_command", { command: text });
 }
@@ -301,7 +325,7 @@ function verifySession(observation) {
     stopReason = `zone_changed:${observedZoneId || "unknown"}`;
     return false;
   }
-  if (Number(observation?.player?.hp_percent) <= 0) {
+  if (playerDefeated(observation)) {
     counters.deaths += 1;
     stopReason = "player_defeated";
     return false;
@@ -463,12 +487,15 @@ async function engage(target, mode, {
     attack_attempts: attempt,
     engagement_counted: false,
     handoff,
+    last_los_event_id: attackBaselineEventId,
+    last_los_recovery_at_ms: 0,
+    los_recovery_attempts: 0,
   };
   currentMode = mode;
   missingTargetSamples = 0;
   let aggroResponseMs = null;
   let handoffQueueMs = null;
-  if (mode === "reactive") {
+  if (mode === "reactive" && attempt === 1) {
     const firstSeen = threatFirstSeen.get(Number(target.server_id));
     if (firstSeen) {
       ({ aggroResponseMs, handoffQueueMs } = classifyReactiveTiming({
@@ -508,14 +535,88 @@ async function engage(target, mode, {
   if (mode === "reactive") {
     const closed = await closeWithTargetFollow(targeted, target);
     const closedTarget = entityById(closed, target.server_id);
-    currentTarget.attack_baseline_event_id = maxObservedEventId(closed);
-    currentTarget.attack_issued_at_ms = Date.now();
-    await command("/attack <t>");
-    log("reactive_attack_reissued", {
-      name: target.name,
-      server_id: target.server_id,
-      distance: closedTarget?.distance,
-    });
+    if (shouldReissueReactiveAttack({
+      observation: closed,
+      targetServerId: target.server_id,
+    })) {
+      currentTarget.attack_baseline_event_id = maxObservedEventId(closed);
+      currentTarget.attack_issued_at_ms = Date.now();
+      await command("/attack <t>");
+      log("reactive_attack_reissued", {
+        name: target.name,
+        server_id: target.server_id,
+        distance: closedTarget?.distance,
+      });
+    } else {
+      log("reactive_attack_registered_during_follow", {
+        name: target.name,
+        server_id: target.server_id,
+        distance: closedTarget?.distance,
+      });
+    }
+  }
+}
+
+async function returnToHomePointAfterDeath(observation) {
+  if (!playerDefeated(observation)) {
+    throw new Error("Death recovery requires an authoritative defeated player state.");
+  }
+  await transition("returning_to_home_point", {
+    defeated_zone_id: playerPartyMember(observation)?.zone_id,
+  });
+
+  let uiState = await waitForMenu("menu    dead");
+
+  await armControl();
+  await call("ffxi_menu_input", { action: "confirm" });
+  uiState = await waitForMenu("menu    comyn");
+
+  // The FFXI confirmation defaults to No. Move exactly once to Yes, prove the
+  // same menu is still focused, then confirm.
+  await armControl();
+  await call("ffxi_menu_input", { action: "left" });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  uiState = await characterState();
+  if (
+    !uiState?.menu_open
+    || String(uiState?.menu_name || "").trim() !== "menu    comyn"
+  ) {
+    throw new Error("Home Point confirmation changed before the Yes selection.");
+  }
+  await armControl();
+  await call("ffxi_menu_input", { action: "confirm" });
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const revived = await observe();
+    if (
+      revived?.login_status === 2
+      && !playerDefeated(revived)
+      && Number(revived?.player?.hp_percent) > 0
+    ) {
+      counters.home_point_returns += 1;
+      currentTarget = null;
+      currentMode = null;
+      stopReason = "player_defeated_home_point";
+      log("home_point_return_complete", {
+        zone_id: playerPartyMember(revived)?.zone_id,
+        player_hp_percent: revived.player?.hp_percent,
+      });
+      return revived;
+    }
+  }
+  throw new Error("Home Point return did not produce a live player within 30 seconds.");
+}
+
+async function completeDeathRecovery(observation) {
+  try {
+    return await returnToHomePointAfterDeath(observation);
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error);
+    stopReason = "player_defeated_recovery_failed";
+    log("home_point_return_failed", { error: lastError });
+    return observation;
   }
 }
 
@@ -731,6 +832,8 @@ async function maybeWeaponSkill(observation) {
     || Date.now() - lastWeaponSkillAt < 5000
     || Number(observation?.target?.server_id) !== Number(currentTarget.server_id)
     || Number(observation?.target?.hp_percent) < 10
+    || Number(observation?.target?.hp_percent)
+      >= Number(currentTarget.start_hp_percent)
     || Number(playerPartyMember(observation)?.tp) < 1000
   ) {
     return;
@@ -743,6 +846,49 @@ async function maybeWeaponSkill(observation) {
     name: weaponSkill,
     server_id: currentTarget.server_id,
   });
+}
+
+async function nudgeThroughTarget(observation, target, {
+  attempt,
+  requireEngaged,
+  reason,
+}) {
+  const destination = lineOfSightNudgeDestination({
+    player: observation?.player,
+    target,
+    requireEngaged,
+  });
+  if (!destination) return observation;
+
+  await transition("line_of_sight_recovery", {
+    name: target.name,
+    server_id: target.server_id,
+    attempt,
+    reason,
+    destination,
+  });
+  await armControl();
+  await call("ffxi_move_to_position", {
+    x: destination.x,
+    y: destination.y,
+    max_start_distance: 6,
+    stop_distance: 0.5,
+    timeout_seconds: 2,
+    stuck_seconds: 1,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1400));
+  await call("ffxi_stop_movement").catch(() => {});
+  const after = await sample();
+  log("line_of_sight_nudge", {
+    name: target.name,
+    server_id: target.server_id,
+    attempt,
+    reason,
+    player_position: after?.player?.position,
+    target_distance: entityById(after, target.server_id)?.distance,
+  });
+  await transition(requireEngaged ? "fighting" : "positioning");
+  return after;
 }
 
 function clearExpiredCooldowns() {
@@ -792,6 +938,29 @@ async function handleFight(observation) {
     });
   }
 
+  if (currentTarget.engagement_counted) {
+    const lineOfSightFailure = latestLineOfSightFailure(
+      observation.recent_events,
+      { afterEventId: currentTarget.last_los_event_id },
+    );
+    if (lineOfSightFailure) {
+      currentTarget.last_los_event_id = Number(lineOfSightFailure.id);
+      if (
+        Number(currentTarget.los_recovery_attempts) < 3
+        && Date.now() - Number(currentTarget.last_los_recovery_at_ms) >= 3000
+      ) {
+        currentTarget.los_recovery_attempts += 1;
+        currentTarget.last_los_recovery_at_ms = Date.now();
+        await nudgeThroughTarget(observation, entity, {
+          attempt: currentTarget.los_recovery_attempts,
+          requireEngaged: true,
+          reason: "engaged_visibility_failure",
+        });
+        return;
+      }
+    }
+  }
+
   const rejectionEvent = observation.recent_events?.find((event) => (
     Number(event.id) > Number(currentTarget.attack_baseline_event_id)
     && Number(event.mode) === 122
@@ -817,7 +986,14 @@ async function handleFight(observation) {
       attempt: rejectedTarget.attack_attempts,
       message: rejectionEvent?.message || "registration_timeout",
     });
-    await command("/attackoff").catch(() => {});
+    const reactiveDefenseActive = (
+      rejectedMode === "reactive"
+      && Number(entity?.status) === 1
+      && Number(entity?.hp_percent) > 0
+    );
+    if (!reactiveDefenseActive) {
+      await command("/attackoff").catch(() => {});
+    }
     currentTarget = null;
     currentMode = null;
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -841,10 +1017,25 @@ async function handleFight(observation) {
       && !hasLiveCombat(retryObservation)
     ) {
       try {
-        retryObservation = await positionNear(retryTarget, retryObservation, {
-          force: true,
-          offset: 2,
-        });
+        if (
+          rejectionEvent
+          && latestLineOfSightFailure([rejectionEvent])
+        ) {
+          retryObservation = await nudgeThroughTarget(
+            retryObservation,
+            retryTarget,
+            {
+              attempt: Number(rejectedTarget.attack_attempts),
+              requireEngaged: false,
+              reason: "proactive_visibility_failure",
+            },
+          );
+        } else {
+          retryObservation = await positionNear(retryTarget, retryObservation, {
+            force: true,
+            offset: 2,
+          });
+        }
         if (!hasLiveCombat(retryObservation)) {
           await engage(retryTarget, "proactive", {
             handoff: rejectedTarget.handoff,
@@ -956,7 +1147,12 @@ try {
     if (await stopRequested()) break;
 
     observation = await sample();
-    if (!verifySession(observation)) break;
+    if (!verifySession(observation)) {
+      if (stopReason === "player_defeated") {
+        await completeDeathRecovery(observation);
+      }
+      break;
+    }
 
     if (currentTarget) {
       await handleFight(observation);
@@ -1019,6 +1215,10 @@ try {
 
     const recovery = await recover(observation);
     observation = recovery.observation;
+    if (stopReason === "player_defeated") {
+      await completeDeathRecovery(observation);
+      break;
+    }
     if (stopReason) break;
     if (recovery.threat) {
       await engage(recovery.threat, "reactive", {
@@ -1052,7 +1252,12 @@ try {
 
     try {
       observation = await positionNear(target, observation);
-      if (!verifySession(observation)) break;
+      if (!verifySession(observation)) {
+        if (stopReason === "player_defeated") {
+          await completeDeathRecovery(observation);
+        }
+        break;
+      }
       const positionThreat = selectReactiveThreat(observation, {
         maxDistance: threatDistance,
       });

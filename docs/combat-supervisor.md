@@ -84,6 +84,26 @@ The unified supervisor was validated live later on 2026-07-28:
 - An Amber Quadav later aggroed while FFXI already had it selected. The
   supervisor logged `reactive_target_preserved`, issued attack in 206 ms,
   followed from 7.83 to 0.84 yalms, and won.
+- A third controlled handoff was won against a flat-terrain linked Walking
+  Sapling pair. The two-fight lease finished in 36 seconds with one proactive
+  and one reactive engagement, no rejected attack or unsafe action, and an
+  exact return to its starting camp.
+- A linked-lizard fixture exposed a target-follow race: the first reactive
+  `/attack` could register while follow was closing distance, and an
+  unconditional second `/attack` then toggled combat off. The supervisor now
+  samples the fresh player/target stance and skips that second command when
+  combat is already registered.
+- The same fixture produced a real defeat after FFXI repeatedly reported that
+  Pablo could not see a lizard only 1.07 yalms away. The supervisor detected
+  status 3 and 0% HP, advanced only the exact observed `menu    dead` and
+  `menu    comyn` states, moved once from the default **No** to **Yes**, returned
+  to registered Bastok Markets, verified 100% HP, and stopped with
+  `player_defeated_home_point`.
+- Fresh in-combat `cannot see` events now trigger at most three bounded
+  world-coordinate nudges through the exact nearby engaged target. This never
+  teleports during combat. Weapon skills also wait until the target has taken
+  damage, preventing repeated Combo attempts against an unregistered
+  line-of-sight fixture.
 
 Live failures also changed the policy:
 
@@ -150,11 +170,8 @@ under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
 ## Next iteration
 
-1. Complete 30 consecutive approved fights.
-2. Validate three controlled add handoffs without abandoning the current live
-   target.
-3. Repeat sub-second reactive measurements with the preserved aggro target.
-4. Diagnose Vulture registration separately.
-5. Implement and validate death detection plus Home Point return.
-6. Record incoming action packets in AgentBridge so aggressor identity remains
+1. Continue the 10,000-gil and Records of Eminence progression loop.
+2. Live-validate the bounded line-of-sight nudge if the geometry repeats.
+3. Diagnose Vulture registration separately.
+4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.
