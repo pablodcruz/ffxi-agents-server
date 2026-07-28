@@ -142,10 +142,49 @@ It requires all menus to be closed and a guarded memory read proving that the
 interface is hidden, so it cannot accidentally hide a visible interface.
 
 Live menu identity checks mapped `menu    menuwind` to the main menu,
-`menu    region` to Region Info, and `menu    link5` to the Trade window.
-The legacy Trade window did not populate Ashita's selected-item fields during
-the first cursor probes, so the coupon handoff remains intentionally
-unconfirmed. Do not infer the Trade cursor from remembered key counts.
+`menu    region` to Region Info, `menu    handover` to the NPC handoff window,
+and `menu    inventor` to its inventory picker. Opening the empty handoff slot
+made Ashita's selected-item fields active; `mcp:select-item` then traversed the
+inventory and proved item ID 536 before any item confirmation. The legacy
+handoff window's empty slots and final action controls still do not expose
+distinct semantic labels, and the VM capture path omits that native layer.
+Do not infer those controls from remembered key counts.
+
+For a single item handed to an NPC, the normal FFXI `/item` command is a
+camera-independent fallback that avoids the legacy Trade window's hidden
+cursor geometry. The helper still proves the exact nearby NPC by name and
+server ID, proves the exact inventory item by numeric ID, derives the quoted
+item name from the client's resource-backed inventory observation, and
+verifies either immediate item consumption or that a quest dialogue started:
+
+```sh
+pnpm mcp:trade-item -- \
+  --target Reet \
+  --server-id 17739836 \
+  --item-id 536
+```
+
+The helper does not accept command text and cannot send chat, GM commands,
+addon commands, scripts, or packets. It refuses to run while any in-game menu
+is open by default. If a legacy NPC handoff is already stuck in the observed
+`handover` or `inventor` menu, `--allow-open-trade-menu` explicitly permits
+the same exact-ID-verified command as a recovery attempt; no other open menu
+name is accepted.
+
+Some NPC handoffs consume the item only after their dialogue finishes. In that
+case the helper returns `reason: "dialogue_started"` without claiming that the
+item was consumed. Advance the bounded dialogue and then verify both inventory
+and reward:
+
+```sh
+pnpm mcp:dialogue -- --max-steps 6
+pnpm mcp:state
+```
+
+The Reet coupon handoff validated this two-stage path: the normal `/item`
+command opened `menu    rem4li2 ` dialogue, two guarded confirms closed it,
+the client logged `Obtained 50 gil.`, item ID 536 disappeared, and Pablo's gil
+increased from 10 to 60.
 
 Long straight Detour route legs are also subdivided into 20-yalm leases by
 default. `--maximum-segment-distance` accepts 5 through 50 yalms. This keeps
@@ -321,6 +360,21 @@ appeared in entity memory but the client would not accept it as a target. The
 old sequence produced a generic command error; the strengthened sequence
 failed before sending `/check`, while the targetable worm ID succeeded.
 
+AgentBridge 0.16.1 observes Ashita's active target slot correctly when the
+client enters subtarget mode and exposes `target_slot` plus
+`subtarget_active`. The check and combat helpers first use the exact-ID bridge
+setter. If the client does not acknowledge it, they may issue only the normal
+allowlisted `/target "observed name"` command and still require the resulting
+active target's server ID to equal the requested ID. Duplicate names therefore
+remain fail-closed.
+
+Coordinate proximity is not proof of targetability. A client wall can separate
+an observed entity from Pablo, while worm-family mobs also have a periodic
+burrow window in which they remain in entity memory but cannot be selected.
+The helpers do not weaken verification in either case. A bounded disarmed wait
+tests the temporal case first; navigation around known collision is appropriate
+only after that wait expires or route evidence identifies a wall.
+
 `mcp:combat` composes existing narrow MCP tools rather than expanding the
 bridge protocol. It:
 
@@ -390,6 +444,19 @@ from 17 to 19, and defense from 28 to 30. The client independently emitted
 `Pablo attains level 3!`. Hand-to-hand and defensive skills also increased,
 and the inventory observation recorded two beastmen's seals.
 
+After the Reet coupon handoff, another three exact-ID Tunnel Worm fights
+advanced Pablo from 220 to 610 EXP at Monk level 3. Each produced a defeat and
+130 EXP event; the lowest observed HP values were 92%, 82%, and 95%, and
+attack increased from 19 to 20. No Flint Stone dropped in those first three
+attempts. The local drop table identifies a 150/1000 Flint Stone rate for this
+South Gustaberg worm and a five-gil base sell value. Combined with the
+quest-reward Fire Crystal's 15-gil base sell value, one legitimate Flint Stone
+drop supplies the 20 gil needed to close the 19-gil Copper Ring purchase gap.
+
+The same run found Vulture `17215662` in normal line of sight. The client said
+it “seems like an even match” with high defense; the verdict parser now treats
+both that wording and “evenly matched” as `unsafe`, and no attack was sent.
+
 The final two fights ran with AgentBridge 0.10.0's local activity feed enabled.
 The game chat displayed sanitized target IDs and `/check`, `/attack`,
 `/attackoff`, and `/heal` verbs alongside the game's normal combat, EXP, and
@@ -458,3 +525,13 @@ or copied here.
 5. Persist quest interaction points as data rather than one-off coordinates.
 6. Add a bounded loop that selects successive low-risk targets and returns to
    a safe location without embedding one-off entity IDs.
+
+The first read-only part of item 6 is now implemented as `mcp:scout`. It joins
+live MCP entity IDs to an ignored export of the matching LandSandBoat zone
+metadata, ranks explainable candidates, and performs no writes. See
+[addon-tooling.md](addon-tooling.md). Exact-ID `/check` remains mandatory.
+
+Tunnel Worms also have a periodic burrow window in which an entity can remain
+observable but the client refuses to select it. `mcp:check-target` accepts a
+bounded `--targetability-timeout`; every failed attempt emergency-disarms
+control before it waits. Use this before inferring collision or moving closer.

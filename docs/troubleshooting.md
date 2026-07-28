@@ -255,7 +255,7 @@ the direct smoke test succeeds.
 
 The client accepts `/trade <t>` as an allowlisted command but does not open the
 NPC item-handoff menu on the tested Ashita client. Use the normal FFXI main
-menu's **Trade** entry. AgentBridge 0.16.0 exposes fixed, automatically released
+menu's **Trade** entry. AgentBridge 0.16.1 exposes fixed, automatically released
 DirectInput pulses for opening the main menu and moving or confirming one entry
 at a time. It also exposes the focused menu name and selected numeric item ID
 so each transition and item choice can be verified before confirmation.
@@ -284,7 +284,19 @@ legacy menu layer; it never sends text to other players or the server.
 The Parallels trial reminder can cover the VM and leave a Windows terminal as
 the guest's foreground window. A host-level key sequence intended for FFXI can
 then type `/addon reload agentbridge` into that terminal. The reload helper now
-fails closed unless `pol.exe` is the foreground Windows process.
+requires a healthy logged-in AgentBridge client and fails closed unless either
+`pol.exe` or the Windows ARM build's live `xiloader.exe` host is the foreground
+Windows process. The bridge-health requirement prevents an `xiloader.exe`
+launcher or login screen from satisfying the guard by itself.
+
+Some Parallels guest-exec sessions report an `Idle` foreground process even
+while FFXI is visibly focused. The helper must still refuse in that case; do
+not weaken the process check. Focus the game visibly and manually enter the
+single fixed `/addon reload agentbridge` command, or use a UI-control layer
+that can target the visible Parallels window. Immediately run
+`pnpm doctor -- --bridge-only`, confirm the new addon version in the observed
+event stream, and re-enable the activity feed. Never type the reload string
+through unguarded host key events when another Windows app could be focused.
 
 Do not dismiss this as a cosmetic popup. Keep OBS stopped, dismiss the reminder
 with **Continue Trial**, inspect the VM, restore the last known-good addon file
@@ -292,6 +304,23 @@ while FFXI is closed, and relaunch the saved `AshitaAgentLab` task. Credentials
 remain a manual checkpoint. Direct AgentBridge gameplay input does not have
 this VM-focus dependency; the guard is specifically for the bootstrap/reload
 helper used before the bridge is available.
+
+### A nearby monster appears in observation but cannot be targeted
+
+Entity memory and horizontal distance do not prove client line of sight. A mob
+on the opposite side of a wall may appear active and only a few yalms away,
+while both the exact-ID target setter and normal `/target` command leave the
+active target empty. Worm-family mobs add a separate temporal case: they can
+remain observable during a periodic burrow window while the client refuses
+selection.
+
+For a nearby worm, use the bounded `mcp:check-target
+--targetability-timeout` first; it emergency-disarms between short selection
+attempts. If that expires, place the exact server ID on the scout's temporary
+cooldown list. Move around a collision boundary only when route evidence
+identifies a wall, then observe again and require the exact server ID before
+`/check`. Do not attack by remembered name, inject a packet, or teleport
+through the wall.
 
 ### The map process restarts during startup
 

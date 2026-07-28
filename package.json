@@ -18,7 +18,9 @@
     "mcp:menu": "./scripts/run-node.sh scripts/mcp-menu.mjs",
     "mcp:prepare-trade": "./scripts/run-node.sh scripts/mcp-prepare-trade.mjs",
     "mcp:select-item": "./scripts/run-node.sh scripts/mcp-select-item.mjs",
+    "mcp:trade-item": "./scripts/run-node.sh scripts/mcp-trade-item.mjs",
     "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",
+    "mcp:doorway": "./scripts/run-node.sh scripts/mcp-doorway.mjs",
     "mcp:feed": "./scripts/run-node.sh scripts/mcp-activity-feed.mjs",
     "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",
     "mcp:check-target": "./scripts/run-node.sh scripts/mcp-check-target.mjs",
@@ -30,8 +32,10 @@
     "mcp:probe-route": "./scripts/run-node.sh scripts/mcp-probe-route.mjs",
     "mcp:rest": "./scripts/run-node.sh scripts/mcp-rest.mjs",
     "mcp:observe": "./scripts/run-node.sh scripts/mcp-observe.mjs",
+    "mcp:scout": "./scripts/run-node.sh scripts/mcp-scout.mjs",
     "mcp:state": "./scripts/run-node.sh scripts/mcp-state.mjs",
     "mcp:wait-target": "./scripts/run-node.sh scripts/mcp-wait-target.mjs",
+    "mobs:export": "./scripts/run-node.sh scripts/export-mob-metadata.mjs",
     "test": "./scripts/run-node.sh --test"
   },
   "dependencies": {

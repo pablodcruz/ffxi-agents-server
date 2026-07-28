@@ -47,6 +47,8 @@ try {
     login_status: value.login_status,
     player: value.player,
     target: value.target,
+    target_slot: value.target_slot,
+    subtarget_active: value.subtarget_active,
     control: value.control,
     nearby_entities: value.nearby_entities,
     recent_events: value.recent_events,
