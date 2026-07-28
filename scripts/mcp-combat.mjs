@@ -21,6 +21,7 @@ const combatTimeoutSeconds = Number(argument("--combat-timeout", "120"));
 const minimumHpPercent = Number(argument("--minimum-hp-percent", "35"));
 const minimumStartHpPercent = Number(argument("--minimum-start-hp-percent", "90"));
 const recoveryTimeoutSeconds = Number(argument("--recovery-timeout", "60"));
+const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
 
 if (!targetName) {
   throw new Error("Combat requires --target with one exact nearby entity name.");
@@ -295,7 +296,10 @@ try {
       reason = "attack_rejected_visibility";
       break;
     }
-    if ((observation.player?.hp_percent ?? 0) <= minimumHpPercent) {
+    if (
+      !commitOnceEngaged
+      && (observation.player?.hp_percent ?? 0) <= minimumHpPercent
+    ) {
       reason = "low_hp";
       break;
     }
@@ -325,6 +329,7 @@ try {
     safety: {
       minimum_hp_percent: minimumHpPercent,
       minimum_start_hp_percent: minimumStartHpPercent,
+      commit_once_engaged: commitOnceEngaged,
       approach_timeout_seconds: approachTimeoutSeconds,
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,

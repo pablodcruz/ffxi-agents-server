@@ -389,6 +389,12 @@ bridge protocol. It:
 - sends `/attackoff`; and
 - always invokes the emergency stop before exit.
 
+When retreat routing is not yet proven and the operator explicitly chooses to
+finish an engagement, pass `--commit-once-engaged`. The helper still records
+HP samples, but it does not treat the HP floor as a reason to issue
+`/attackoff`; it continues until the target is defeated, the client logs out,
+or the combat timeout expires.
+
 Example:
 
 ```sh
@@ -401,12 +407,70 @@ pnpm mcp:combat -- \
   --combat-timeout 90
 ```
 
+For an explicitly committed engagement:
+
+```sh
+pnpm mcp:combat -- \
+  --target "Walking Sapling" \
+  --server-id 17215660 \
+  --commit-once-engaged \
+  --minimum-hp-percent 35 \
+  --combat-timeout 120
+```
+
 Use `--server-id` when multiple nearby entities share the same display name.
 The ID comes from `ffxi_observe`; the bridge still validates that the entity is
 nearby before targeting it. AgentBridge 0.9.1 makes an explicit server ID
 authoritative; name matching is only a fallback when no ID is supplied. This
 fixed an ambiguity where a corpse or a different live Huge Hornet could be
 selected because several entities shared the same name.
+
+The standalone entity-follow helper accepts the same exact-ID pin:
+
+```sh
+pnpm mcp:move -- \
+  --target "Walking Sapling" \
+  --server-id 17215660 \
+  --max-start-distance 30 \
+  --stop-distance 1 \
+  --timeout 15
+```
+
+This matters for roaming mobs with duplicate display names. A live South
+Gustaberg test caught a Walking Sapling from more than 20 yalms away, after
+which the exact-ID check and committed combat loop defeated it. Name-only
+follow remains available for unique targets, but automation should pin the
+observed server ID.
+
+### Collision-safe route recovery
+
+Do not disable client collision or use wall-hack behavior on the retail
+service. Long direct coordinate movement can cut across collision even when
+both endpoints are valid. Use the zone navmesh with short segments instead:
+
+```sh
+pnpm mcp:pathfind -- \
+  --mesh South_Gustaberg.nav \
+  --x 344 \
+  --y -261 \
+  --z 0 \
+  --maximum-segment-distance 10 \
+  --max-replans 2 \
+  --recover-stuck
+```
+
+When `--recover-stuck` is enabled and a segment stops more than two yalms from
+its waypoint, the helper sends one bounded backward pulse, observes the new
+position, and replans from there. Recovery is capped by `--max-replans`, and
+the helper still invokes the emergency stop on every exit. The pulse defaults
+to 750 ms and can be set from 50 through 1000 ms with
+`--recovery-pulse-ms`.
+
+Live validation exposed a field collision seam where direct movement repeatedly
+reported `no_progress`. A one-second reverse pulse freed the character, and a
+13-segment South Gustaberg navmesh route then reached the camp within 0.55
+yalms. This is the preferred camera-independent recovery path; repeated visual
+wall inspection should be treated as a debugging fallback.
 
 Recovery can also be run independently:
 
