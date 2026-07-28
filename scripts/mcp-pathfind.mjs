@@ -9,6 +9,7 @@ import {
   planNavmeshPath,
   subdividePath,
 } from "../src/navmesh-planner.mjs";
+import { movementUnsafeReason } from "../src/navigation-safety.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -81,16 +82,22 @@ async function observe() {
   return valueOf(response);
 }
 
-async function waitForMovement(timeoutSeconds) {
+async function waitForMovement(timeoutSeconds, baselineHpPercent) {
   const deadline = Date.now() + (timeoutSeconds * 1000) + 1000;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 250));
-    const response = await client.callTool({
-      name: "ffxi_control_status",
-      arguments: {},
+    const observation = await observe();
+    const unsafeReason = movementUnsafeReason({
+      loginStatus: observation.login_status,
+      playerStatus: observation.player?.status,
+      playerHpPercent: observation.player?.hp_percent,
+      baselineHpPercent,
     });
-    if (response.isError) throw new Error("Could not read movement status.");
-    if (!valueOf(response).movement) return;
+    if (unsafeReason) {
+      await client.callTool({ name: "ffxi_stop_movement", arguments: {} });
+      throw new Error(`Navigation aborted: ${unsafeReason}.`);
+    }
+    if (!observation.control?.movement) return;
   }
   await client.callTool({ name: "ffxi_stop_movement", arguments: {} });
 }
@@ -101,6 +108,16 @@ try {
   const initial = await observe();
   const start = initial.player?.position;
   if (!start) throw new Error("Player position is unavailable.");
+  const baselineHpPercent = initial.player?.hp_percent;
+  const initialUnsafeReason = movementUnsafeReason({
+    loginStatus: initial.login_status,
+    playerStatus: initial.player?.status,
+    playerHpPercent: baselineHpPercent,
+    baselineHpPercent,
+  });
+  if (!planOnly && initialUnsafeReason) {
+    throw new Error(`Navigation refused: ${initialUnsafeReason}.`);
+  }
 
   const initialRawPathPoints = await planNavmeshPath({
     meshPath,
@@ -185,7 +202,7 @@ try {
       if (movement.isError) {
         throw new Error(`Waypoint ${index + 1} could not start.`);
       }
-      await waitForMovement(timeoutSeconds);
+      await waitForMovement(timeoutSeconds, baselineHpPercent);
 
       const after = await observe();
       const remaining = distance2d(after.player.position, waypoint);

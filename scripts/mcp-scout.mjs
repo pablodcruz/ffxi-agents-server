@@ -68,7 +68,7 @@ try {
     arguments: {
       radius,
       max_entities: 64,
-      event_limit: 0,
+      event_limit: 12,
     },
   });
   if (response.isError) throw new Error("FFXI observation failed.");
@@ -108,14 +108,20 @@ try {
     maximumElevationDifference,
     excludedServerIds,
   });
-  const actionable = ranked.filter((mob) => mob.disposition !== "avoid");
+  const playerOperational = observation.login_status === 2
+    && (observation.player?.hp_percent ?? 0) > 0
+    && observation.player?.status !== 3;
+  const actionable = playerOperational
+    ? ranked.filter((mob) => mob.disposition !== "avoid")
+    : [];
 
   console.log(JSON.stringify({
     protocol: "mcp-stdio",
     mode: "read-only-scout",
     zone_id: zoneId,
     player_level: playerLevel,
-    player_position: observation.player?.position,
+    player: observation.player,
+    player_operational: playerOperational,
     metadata_generated_at: metadata.generated_at,
     safety: {
       authoritative_combat_gate: "fresh exact-ID /check is still required",
@@ -125,6 +131,7 @@ try {
     },
     recommendation: actionable[0] || null,
     candidates: ranked.slice(0, limit),
+    recent_events: observation.recent_events,
   }, null, 2));
 } finally {
   await client.close();

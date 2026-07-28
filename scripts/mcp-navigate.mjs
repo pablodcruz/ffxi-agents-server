@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { movementUnsafeReason } from "../src/navigation-safety.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -36,6 +37,24 @@ function valueOf(response) {
 
 try {
   await client.connect(transport);
+  const initialObservationResponse = await client.callTool({
+    name: "ffxi_observe",
+    arguments: { radius: 12, max_entities: 8, event_limit: 8 },
+  });
+  if (initialObservationResponse.isError) {
+    throw new Error("Could not read the initial navigation state.");
+  }
+  const initialObservation = valueOf(initialObservationResponse);
+  const baselineHpPercent = initialObservation.player?.hp_percent;
+  const initialUnsafeReason = movementUnsafeReason({
+    loginStatus: initialObservation.login_status,
+    playerStatus: initialObservation.player?.status,
+    playerHpPercent: baselineHpPercent,
+    baselineHpPercent,
+  });
+  if (initialUnsafeReason) {
+    throw new Error(`Navigation refused: ${initialUnsafeReason}.`);
+  }
   await client.callTool({
     name: "ffxi_enable_control",
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
@@ -52,13 +71,26 @@ try {
     },
   });
   const deadline = Date.now() + (timeoutSeconds * 1000) + 500;
+  let abortReason;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 250));
-    const status = await client.callTool({
-      name: "ffxi_control_status",
-      arguments: {},
+    const liveResponse = await client.callTool({
+      name: "ffxi_observe",
+      arguments: { radius: 12, max_entities: 8, event_limit: 8 },
     });
-    if (!valueOf(status).movement) break;
+    if (liveResponse.isError) throw new Error("Could not monitor navigation.");
+    const live = valueOf(liveResponse);
+    abortReason = movementUnsafeReason({
+      loginStatus: live.login_status,
+      playerStatus: live.player?.status,
+      playerHpPercent: live.player?.hp_percent,
+      baselineHpPercent,
+    });
+    if (abortReason) {
+      await client.callTool({ name: "ffxi_stop_movement", arguments: {} });
+      break;
+    }
+    if (!live.control?.movement) break;
   }
   const observation = await client.callTool({
     name: "ffxi_observe",
@@ -75,11 +107,13 @@ try {
   console.log(JSON.stringify({
     protocol: "mcp-stdio",
     waypoint: { x, y },
+    abort_reason: abortReason || null,
     movement: valueOf(movement),
     observation: valueOf(observation),
     emergency_stop: valueOf(emergencyStop),
     final_control: valueOf(finalStatus),
   }, null, 2));
+  if (abortReason) process.exitCode = 1;
 } finally {
   await client.callTool({ name: "ffxi_emergency_stop", arguments: {} })
     .catch(() => {});
