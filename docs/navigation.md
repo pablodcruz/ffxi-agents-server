@@ -884,6 +884,43 @@ the host-level modal, the unchanged guarded helper completed and verified the
 sale. This is useful failure evidence: desktop focus loss produces a safe
 no-op, not a guessed confirmation.
 
+### Level-20 Sparks equipment upgrade
+
+At Monk 20, the pinned server's equipment data and Isakoth's live
+`Equipment Lv. 20-29` shop page identified the Trader's set as the appropriate
+armor upgrade. The exact purchases were Trader's Chapeau (15207, 70 Sparks),
+Trader's Saio (14446, 71), Trader's Cuffs (14053, 70), Trader's Slops (15404,
+70), and Trader's Pigaches (15343, 70). Their listed defense totals 40 versus
+28 for Headgear, Doublet, Gloves, Brais, and Gaiters. No hand-to-hand weapon
+in this Sparks tier is usable at level 20, so Brass Baghnakhs remained
+equipped. The Monk-usable level-20 Warhammer was rejected because changing
+weapon families would discard Pablo's trained hand-to-hand advantage.
+
+Isakoth's equipment list is paginated. The first page ends at an inactive
+boundary after fifteen entries; confirming that boundary advances to the
+second page, where the Trader's pieces appear. The exact-item selector
+correctly stopped at the inactive row instead of guessing. Page advancement
+was performed explicitly, then each purchase used the guarded exact-ID Sparks
+helper and verified inventory count `0 -> 1`.
+
+Before buying, all thirteen carried Beastmen's Seals were stored normally with
+Shami, producing a verified stored balance of 27. Two bounded vendor passes
+then sold only reviewed non-food drops: eleven Sheepskins, two Rabbit Hides,
+two Grain Seeds, twelve Sheep Teeth, and three Treant Bulbs. Meat Jerky,
+G. Sheep Meat, Hare Meat, the Copper Voucher, equipment, and other protected
+items were preserved. Gil increased from 28,815 to 29,914 and inventory fell
+from 23/30 to 17/30 before the five purchases.
+
+All five pieces were equipped using FFXI's native `/equip` commands through the
+allowlisted MCP gameplay-command path. AgentBridge then authoritatively
+reported exact item IDs 15207, 14446, 14053, 15404, and 15343 in the head,
+body, hands, legs, and feet slots. Final inventory was 22/30. A read-only
+LandSandBoat database query verified 4,934 Sparks, 1,100 Unity accolades, and
+27 stored Beastmen's Seals. The bridge's aggregate `defense` observation
+remained 93 despite the exact equipment-change events and slot updates, so
+the listed +12 armor-defense difference is data-derived rather than claimed
+as a live aggregate-stat observation.
+
 ### Verified travel-node cache
 
 Nearby travel discovery is now persistent without making remembered locations

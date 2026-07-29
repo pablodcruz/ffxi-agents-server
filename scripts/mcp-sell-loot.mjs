@@ -7,6 +7,9 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 const sellableItems = new Map([
+  [505, "Sheepskin"],
+  [856, "Rabbit Hide"],
+  [882, "Sheep Tooth"],
   [847, "Bird Feather"],
   [926, "Lizard Tail"],
   [953, "Treant Bulb"],
@@ -204,6 +207,8 @@ try {
       "White Belt",
       "Bastokan Ring",
       "Meat Jerky",
+      "G. Sheep Meat",
+      "Hare Meat",
       "Beastmen's Seal",
     ],
     initial_gil: gil(initial),

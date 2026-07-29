@@ -12,9 +12,10 @@ resolved failures belong in `docs/`.
 ## Current state
 
 - Pablo: Hume male, Monk 20, 389/4,600 EXP.
-- Currency: 28,815 gil; 2,285 Sparks; 1,000 Unity accolades.
-- Equipment verified through AgentBridge: Brass Baghnakhs, Headgear, Doublet,
-  Gloves, Brais, Gaiters, White Belt, and Bastokan Ring.
+- Currency: 29,914 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Equipment verified through AgentBridge: Brass Baghnakhs, Trader's Chapeau,
+  Trader's Saio, Trader's Cuffs, Trader's Slops, Trader's Pigaches, White
+  Belt, and Bastokan Ring.
 - Gil milestone completed: 28,815/10,000 through normal Sparks conversion.
 - Trusts learned: Naji, Valaineral, Mihli Aliapoh, Tenzen, Adelheid, Joachim.
 - Adelheid and Joachim were each summoned successfully through MCP.
@@ -54,91 +55,28 @@ resolved failures belong in `docs/`.
   collision-aware navigation meets its reliability target.
 - Farming exclusions: worms, Stone Eaters, Huge Hornets, Vultures, Treasure
   Caskets, and the western South Gustaberg Quadav pocket.
-- Inventory remains auto-sorted at 23/30 slots. Store future Beastmen's Seal
-  batches with Shami in Port Jeuno; Pablo currently has 14 stored and 13
+- Inventory remains auto-sorted at 22/30 slots. Store future Beastmen's Seal
+  batches with Shami in Port Jeuno; Pablo currently has 27 stored and none
   carried.
 
-## Current Goal 1 — finish the Trust/Unity progression checkpoint
+## Current Goal 1 — upgrade Pablo's level-20 equipment
 
 Status: **completed**
 
-1. Exact RoE activation: **completed and live-validated** through FFXI's normal
-   `0x10C` packet.
-2. `Alter Ego: Joachim`: **completed**, awarding 500 EXP and 300 Sparks.
-3. Unique non-hidden RoE count: **11**, so no filler records were required.
-4. `All for One`: **completed**. Apururu was explicitly named before the final
-   confirmation; Igsli's event then awarded the Concordoll, 300 EXP, 300
-   Sparks, and 1,000 Unity accolades. Database validation confirmed
-   `unity_leader = 4`.
+1. Stored all 13 carried Beastmen's Seals with Shami, raising the verified
+   stored balance from 14 to 27.
+2. Sold only reviewed non-food drops: Sheepskins, Rabbit Hides, Grain Seeds,
+   Sheep Teeth, and Treant Bulbs. Gil increased from 28,815 to 29,914.
+3. Bought the exact level-20 Trader's set from Isakoth for 351 Sparks:
+   Chapeau 15207, Saio 14446, Cuffs 14053, Slops 15404, and Pigaches 15343.
+4. Equipped all five pieces with native `/equip` commands through the
+   allowlisted MCP control plane. AgentBridge verified every exact slot and
+   item ID.
+5. Final state verified: inventory 22/30, 29,914 gil, 4,934 Sparks, 1,100
+   Unity accolades, and no carried seals.
 
-Do not block combat validation on step 1: the balanced Trust roster itself is
-already learned and usable.
-
-## Current Goal 2 — reach Monk level 20 through local automation
-
-Status: **completed; 15 → 20**
-
-1. Keep Valaineral, Joachim, and Mihli Aliapoh as the automated party until the
-   pinned server's missing Apururu (UC) spell grant is resolved.
-2. Let deterministic local supervisors own target selection, exact checks,
-   approach, battle, weapon skills, recovery, and safe camp rotation. MCP
-   should start bounded leases, inspect milestones, and handle exceptions.
-3. Progress through metadata-vetted camps without weakening the current
-   rejection of high evasion, `even match`, `tough`, or harder targets.
-4. Trust readiness, same-zone rotation, and the level-17 Konschtat-to-Valkurm
-   transition are automated and live-validated.
-5. Check inventory only at lease boundaries, near capacity, or before selling
-   and seal-storage runs.
-
-Latest completed calibration: Valkurm lease
-`75682b7c-9770-47d8-9be2-0bb0ce7d19e8` completed 5/5 Sand Hare fights for
-880 EXP in 267 seconds. It performed four guarded camp relocations, fired
-Combo once, and rejected one live `even match` Hare before attack. All approved
-targets checked `decent challenge` with Valaineral, Joachim, and Mihli Aliapoh
-present. There were zero deaths, attack rejections, target-cycle errors,
-combat teleports, or recovery actions during combat.
-
-Final lease `14cb9905-796a-4a99-971e-fc053146539d` completed the milestone in
-17 fights and 1,003 seconds. It earned 7,750 EXP, rotated among 16 vetted
-camps, fired Combo seven times, and safely drained one aggroed Brutal Sheep
-through a reactive handoff. A 5,000-EXP reward after fight 15 advanced Pablo
-to level 19 at the one-point cap; the reactive Sheep then advanced him to
-level 20. There were zero deaths, target-cycle errors, combat teleports, or
-recovery actions during combat. The supervisor refreshed the in-game overlay
-and stopped itself with `target_level`.
-
-Safety rules:
-
-- Never teleport while attacked or engaged.
-- Stop on logout, zoning, death, expired lease, or emergency stop.
-- Reject high-evasion and even-match-or-harder proactive targets.
-- Permit a clean `decent challenge` only when live Trust telemetry satisfies
-  the tested policy.
-- Never proactively select excluded families or caskets.
-
-Milestone exit criteria:
-
-- Pablo reached Monk level 20 through normal combat rewards.
-- Authoritative AgentBridge state reports Monk 20 at 389/4,600 EXP, 100% HP,
-  idle, with all three intended Trusts healthy.
-- The supervisor stopped on `target_level` with zero deaths or unsafe-action
-  counters.
-
-Further combat hardening remains queued: accumulate another 30-fight clean
-sample, validate more multi-enemy handoffs, and measure immediate aggro
-response separately from intentional add-drain timing.
-
-## Current Goal 3 — improve deterministic menus and travel
-
-Status: **queued alongside combat**
-
-- Expose a verified menu cursor/index or exact RoE objective selector through
-  the local bridge; stop encoding long menu paths as remembered offsets.
-- Register nearby Home Points, Survival Guides, Waypoints, and outposts, then
-  cache exact IDs and coordinates.
-- Prefer registered travel when reliable; use guarded local-server teleport as
-  the recovery/default path until collision-aware navigation is proven.
-- Keep credential files ignored and local. Never commit login values.
+Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
+credentials ignored and local.
 
 ## Completed milestones
 
@@ -148,6 +86,13 @@ Status: **queued alongside combat**
   runbooks established.
 - 10,000-gil target exceeded through normal gameplay.
 - Level-11 Sparks equipment set bought and equipped.
+- Level-20 Trader's armor set bought and equipped after a guarded inventory
+  cleanup and seal-storage run.
+- Trust/Unity progression completed, including Joachim, `All for One`,
+  Apururu's Unity membership, Concordoll, and 1,000 Unity accolades.
+- Automated Monk 15→20 progression completed with exact-check combat, guarded
+  camp rotation, Trust repair, reactive handoff, automatic Combo, and zero
+  deaths in the final lease.
 - Seal stacking/storage, loot selling, casket exclusion, travel caching, and
   exact-ID combat helpers validated.
 - Unified farm supervisor implemented with proactive selection, reactive aggro
