@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyMob,
   conservativeVendorValue,
   parseMobMetadataTsv,
   rankNearbyMobs,
@@ -171,6 +172,89 @@ test("excludes Vultures after target-follow still failed live registration", () 
 
   assert.equal(mob.disposition, "avoid");
   assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
+});
+
+test("allows exact validated linked families while retaining other link exclusions", () => {
+  const sheep = classifyMob({
+    entity: {
+      server_id: 201,
+      name: "Mad Sheep",
+      entity_type: 2,
+      status: 0,
+      hp_percent: 100,
+      position: { z: 7 },
+      player_z: 3.5,
+    },
+    metadata: {
+      minimum_level: 12,
+      maximum_level: 13,
+      aggro: false,
+      links: true,
+    },
+    playerLevel: 14,
+  });
+  const sapling = classifyMob({
+    entity: {
+      server_id: 202,
+      name: "Strolling Sapling",
+      entity_type: 2,
+      status: 0,
+      hp_percent: 100,
+      position: { z: 7 },
+      player_z: 3.5,
+    },
+    metadata: {
+      minimum_level: 12,
+      maximum_level: 13,
+      aggro: false,
+      links: true,
+    },
+    playerLevel: 14,
+  });
+  const hare = classifyMob({
+    entity: {
+      server_id: 203,
+      name: "Sand Hare",
+      entity_type: 2,
+      status: 0,
+      hp_percent: 100,
+      position: { z: 0.3 },
+      player_z: 0,
+    },
+    metadata: {
+      minimum_level: 16,
+      maximum_level: 17,
+      aggro: false,
+      links: true,
+    },
+    playerLevel: 15,
+  });
+  const tooHigh = classifyMob({
+    entity: {
+      server_id: 204,
+      name: "Sand Hare",
+      entity_type: 2,
+      status: 0,
+      hp_percent: 100,
+      position: { z: 0.3 },
+      player_z: 0,
+    },
+    metadata: {
+      minimum_level: 17,
+      maximum_level: 18,
+      aggro: false,
+      links: true,
+    },
+    playerLevel: 15,
+  });
+  assert.equal(sheep.disposition, "low_risk_candidate");
+  assert.deepEqual(sheep.reasons, []);
+  assert.equal(hare.disposition, "requires_exact_check");
+  assert.deepEqual(hare.reasons, []);
+  assert.equal(tooHigh.disposition, "avoid");
+  assert.ok(tooHigh.reasons.includes("level_range_above_player"));
+  assert.equal(sapling.disposition, "avoid");
+  assert.ok(sapling.reasons.includes("links"));
 });
 
 test("temporarily cools down an exact server ID without hiding evidence", () => {

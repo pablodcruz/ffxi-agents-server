@@ -6,6 +6,8 @@ const defaultExcludedNamePatterns = Object.freeze([
 
 const defaultAllowedLinkedNamePatterns = Object.freeze([
   /^walking sapling$/i,
+  /^mad sheep$/i,
+  /^sand hare$/i,
   /^vulture$/i,
   /^rock lizard$/i,
 ]);
@@ -157,7 +159,7 @@ export function classifyMob({
   if (reasons.length === 0) {
     if (metadata.maximum_level <= playerLevel - 1) {
       disposition = "low_risk_candidate";
-    } else if (metadata.minimum_level <= playerLevel) {
+    } else if (metadata.minimum_level <= playerLevel + 1) {
       disposition = "requires_exact_check";
     } else {
       reasons.push("level_range_above_player");

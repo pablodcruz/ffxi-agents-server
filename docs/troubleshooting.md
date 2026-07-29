@@ -156,6 +156,19 @@ This is expected if the private forwarder or Colima is restarted while the
 lobby is open. Close the game client, wait for `server.sh check` and
 `pnpm forwarder`, then relaunch from a clean xiloader process.
 
+The reference VM keeps private-server login values in an ACL-restricted,
+ignored JSON file and points its VM-local Ashita boot profile at that file.
+The public profile stays credential-free. Never pass credentials on a command
+line, print them in diagnostics, or commit the private JSON file.
+
+After character selection, the simplified Windows ARM renderer can show a
+completely black screen while an undrawn confirmation remains active. Diagnose
+this from both sides: `login_status: 0` in AgentBridge and no new map-server
+session means the character has not entered the world. One bounded confirm
+advanced the reference client; AgentBridge then reported `login_status: 2`,
+Pablo in Port Bastok, and normal zone events. Do not repeatedly send confirms:
+verify after one, and stop if the expected login transition does not occur.
+
 ### `FFXI-3117` failed to carry out user file operations
 
 The official installation under `Program Files (x86)` may leave the FFXI
@@ -278,6 +291,36 @@ The enabled feed writes the same allowlisted summaries to local game chat and
 to a persistent six-line `AGENT ACTIVITY - LOCAL ONLY` Ashita overlay. The
 overlay exists because native chat fades and some VM capture paths omit FFXI's
 legacy menu layer; it never sends text to other players or the server.
+
+### Records of Eminence menus are invisible or shift after completion
+
+The legacy `quest01` Records of Eminence layer can be absent from Parallels
+captures even while guarded MCP menu pulses work. Completed Tutorial rows can
+also change the effective cursor offset. A path validated for Adelheid must not
+be assumed to select Joachim later.
+
+Treat the focused menu name and authoritative `You have undertaken ...` event
+as the write proof. If a confirm stays in `quest01` and no undertaking event is
+emitted, close the menus and leave the record unmodified. Do not guess through
+multiple confirmations or claim completion from a learned Trust alone. The
+durable fix is a read-only menu cursor/objective observation or an exact,
+private-server-only RoE activation helper with an allowlisted record ID.
+
+AgentBridge 0.25.0 implements the durable activation path. It sends only
+FFXI's normal `0x10C` objective-start packet with one validated 16-bit record
+ID after explicit private-server confirmation. LandSandBoat retains normal
+eligibility, completion, timed-record, event-state, and active-log validation.
+Record 937 produced the normal `You have undertaken Alter Ego: Joachim` event
+and completed normally when Joachim was summoned.
+
+### AgentBridge reload types a corrupted addon name
+
+The original reload helper used Parallels virtual keycodes. In the live VM,
+its initial Escape became `h` and its `b` disappeared, producing
+`hagentridge` instead of `agentbridge`. Use standard keyboard scancodes:
+Escape `1`, Enter `28`, and set-1 letter scancodes. The repaired helper
+subsequently produced Ashita's `Loaded addon: agentbridge version: 0.25.0`
+event.
 
 ### Parallels steals focus during an addon reload
 
@@ -500,6 +543,25 @@ The feed cannot send arbitrary text or server chat. It shows only bounded
 target, movement, input, heading, and allowlisted command-verb events. Disable
 it with the same command and `--enabled false` if it obscures dialogue or
 combat text.
+
+## Apururu's Unity joins, but Apururu (UC) is not summonable
+
+The normal Igsli flow can complete successfully while `/ma "Apururu (UC)"
+<me>` returns a client command error. Verify the distinction before changing
+character data:
+
+- the completion message says `You have joined Apururu's Unity!`;
+- `char_profile.unity_leader` is `4`;
+- All for One awarded its EXP, Sparks, accolades, and Concordoll; and
+- `char_spells` does not contain spell ID `955` (`apururu_uc`).
+
+In the pinned LandSandBoat build, `scripts/globals/unity.lua` calls
+`setUnityLeader()` and completes All for One but does not call `addSpell()` for
+the selected Unity leader. The spell exists in `spell_list` and its Trust
+action script exists, but the player never receives the spell. Treat this as a
+server implementation gap, retain Mihli Aliapoh as the healer fallback, and do
+not silently insert spell 955 into the database when validating normal
+progression.
 
 ## Safe recovery sequence
 

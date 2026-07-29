@@ -15,8 +15,12 @@ function argument(name, fallback) {
 
 const action = argument("--action", "status");
 const agentId = argument("--agent-id", "primary");
+const allowCautionValue = argument("--allow-caution", "false");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
+}
+if (!["true", "false"].includes(allowCautionValue)) {
+  throw new Error("--allow-caution must be true or false.");
 }
 
 const transport = new StdioClientTransport({
@@ -62,6 +66,7 @@ try {
       minimum_start_hp_percent: Number(
         argument("--minimum-start-hp-percent", "90"),
       ),
+      allow_caution: allowCautionValue === "true",
       weapon_skill: argument("--weapon-skill", "Combo"),
       confirmation: FARM_CONFIRMATION,
     });

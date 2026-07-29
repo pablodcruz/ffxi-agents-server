@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canCompleteCooperativeStop,
   canStopAtFightLimit,
   classifyReactiveTiming,
   excludedCombatPocket,
   hasLiveCombat,
   isClosedMenuInputRace,
+  isFarmCheckApproved,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
   parseCombatRewards,
   playerDefeated,
+  readyTrustSupport,
   safeCombatPosition,
   selectProactiveTarget,
   shouldAutoCancelMenu,
@@ -328,6 +331,142 @@ test("fight limits stop only after current and reactive combat are drained", () 
     currentTarget: null,
     reactiveThreat: null,
   }), false);
+});
+
+test("cooperative stops require a stable idle window after combat drains", () => {
+  const idle = observation({ player: { status: 0, hp_percent: 90 } });
+  const fighting = observation({ player: { status: 1, hp_percent: 90 } });
+  assert.equal(canCompleteCooperativeStop({
+    stopRequested: true,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+    idleSamples: 8,
+  }), true);
+  assert.equal(canCompleteCooperativeStop({
+    stopRequested: true,
+    observation: idle,
+    currentTarget: { server_id: 42 },
+    reactiveThreat: null,
+    idleSamples: 8,
+  }), false);
+  assert.equal(canCompleteCooperativeStop({
+    stopRequested: true,
+    observation: fighting,
+    currentTarget: null,
+    reactiveThreat: { server_id: 42 },
+    idleSamples: 8,
+  }), false);
+  assert.equal(canCompleteCooperativeStop({
+    stopRequested: true,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+    idleSamples: 7,
+  }), false);
+  assert.equal(canCompleteCooperativeStop({
+    stopRequested: false,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+    idleSamples: 20,
+  }), false);
+});
+
+test("farm checks admit only a clean decent challenge when explicitly opted in", () => {
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "safe",
+      difficulty: "easy_prey",
+      high_defense: false,
+      high_evasion: false,
+    },
+  }), true);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "caution",
+      difficulty: "decent_challenge",
+      high_defense: false,
+      high_evasion: false,
+    },
+    allowCaution: false,
+  }), false);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "caution",
+      difficulty: "decent_challenge",
+      high_defense: false,
+      high_evasion: false,
+    },
+    allowCaution: true,
+  }), true);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "caution",
+      difficulty: "decent_challenge",
+      high_defense: true,
+      high_evasion: false,
+    },
+    allowCaution: true,
+  }), false);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "caution",
+      difficulty: "decent_challenge",
+      high_defense: true,
+      high_evasion: false,
+    },
+    allowCaution: true,
+    trustedSupportReady: true,
+  }), true);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "caution",
+      difficulty: "decent_challenge",
+      high_defense: true,
+      high_evasion: true,
+    },
+    allowCaution: true,
+    trustedSupportReady: true,
+  }), false);
+  assert.equal(isFarmCheckApproved({
+    checkVerdict: {
+      verdict: "unsafe",
+      difficulty: "even_match",
+      high_defense: false,
+      high_evasion: false,
+    },
+    allowCaution: true,
+  }), false);
+});
+
+test("recognizes multiple healthy in-zone Trust companions as combat support", () => {
+  assert.deepEqual(readyTrustSupport({
+    party: [
+      { name: "Pablo", hp_percent: 100, zone_id: 108 },
+      { name: "Valaineral", hp_percent: 100, zone_id: 108 },
+      { name: "MihliAliapoh", hp_percent: 90, zone_id: 108 },
+      { name: "Joachim", hp_percent: 79, zone_id: 108 },
+      { name: "Naji", hp_percent: 100, zone_id: 107 },
+    ],
+    playerName: "Pablo",
+    zoneId: 108,
+  }), {
+    ready: true,
+    members: ["Valaineral", "MihliAliapoh"],
+  });
+  assert.deepEqual(readyTrustSupport({
+    party: [
+      { name: "Pablo", hp_percent: 100, zone_id: 108 },
+      { name: "Valaineral", hp_percent: 100, zone_id: 108 },
+      { name: "MihliAliapoh", hp_percent: 70, zone_id: 108 },
+    ],
+    playerName: "Pablo",
+    zoneId: 108,
+  }), {
+    ready: false,
+    members: ["Valaineral"],
+  });
 });
 
 test("excludes the unvalidated South Gustaberg multi-aggro pocket", () => {

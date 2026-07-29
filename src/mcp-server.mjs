@@ -698,7 +698,7 @@ server.registerTool(
   {
     title: "Send bounded FFXI menu input",
     description:
-      "Send exactly one automatically released allowlisted DirectInput menu pulse through AgentBridge. Confirm, cancel, directional input, and open_context_menu require an open menu; open_main_menu and show_interface require a closed menu. show_interface also requires read-only proof that the FFXI interface is hidden.",
+      "Send exactly one automatically released allowlisted DirectInput menu pulse through AgentBridge. Confirm, cancel, directional input, and open_context_menu require an open menu. Main-menu and Ctrl shortcut actions require a closed menu. show_interface also requires a closed menu plus read-only proof that the FFXI interface is hidden.",
     inputSchema: {
       agent_id: agentIdSchema,
       action: z.enum([
@@ -709,7 +709,12 @@ server.registerTool(
         "left",
         "right",
         "open_context_menu",
+        "open_equipment",
+        "open_items",
+        "open_job_abilities",
+        "open_magic",
         "open_main_menu",
+        "open_weapon_skills",
         "show_interface",
       ]),
     },
@@ -727,6 +732,40 @@ server.registerTool(
           agent_id,
           "menu_input",
           { action },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_start_roe_objective",
+  {
+    title: "Start an exact Records of Eminence objective",
+    description:
+      "Start one exact Records of Eminence objective on the private server using FFXI's normal 0x10C client packet. This avoids invisible or shifting legacy menu cursors; LandSandBoat still applies its normal eligibility, completion, timed-record, and capacity validation.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      objective_id: z.number().int().min(1).max(4095),
+      confirmation: z.literal("START PRIVATE SERVER ROE OBJECTIVE"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, objective_id, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "start_roe_objective",
+          { objective_id, confirmation },
           { write: true },
         ),
       );
@@ -936,6 +975,7 @@ server.registerTool(
       maximum_fights: z.number().int().min(1).max(200).default(30),
       scan_radius: z.number().int().min(10).max(50).default(50),
       minimum_start_hp_percent: z.number().int().min(50).max(100).default(90),
+      allow_caution: z.boolean().default(false),
       weapon_skill: z
         .string()
         .min(1)
@@ -958,6 +998,7 @@ server.registerTool(
     maximum_fights,
     scan_radius,
     minimum_start_hp_percent,
+    allow_caution,
     weapon_skill,
     confirmation,
   }) => {
@@ -970,6 +1011,7 @@ server.registerTool(
         maximumFights: maximum_fights,
         scanRadius: scan_radius,
         minimumStartHpPercent: minimum_start_hp_percent,
+        allowCaution: allow_caution,
         weaponSkill: weapon_skill,
         confirmation,
       }));

@@ -6,19 +6,19 @@ import path from "node:path";
 const vmName = process.env.FFXI_PARALLELS_VM || "Windows 11";
 const projectDir = path.resolve(import.meta.dirname, "..");
 const keyCodes = Object.freeze({
-  "/": 61,
-  " ": 65,
-  a: 38,
-  b: 56,
-  d: 40,
-  e: 26,
-  g: 42,
-  i: 31,
-  l: 46,
-  n: 57,
-  o: 32,
-  r: 27,
-  t: 28,
+  "/": 53,
+  " ": 57,
+  a: 30,
+  b: 48,
+  d: 32,
+  e: 18,
+  g: 34,
+  i: 23,
+  l: 38,
+  n: 49,
+  o: 24,
+  r: 19,
+  t: 20,
 });
 const command = "/addon reload agentbridge";
 const foregroundGameCheck = [
@@ -79,14 +79,14 @@ function requireForegroundGame() {
   }
 }
 
-function sendKey(keyCode, delay = 35) {
+function sendScanCode(scanCode, delay = 35) {
   const child = spawnSync(
     "prlctl",
     [
       "send-key-event",
       vmName,
-      "--key",
-      String(keyCode),
+      "--scancode",
+      String(scanCode),
       "--delay",
       String(delay),
     ],
@@ -98,18 +98,18 @@ function sendKey(keyCode, delay = 35) {
   );
   if (child.error || child.status !== 0) {
     const detail = child.error?.message || child.stderr?.trim() || `exit ${child.status}`;
-    throw new Error(`Could not send Parallels key event ${keyCode}: ${detail}`);
+    throw new Error(`Could not send Parallels scancode ${scanCode}: ${detail}`);
   }
 }
 
 // Escape any partially entered chat text, then type one fixed, non-chat command.
 requireLiveBridge();
 requireForegroundGame();
-sendKey(9, 80);
+sendScanCode(1, 80);
 for (const character of command) {
-  sendKey(keyCodes[character]);
+  sendScanCode(keyCodes[character]);
 }
-sendKey(36, 80);
+sendScanCode(28, 80);
 
 console.log(JSON.stringify({
   status: "submitted",

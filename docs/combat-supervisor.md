@@ -47,6 +47,12 @@ The guard:
 - treats the configured fight count as a proactive limit, drains any active
   defensive threat, and returns to the lease's starting camp while idle before
   stopping;
+- treats an explicit cooperative stop as a drain request: it starts no new
+  proactive pull, finishes tracked and reactive combat, and requires eight
+  fresh idle samples before disabling control;
+- requires safe checks by default. A lease may explicitly admit only
+  `decent challenge` targets without high-defense or high-evasion evidence;
+  even match and every harder result remain forbidden;
 - stops on logout, zoning, death, signal, or lease expiration;
 - performs an emergency stop when it exits.
 
@@ -149,6 +155,52 @@ Live failures also changed the policy:
   Sapling. The recovery remained non-teleporting and safe, but two moving
   Sapling spawns still produced repeated visibility/registration failures.
   They are inefficient targets; the nearby Rock Lizard remained clean.
+- An explicit stop once arrived just as a queued attack registered. The old
+  loop immediately disabled control even though the fight continued. Lease
+  `3ade4102-83d2-437d-9b79-5a67b07b7e57` live-validated the repaired drain:
+  the stop latched during a tracked Sapling fight, the supervisor finished the
+  kill, observed eight consecutive idle samples, and disabled control after
+  9.447 seconds. A fresh observation showed Pablo idle and no late attack.
+- South Gustaberg stopped awarding EXP at Monk level 14. Local LandSandBoat
+  metadata selected a Konschtat Highlands camp near
+  `(-326.295, -51.917)`: two live level 12–13 Mad Sheep were inside 13 yalms,
+  and the nearest aggressive spawn was about 45 yalms away. `Mad Sheep` is the
+  only newly admitted linked family. A safe-only lease observed and refused
+  `decent challenge`; the explicit caution opt-in is unit-tested.
+- A post-relogin exact-ID calibration established the current high-defense
+  boundary. AgentBridge first verified Naji in party, then Pablo defeated one
+  `decent challenge` Mad Sheep in a single attack attempt. Pablo remained at
+  91% HP while Naji tanked, and the fight awarded 180 EXP.
+- The first three-Trust run exposed a brittle admission rule: it recognized
+  only the literal name `Naji`, so twelve otherwise valid Mad Sheep checks were
+  excluded despite healthy Valaineral, Mihli Aliapoh, and Joachim telemetry.
+  The rule now requires at least two healthy non-player party members in the
+  current zone instead of one named Trust. Lease
+  `43e936f2-c80a-4eb0-a87c-f2590f96565d` live-validated the repair with two
+  high-defense `decent challenge` wins, 320 EXP, Pablo at 90% HP, and no
+  deaths, attack rejections, exclusions, target-cycle errors, combat teleports,
+  or combat recoveries. It stopped normally at four minutes after nearby
+  spawns were exhausted. High evasion and even-match-or-harder checks remain
+  excluded.
+- Pablo reached Monk 15 through two additional clean Mad Sheep wins. At the
+  original camp, the lower and upper sheep shelves differ by more than the
+  four-yalm elevation gate. A cooperative stop followed by a guarded
+  same-zone service teleport to the upper shelf avoided collision-prone
+  roaming and produced the level-up normally.
+- Valkurm metadata identified three nearby level 16–17 Sand Hares with the
+  nearest aggressive goblin about 44.7 yalms away. `Sand Hare` is now an exact
+  linked-family allowlist entry, and metadata may pass a mob only one level
+  above the player to the authoritative `/check`. Live lease
+  `bfaffa06-dcaa-4620-af6a-b7f75e2621db` checked each candidate as `tough` and
+  excluded it without attacking. An isolated level 15–16 hare later checked
+  `even match` and was also excluded. These tests validate the prefilter
+  expansion without relaxing the combat admission rule.
+- The level-15 Konschtat camp near `(-40.803, 436.784, 40.0)` has two level
+  13–14 Mad Sheep and places the nearest aggressive spawn about 46 yalms away.
+  Lease `6cc61920-ec4c-49ed-b91b-8b73af972c70` defeated both for 320 EXP in
+  53 seconds with zero deaths, attack rejections, exclusions, target-cycle
+  errors, combat teleports, or recoveries. It stopped normally at its
+  two-fight limit.
 
 ## Usage
 
@@ -176,15 +228,32 @@ pnpm mcp:farm-status
 pnpm mcp:farm-stop -- --lease-id <active-lease-id>
 ```
 
+For a level-appropriate camp that admits `decent challenge` checks (including
+high defense only while at least two healthy in-zone companions are verified):
+
+```sh
+pnpm mcp:farm-start -- \
+  --zone-id 108 \
+  --maximum-seconds 360 \
+  --maximum-fights 3 \
+  --scan-radius 30 \
+  --allow-caution true \
+  --confirmation "ARM PRIVATE SERVER FARM SUPERVISOR"
+```
+
+Omit `--allow-caution true` to retain the safe-only default.
+
 `ffxi_farm_start`, `ffxi_farm_status`, and `ffxi_farm_stop` expose the same
 controls directly to MCP clients. Runtime state and JSON event logs are stored
 under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
 ## Next iteration
 
-1. Continue Records of Eminence and Unity progression; the 10,000-gil
-   milestone is complete at 28,815 gil.
-2. Live-validate the bounded line-of-sight nudge if the geometry repeats.
+1. Continue bounded level-15 batches by service-teleporting among
+   metadata-vetted Mad Sheep clusters while collision-aware routing remains
+   unproven.
+2. Revisit the Valkurm Sand Hare camp at level 16; retain exact-check rejection
+   for `even match`, `tough`, and higher.
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.

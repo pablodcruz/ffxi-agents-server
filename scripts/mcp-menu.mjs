@@ -18,13 +18,18 @@ const allowedActions = new Set([
   "left",
   "right",
   "open_context_menu",
+  "open_equipment",
+  "open_items",
+  "open_job_abilities",
+  "open_magic",
   "open_main_menu",
+  "open_weapon_skills",
   "show_interface",
 ]);
 
 if (!allowedActions.has(action)) {
   throw new Error(
-    "Menu input requires --action confirm|cancel|up|down|left|right|open_context_menu|open_main_menu|show_interface.",
+    `Menu input requires --action ${[...allowedActions].join("|")}.`,
   );
 }
 if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {

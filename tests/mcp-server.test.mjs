@@ -31,6 +31,7 @@ async function createMockBridge(token) {
         "move_to_entity",
         "move_to_position",
         "service_teleport",
+        "start_roe_objective",
         "set_activity_feed",
         "set_goal_overlay",
         "gameplay_command",
@@ -170,6 +171,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_service_teleport",
       "ffxi_set_activity_feed",
       "ffxi_set_goal_overlay",
+      "ffxi_start_roe_objective",
       "ffxi_stop_movement",
       "ffxi_target_entity",
     ].sort(),
@@ -282,6 +284,23 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(menuInput.isError, undefined);
   assert.equal(menuInput.structuredContent.operation, "menu_input");
+
+  const equipmentShortcut = await client.callTool({
+    name: "ffxi_menu_input",
+    arguments: { action: "open_equipment" },
+  });
+  assert.equal(equipmentShortcut.isError, undefined);
+  assert.equal(equipmentShortcut.structuredContent.operation, "menu_input");
+
+  const roeObjective = await client.callTool({
+    name: "ffxi_start_roe_objective",
+    arguments: {
+      objective_id: 937,
+      confirmation: "START PRIVATE SERVER ROE OBJECTIVE",
+    },
+  });
+  assert.equal(roeObjective.isError, undefined);
+  assert.equal(roeObjective.structuredContent.operation, "start_roe_objective");
 
   const movement = await client.callTool({
     name: "ffxi_move_to_entity",

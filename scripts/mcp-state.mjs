@@ -61,6 +61,7 @@ try {
     activity_overlay: value.activity_overlay,
     goal_overlay: value.goal_overlay,
     selected_item: value.selected_item,
+    equipment: value.equipment,
     statuses: value.statuses?.filter(
       (status) =>
         status.buff_id > 0 ||

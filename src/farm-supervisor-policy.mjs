@@ -204,6 +204,57 @@ export function canStopAtFightLimit({
     && !hasLiveCombat(observation);
 }
 
+export function canCompleteCooperativeStop({
+  stopRequested,
+  observation,
+  currentTarget,
+  reactiveThreat,
+  idleSamples,
+  minimumIdleSamples = 8,
+}) {
+  return Boolean(stopRequested)
+    && !currentTarget
+    && !reactiveThreat
+    && !hasLiveCombat(observation)
+    && Number(observation?.player?.status) === 0
+    && Number(idleSamples) >= Number(minimumIdleSamples);
+}
+
+export function isFarmCheckApproved({
+  checkVerdict,
+  allowCaution = false,
+  trustedSupportReady = false,
+}) {
+  if (checkVerdict?.verdict === "safe") return true;
+  return Boolean(allowCaution)
+    && checkVerdict?.verdict === "caution"
+    && checkVerdict?.difficulty === "decent_challenge"
+    && !checkVerdict?.high_evasion
+    && (
+      !checkVerdict?.high_defense
+      || Boolean(trustedSupportReady)
+    );
+}
+
+export function readyTrustSupport({
+  party,
+  playerName,
+  zoneId,
+  minimumHpPercent = 80,
+  minimumCount = 2,
+}) {
+  const members = (party || []).filter((member) => (
+    String(member?.name || "") !== String(playerName || "")
+    && String(member?.name || "").trim() !== ""
+    && Number(member?.hp_percent) >= Number(minimumHpPercent)
+    && Number(member?.zone_id) === Number(zoneId)
+  ));
+  return {
+    ready: members.length >= Number(minimumCount),
+    members: members.map((member) => String(member.name)),
+  };
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

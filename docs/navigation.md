@@ -196,6 +196,21 @@ automatically. This replaces the focus-sensitive Parallels key-event path.
 It requires all menus to be closed and a guarded memory read proving that the
 interface is hidden, so it cannot accidentally hide a visible interface.
 
+AgentBridge 0.24.0 also exposes FFXI's native Ctrl shortcuts. These actions
+require all menus to be closed and press and release Ctrl with the exact
+allowlisted letter as a single bounded pulse:
+
+```sh
+pnpm mcp:menu -- --action open_equipment
+pnpm mcp:menu -- --action open_items
+pnpm mcp:menu -- --action open_job_abilities
+pnpm mcp:menu -- --action open_magic
+pnpm mcp:menu -- --action open_weapon_skills
+```
+
+Prefer these shortcuts over traversing the main menu. They reduce cursor-state
+assumptions and make the resulting focused menu name directly observable.
+
 Live menu identity checks mapped `menu    menuwind` to the main menu,
 `menu    region` to Region Info, `menu    handover` to the NPC handoff window,
 and `menu    inventor` to its inventory picker. Opening the empty handoff slot

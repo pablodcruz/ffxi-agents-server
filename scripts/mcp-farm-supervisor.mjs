@@ -7,14 +7,17 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
 import {
+  canCompleteCooperativeStop,
   canStopAtFightLimit,
   classifyReactiveTiming,
   hasLiveCombat,
   isClosedMenuInputRace,
+  isFarmCheckApproved,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
   parseCombatRewards,
   playerDefeated,
+  readyTrustSupport,
   safeCombatPosition,
   selectProactiveTarget,
   shouldAutoCancelMenu,
@@ -43,6 +46,14 @@ function integerArgument(name, fallback, minimum, maximum) {
   return value;
 }
 
+function booleanArgument(name, fallback = false) {
+  const value = String(argument(name, String(fallback)));
+  if (!["true", "false"].includes(value)) {
+    throw new Error(`${name} must be true or false.`);
+  }
+  return value === "true";
+}
+
 function safeLabel(value, name) {
   const label = String(value || "");
   if (!label || label.length > 64 || /["\r\n;|]/.test(label)) {
@@ -63,6 +74,7 @@ const minimumStartHpPercent = integerArgument(
   50,
   100,
 );
+const allowCaution = booleanArgument("--allow-caution");
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
 
 if (!/^[A-Za-z0-9_-]{1,32}$/.test(agentId)) {
@@ -138,6 +150,8 @@ let lastWeaponSkillAt = 0;
 let lastStateWriteAt = 0;
 let missingTargetSamples = 0;
 let stopping = false;
+let cooperativeStopRequestedAt = null;
+let cooperativeStopIdleSamples = 0;
 let recovering = false;
 let leaseOriginPosition = null;
 const cooldowns = new Map();
@@ -179,6 +193,7 @@ async function writeState(force = false) {
       maximum_fights: maximumFights,
       scan_radius: scanRadius,
       minimum_start_hp_percent: minimumStartHpPercent,
+      allow_caution: allowCaution,
       weapon_skill: weaponSkill,
     },
     counters,
@@ -334,11 +349,15 @@ function verifySession(observation) {
   return true;
 }
 
-async function stopRequested() {
-  if (stopping) return true;
+async function latchCooperativeStopRequest() {
+  if (cooperativeStopRequestedAt !== null) return true;
   try {
     await fs.access(stopPath);
     stopReason = "stop_requested";
+    cooperativeStopRequestedAt = Date.now();
+    log("farm_stop_draining", {
+      current_target: currentTarget?.server_id || null,
+    });
     return true;
   } catch (error) {
     if (error?.code === "ENOENT") return false;
@@ -478,6 +497,16 @@ async function engage(target, mode, {
     throw new Error(`${target.name} moved outside the melee envelope.`);
   }
   const attackBaselineEventId = maxObservedEventId(targeted);
+  if (await latchCooperativeStopRequest()) {
+    log("engagement_skipped", {
+      mode,
+      name: target.name,
+      server_id: target.server_id,
+      reason: "cooperative_stop_requested",
+    });
+    await transition("draining_stop");
+    return;
+  }
   await command("/attack <t>");
   currentTarget = {
     server_id: Number(target.server_id),
@@ -671,7 +700,7 @@ async function recover(observation) {
       if (Number(observation?.player?.hp_percent) >= minimumStartHpPercent) {
         break;
       }
-      if (await stopRequested()) break;
+      if (await latchCooperativeStopRequest()) break;
     }
   } finally {
     recovering = false;
@@ -1131,6 +1160,7 @@ try {
     maximum_seconds: maximumSeconds,
     maximum_fights: maximumFights,
     scan_radius: scanRadius,
+    allow_caution: allowCaution,
   });
 
   let observation = await observe();
@@ -1145,7 +1175,7 @@ try {
       stopReason = "time_limit";
       break;
     }
-    if (await stopRequested()) break;
+    await latchCooperativeStopRequest();
 
     observation = await sample();
     if (!verifySession(observation)) {
@@ -1202,6 +1232,34 @@ try {
         handoff: previousTargetId !== null,
         observation,
       });
+      continue;
+    }
+    if (cooperativeStopRequestedAt !== null) {
+      cooperativeStopIdleSamples = (
+        !currentTarget
+        && !reactiveThreat
+        && !hasLiveCombat(observation)
+        && Number(observation?.player?.status) === 0
+      )
+        ? cooperativeStopIdleSamples + 1
+        : 0;
+      if (canCompleteCooperativeStop({
+        stopRequested: true,
+        observation,
+        currentTarget,
+        reactiveThreat,
+        idleSamples: cooperativeStopIdleSamples,
+      })) {
+        log("farm_stop_idle_verified", {
+          idle_samples: cooperativeStopIdleSamples,
+          drain_ms: Date.now() - cooperativeStopRequestedAt,
+        });
+        break;
+      }
+      await transition("draining_stop", {
+        idle_samples: cooperativeStopIdleSamples,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
       continue;
     }
     if (counters.fights_completed >= maximumFights) {
@@ -1301,7 +1359,16 @@ try {
         });
         continue;
       }
-      if (checked.verdict?.verdict !== "safe") {
+      const trustSupport = readyTrustSupport({
+        party: observation.party,
+        playerName: observation.player?.name,
+        zoneId,
+      });
+      if (!isFarmCheckApproved({
+        checkVerdict: checked.verdict,
+        allowCaution,
+        trustedSupportReady: trustSupport.ready,
+      })) {
         cooldowns.set(Number(target.server_id), Date.now() + cooldownMilliseconds);
         counters.excluded_pulls += 1;
         log("target_excluded", {
@@ -1312,6 +1379,15 @@ try {
         });
         await transition("cooldown");
         continue;
+      }
+      if (checked.verdict?.verdict === "caution") {
+        log("target_caution_approved", {
+          name: target.name,
+          server_id: target.server_id,
+          difficulty: checked.verdict.difficulty,
+          high_defense: Boolean(checked.verdict.high_defense),
+          trusted_support: trustSupport.members,
+        });
       }
 
       const checkedEntity = entityById(observation, target.server_id);

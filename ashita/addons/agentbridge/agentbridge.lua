@@ -3,14 +3,15 @@ AgentBridge exposes a narrow, localhost-only JSON-lines interface for an AI
 agent operating on a private LandSandBoat server.
 
 It intentionally does not support arbitrary GM commands, chat, arbitrary
-console commands, scripts, packet injection, or remote network binding. One
-dedicated service-teleport operation can queue a validated LandSandBoat !pos
-command for vendor, registered travel-node, or stuck-recovery travel.
+console commands, scripts, packet injection, or remote network binding. Two
+dedicated private-server operations are exposed: validated LandSandBoat !pos
+service travel and exact Records of Eminence objective activation using the
+normal client packet.
 --]]
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.21.0';
+addon.version = '0.25.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -51,6 +52,7 @@ local allowed_commands =
     ['/attack'] = true,
     ['/attackoff'] = true,
     ['/check'] = true,
+    ['/equip'] = true,
     ['/follow'] = true,
     ['/heal'] = true,
     ['/item'] = true,
@@ -62,6 +64,7 @@ local allowed_commands =
     ['/pet'] = true,
     ['/ra'] = true,
     ['/range'] = true,
+    ['/refa'] = true,
     ['/ta'] = true,
     ['/target'] = true,
     ['/trade'] = true,
@@ -86,10 +89,24 @@ local allowed_menu_actions =
     down = 0xD0,
     left = 0xCB,
     open_context_menu = 0x4E,
+    open_equipment = 0x12,
+    open_items = 0x17,
+    open_job_abilities = 0x24,
+    open_magic = 0x32,
     open_main_menu = 0x4A,
+    open_weapon_skills = 0x11,
     right = 0xCD,
     show_interface = 0x46,
     up = 0xC8,
+};
+
+local modified_menu_actions =
+{
+    open_equipment = true,
+    open_items = true,
+    open_job_abilities = true,
+    open_magic = true,
+    open_weapon_skills = true,
 };
 
 local allowed_teleport_reasons =
@@ -622,8 +639,62 @@ local function character_state(params)
             slot = selected_item_index,
             name = selected_item_name:sub(1, 128),
         },
+        equipment = T{},
         statuses = T{},
     };
+
+    local equipment_slot_names =
+    {
+        [0] = 'main',
+        [1] = 'sub',
+        [2] = 'range',
+        [3] = 'ammo',
+        [4] = 'head',
+        [5] = 'body',
+        [6] = 'hands',
+        [7] = 'legs',
+        [8] = 'feet',
+        [9] = 'neck',
+        [10] = 'waist',
+        [11] = 'ear1',
+        [12] = 'ear2',
+        [13] = 'ring1',
+        [14] = 'ring2',
+        [15] = 'back',
+    };
+    for equipment_slot = 0, 15 do
+        local equipment_entry = inventory:GetEquippedItem(equipment_slot);
+        local packed_index = equipment_entry ~= nil and tonumber(equipment_entry.Index) or 0;
+        local equipped =
+        {
+            slot_id = equipment_slot,
+            slot_name = equipment_slot_names[equipment_slot],
+            equipped = packed_index > 0,
+            container_id = 0,
+            container_slot = 0,
+            item_id = 0,
+            name = '',
+        };
+        if (packed_index > 0) then
+            equipped.container_id = bit.band(packed_index, 0xFF00) / 0x0100;
+            equipped.container_slot = packed_index % 0x0100;
+            local item = inventory:GetContainerItem(
+                equipped.container_id,
+                equipped.container_slot
+            );
+            if (item ~= nil and tonumber(item.Id) ~= nil and tonumber(item.Id) > 0) then
+                equipped.item_id = tonumber(item.Id);
+                local ok, resource_item = pcall(function ()
+                    return resources:GetItemById(equipped.item_id);
+                end);
+                equipped.name = resource_entry_name(
+                    ok and resource_item or nil,
+                    ('Unknown item %d'):fmt(equipped.item_id)
+                );
+            end
+        end
+        result.equipment:append(equipped);
+    end
 
     -- Buff ids are the current effects. Status-icon ids and timers are the
     -- client timer-display slots. The SDK does not document the status timer
@@ -984,12 +1055,14 @@ local function start_menu_pulse(params)
 
     local menu_open = target:GetIsMenuOpen() ~= 0;
     local requires_closed_menu =
-        action == 'open_main_menu' or action == 'show_interface';
+        action == 'open_main_menu' or
+        action == 'show_interface' or
+        modified_menu_actions[action] == true;
     if (requires_closed_menu and menu_open) then
-        error('Opening the main menu or showing the interface requires all menus to be closed.');
+        error('Opening a shortcut menu or showing the interface requires all menus to be closed.');
     end
     if (not requires_closed_menu and not menu_open) then
-        error('Confirm, cancel, up, down, left, and right require an open menu or dialogue.');
+        error('Confirm, cancel, directional input, and the context menu require an open menu or dialogue.');
     end
     local interface_visibility = interface_visibility_snapshot();
     if (action == 'show_interface') then
@@ -1005,6 +1078,7 @@ local function start_menu_pulse(params)
     bridge.input_pulse =
     {
         key = key,
+        modifier_keys = modified_menu_actions[action] and { 0x1D } or nil,
         action = 'menu ' .. action,
         down_frames = 2,
         deadline = now + 0.08,
@@ -1017,6 +1091,7 @@ local function start_menu_pulse(params)
         queued = true,
         action = action,
         key = key,
+        modifier_keys = bridge.input_pulse.modifier_keys,
         input_source = 'agentbridge_directinput',
         menu_open = menu_open,
         interface_visibility = interface_visibility,
@@ -1360,6 +1435,53 @@ local function validate_command(command)
     return command;
 end
 
+local function start_roe_objective(params)
+    require_control_enabled();
+    if (params.confirmation ~= 'START PRIVATE SERVER ROE OBJECTIVE') then
+        error('Starting a RoE objective requires the exact private-server confirmation phrase.');
+    end
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Cannot start a RoE objective until a character is logged in.');
+    end
+    if (player:GetIsZoning() ~= 0) then
+        error('Cannot start a RoE objective while zoning.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Cannot start a RoE objective while an in-game menu or dialogue is open.');
+    end
+
+    local objective_id = tonumber(params.objective_id);
+    if (
+        objective_id == nil or objective_id ~= math.floor(objective_id) or
+        objective_id < 1 or objective_id > 4095
+    ) then
+        error('RoE objective_id must be an integer from 1 through 4095.');
+    end
+
+    stop_movement('roe_objective');
+    stop_heading_hold('roe_objective');
+    local packet =
+    {
+        0x0C, 0x05, 0x00, 0x00,
+        objective_id % 0x0100,
+        math.floor(objective_id / 0x0100),
+        0x00, 0x00,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x10C, packet);
+    add_event(-1, ('Agent requested RoE objective %d.'):fmt(objective_id));
+    return
+    {
+        queued = true,
+        objective_id = objective_id,
+        packet_id = 0x10C,
+        normal_client_packet = true,
+    };
+end
+
 local function dispatch(request)
     if (type(request) ~= 'table') then
         error('Request must be a JSON object.');
@@ -1507,6 +1629,8 @@ local function dispatch(request)
         return start_position_movement(params);
     elseif (request.operation == 'service_teleport') then
         return service_teleport(params);
+    elseif (request.operation == 'start_roe_objective') then
+        return start_roe_objective(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);
@@ -1664,19 +1788,35 @@ ashita.events.register('key_state', 'key_state_cb', function (event)
         stop_input_pulse('control_disabled_or_logged_out');
         return;
     end
-    if (event.data_raw == nil or event.size <= pulse.key) then
+    local pulse_keys = { pulse.key };
+    if (pulse.modifier_keys ~= nil) then
+        for _, modifier_key in ipairs(pulse.modifier_keys) do
+            pulse_keys[#pulse_keys + 1] = modifier_key;
+        end
+    end
+    if (event.data_raw == nil) then
         stop_input_pulse('keyboard_state_unavailable');
         return;
+    end
+    for _, pulse_key in ipairs(pulse_keys) do
+        if (event.size <= pulse_key) then
+            stop_input_pulse('keyboard_state_unavailable');
+            return;
+        end
     end
 
     local keys = ffi.cast('uint8_t*', event.data_raw);
     if (pulse.down_frames > 0 or socket.gettime() < pulse.deadline) then
-        keys[pulse.key] = 0x80;
+        for _, pulse_key in ipairs(pulse_keys) do
+            keys[pulse_key] = 0x80;
+        end
         pulse.down_frames = math.max(0, pulse.down_frames - 1);
         return;
     end
 
-    keys[pulse.key] = 0;
+    for _, pulse_key in ipairs(pulse_keys) do
+        keys[pulse_key] = 0;
+    end
     pulse.release_frames = pulse.release_frames - 1;
     if (pulse.release_frames <= 0) then
         add_event(-1, ('Agent %s pulse completed.'):fmt(pulse.action));

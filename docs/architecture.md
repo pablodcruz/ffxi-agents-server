@@ -71,7 +71,7 @@ output, and never sends `/say`, `/tell`, linkshell, or any other server chat.
 
 ### Local current-goal overlay
 
-AgentBridge 0.21.0 keeps the original numeric gil fields for compatibility but
+AgentBridge 0.25.0 keeps the original numeric gil fields for compatibility but
 also accepts one bounded single-line goal title and progress label. Both labels
 must be supplied together, are length-limited, cannot contain line breaks, stay
 inside the local font overlay, and are never sent to server chat:
@@ -135,7 +135,9 @@ assets.
 - Caps request size and observation result size.
 - Does not expose raw packet injection, Lua evaluation, arbitrary files, chat,
   console commands, scripts, or arbitrary GM commands. The guarded service
-  teleport is the sole dedicated GM-backed operation.
+  teleport is the sole dedicated GM-backed operation. One separate exact RoE
+  helper emits only FFXI's normal `0x10C` objective-start packet after explicit
+  private-server confirmation; LandSandBoat retains normal validation.
 
 If Codex is not on the Windows client host, the preferred order is:
 

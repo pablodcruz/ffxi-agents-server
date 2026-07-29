@@ -8,16 +8,23 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectDir = path.resolve(import.meta.dirname, "..");
 const radiusIndex = process.argv.indexOf("--radius");
 const maxEntitiesIndex = process.argv.indexOf("--max-entities");
+const eventLimitIndex = process.argv.indexOf("--event-limit");
 const radius = radiusIndex >= 0 ? Number(process.argv[radiusIndex + 1]) : 40;
 const maxEntities = maxEntitiesIndex >= 0
   ? Number.parseInt(process.argv[maxEntitiesIndex + 1], 10)
   : 24;
+const eventLimit = eventLimitIndex >= 0
+  ? Number.parseInt(process.argv[eventLimitIndex + 1], 10)
+  : 10;
 
 if (!Number.isFinite(radius) || radius < 1 || radius > 50) {
   throw new Error("--radius must be a number from 1 through 50.");
 }
 if (!Number.isInteger(maxEntities) || maxEntities < 1 || maxEntities > 64) {
   throw new Error("--max-entities must be an integer from 1 through 64.");
+}
+if (!Number.isInteger(eventLimit) || eventLimit < 0 || eventLimit > 50) {
+  throw new Error("--event-limit must be an integer from 0 through 50.");
 }
 
 const transport = new StdioClientTransport({
@@ -37,7 +44,7 @@ try {
   await client.connect(transport);
   const observation = await client.callTool({
     name: "ffxi_observe",
-    arguments: { radius, max_entities: maxEntities, event_limit: 10 },
+    arguments: { radius, max_entities: maxEntities, event_limit: eventLimit },
   });
   const value = valueOf(observation);
 
@@ -46,6 +53,7 @@ try {
     agent_id: value.agent_id,
     login_status: value.login_status,
     player: value.player,
+    party: value.party,
     target: value.target,
     target_slot: value.target_slot,
     subtarget_active: value.subtarget_active,

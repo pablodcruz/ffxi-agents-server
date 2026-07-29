@@ -48,6 +48,33 @@ export async function farmStatus({ projectDir, agentId = "primary" }) {
   return publicState(await readJson(paths.state));
 }
 
+export function farmSupervisorArgs({
+  projectDir,
+  agentId,
+  leaseId,
+  zoneId,
+  maximumSeconds,
+  maximumFights,
+  scanRadius,
+  minimumStartHpPercent,
+  allowCaution,
+  weaponSkill,
+}) {
+  return [
+    path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
+    "--agent-id", agentId,
+    "--lease-id", leaseId,
+    "--zone-id", String(zoneId),
+    "--maximum-seconds", String(maximumSeconds),
+    "--maximum-fights", String(maximumFights),
+    "--scan-radius", String(scanRadius),
+    "--minimum-start-hp-percent", String(minimumStartHpPercent),
+    "--allow-caution", String(Boolean(allowCaution)),
+    "--weapon-skill", weaponSkill,
+    "--confirmation", FARM_CONFIRMATION,
+  ];
+}
+
 export async function startFarm({
   projectDir,
   agentId = "primary",
@@ -56,6 +83,7 @@ export async function startFarm({
   maximumFights = 30,
   scanRadius = 50,
   minimumStartHpPercent = 90,
+  allowCaution = false,
   weaponSkill = "Combo",
   confirmation,
 }) {
@@ -90,6 +118,7 @@ export async function startFarm({
       maximum_fights: maximumFights,
       scan_radius: scanRadius,
       minimum_start_hp_percent: minimumStartHpPercent,
+      allow_caution: Boolean(allowCaution),
       weapon_skill: weaponSkill,
     },
     counters: {
@@ -114,18 +143,18 @@ export async function startFarm({
     mode: 0o600,
   });
 
-  const args = [
-    path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
-    "--agent-id", agentId,
-    "--lease-id", leaseId,
-    "--zone-id", String(zoneId),
-    "--maximum-seconds", String(maximumSeconds),
-    "--maximum-fights", String(maximumFights),
-    "--scan-radius", String(scanRadius),
-    "--minimum-start-hp-percent", String(minimumStartHpPercent),
-    "--weapon-skill", weaponSkill,
-    "--confirmation", FARM_CONFIRMATION,
-  ];
+  const args = farmSupervisorArgs({
+    projectDir,
+    agentId,
+    leaseId,
+    zoneId,
+    maximumSeconds,
+    maximumFights,
+    scanRadius,
+    minimumStartHpPercent,
+    allowCaution,
+    weaponSkill,
+  });
   const child = spawn(process.execPath, args, {
     cwd: projectDir,
     env: process.env,

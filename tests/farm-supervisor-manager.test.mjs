@@ -3,7 +3,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { farmStatus } from "../src/farm-supervisor-manager.mjs";
+import {
+  FARM_CONFIRMATION,
+  farmStatus,
+  farmSupervisorArgs,
+} from "../src/farm-supervisor-manager.mjs";
 
 test("reports an idle farm supervisor without runtime state", async (context) => {
   const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "ffxi-farm-"));
@@ -41,4 +45,32 @@ test("reports fresh and stale leases without exposing the process id", async (co
   const stale = await farmStatus({ projectDir });
   assert.equal(stale.active, false);
   assert.ok(stale.heartbeat_age_ms >= 5000);
+});
+
+test("passes the explicit caution opt-in to the detached supervisor process", () => {
+  const args = farmSupervisorArgs({
+    projectDir: "/private/test-project",
+    agentId: "primary",
+    leaseId: "00000000-0000-4000-8000-000000000001",
+    zoneId: 108,
+    maximumSeconds: 360,
+    maximumFights: 3,
+    scanRadius: 30,
+    minimumStartHpPercent: 90,
+    allowCaution: true,
+    weaponSkill: "Combo",
+  });
+  assert.deepEqual(args, [
+    "/private/test-project/scripts/mcp-farm-supervisor.mjs",
+    "--agent-id", "primary",
+    "--lease-id", "00000000-0000-4000-8000-000000000001",
+    "--zone-id", "108",
+    "--maximum-seconds", "360",
+    "--maximum-fights", "3",
+    "--scan-radius", "30",
+    "--minimum-start-hp-percent", "90",
+    "--allow-caution", "true",
+    "--weapon-skill", "Combo",
+    "--confirmation", FARM_CONFIRMATION,
+  ]);
 });
