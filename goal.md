@@ -11,7 +11,7 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 17, 3,869/4,000 EXP.
+- Pablo: Hume male, Monk 20, 389/4,600 EXP.
 - Currency: 28,815 gil; 2,285 Sparks; 1,000 Unity accolades.
 - Equipment verified through AgentBridge: Brass Baghnakhs, Headgear, Doublet,
   Gloves, Brais, Gaiters, White Belt, and Bastokan Ring.
@@ -54,8 +54,9 @@ resolved failures belong in `docs/`.
   collision-aware navigation meets its reliability target.
 - Farming exclusions: worms, Stone Eaters, Huge Hornets, Vultures, Treasure
   Caskets, and the western South Gustaberg Quadav pocket.
-- Inventory remains auto-sorted. Store future Beastmen's Seal batches with
-  Shami in Port Jeuno; Pablo currently has 14 stored and 5 carried.
+- Inventory remains auto-sorted at 23/30 slots. Store future Beastmen's Seal
+  batches with Shami in Port Jeuno; Pablo currently has 14 stored and 13
+  carried.
 
 ## Current Goal 1 — finish the Trust/Unity progression checkpoint
 
@@ -75,7 +76,7 @@ already learned and usable.
 
 ## Current Goal 2 — reach Monk level 20 through local automation
 
-Status: **active; 15 → 20**
+Status: **completed; 15 → 20**
 
 1. Keep Valaineral, Joachim, and Mihli Aliapoh as the automated party until the
    pinned server's missing Apururu (UC) spell grant is resolved.
@@ -97,11 +98,14 @@ targets checked `decent challenge` with Valaineral, Joachim, and Mihli Aliapoh
 present. There were zero deaths, attack rejections, target-cycle errors,
 combat teleports, or recovery actions during combat.
 
-Current level-20 lease `c043d9f3-b8f6-4899-aa82-506ac97d6144` is bounded to
-200 fights or 60 minutes. It owns exact checks, approach, combat, Combo,
-recovery, camp rotation, Trust repair, overlay updates, and the level-20 stop.
-MCP supervision remains milestone- and exception-based rather than
-fight-by-fight.
+Final lease `14cb9905-796a-4a99-971e-fc053146539d` completed the milestone in
+17 fights and 1,003 seconds. It earned 7,750 EXP, rotated among 16 vetted
+camps, fired Combo seven times, and safely drained one aggroed Brutal Sheep
+through a reactive handoff. A 5,000-EXP reward after fight 15 advanced Pablo
+to level 19 at the one-point cap; the reactive Sheep then advanced him to
+level 20. There were zero deaths, target-cycle errors, combat teleports, or
+recovery actions during combat. The supervisor refreshed the in-game overlay
+and stopped itself with `target_level`.
 
 Safety rules:
 
@@ -112,13 +116,17 @@ Safety rules:
   the tested policy.
 - Never proactively select excluded families or caskets.
 
-Exit criteria:
+Milestone exit criteria:
 
-- Pablo reaches Monk level 20 through normal combat rewards.
-- 30 consecutive approved fights without a preventable aggro death.
-- Three controlled multi-enemy wins with correct target handoff.
-- Aggro-to-attack latency consistently below one second.
-- Automatic weapon-skill use and safe post-fight recovery observed live.
+- Pablo reached Monk level 20 through normal combat rewards.
+- Authoritative AgentBridge state reports Monk 20 at 389/4,600 EXP, 100% HP,
+  idle, with all three intended Trusts healthy.
+- The supervisor stopped on `target_level` with zero deaths or unsafe-action
+  counters.
+
+Further combat hardening remains queued: accumulate another 30-fight clean
+sample, validate more multi-enemy handoffs, and measure immediate aggro
+response separately from intentional add-drain timing.
 
 ## Current Goal 3 — improve deterministic menus and travel
 

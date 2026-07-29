@@ -20,6 +20,7 @@ import {
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
+  shouldWaitForLevelProgress,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
 
@@ -254,11 +255,15 @@ test("admits at-level transition metadata only with an explicit offset", () => {
   })?.server_id, 701);
 });
 
-test("opts Valkurm level 17+ relocation into at-level metadata only", () => {
+test("opts only the Valkurm level-17 transition band into at-level metadata", () => {
   assert.equal(relocationMaximumLevelOffset({
     zoneId: 103,
     playerLevel: 17,
   }), 0);
+  assert.equal(relocationMaximumLevelOffset({
+    zoneId: 103,
+    playerLevel: 18,
+  }), -1);
   assert.equal(relocationMaximumLevelOffset({
     zoneId: 103,
     playerLevel: 16,
@@ -267,6 +272,24 @@ test("opts Valkurm level 17+ relocation into at-level metadata only", () => {
     zoneId: 108,
     playerLevel: 17,
   }), -1);
+});
+
+test("holds proactive scouting while a defeated target's rewards settle", () => {
+  assert.equal(shouldWaitForLevelProgress({
+    dirty: true,
+    now: 1_000,
+    nextAttemptAt: 3_000,
+  }), true);
+  assert.equal(shouldWaitForLevelProgress({
+    dirty: true,
+    now: 3_000,
+    nextAttemptAt: 3_000,
+  }), false);
+  assert.equal(shouldWaitForLevelProgress({
+    dirty: false,
+    now: 1_000,
+    nextAttemptAt: 3_000,
+  }), false);
 });
 
 test("refuses combat positioning whenever a live fight exists", () => {

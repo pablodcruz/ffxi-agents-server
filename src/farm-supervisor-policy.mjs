@@ -58,7 +58,15 @@ export function selectProactiveTarget({
 }
 
 export function relocationMaximumLevelOffset({ zoneId, playerLevel }) {
-  return Number(zoneId) === 103 && Number(playerLevel) >= 17 ? 0 : -1;
+  return Number(zoneId) === 103 && Number(playerLevel) === 17 ? 0 : -1;
+}
+
+export function shouldWaitForLevelProgress({
+  dirty,
+  now,
+  nextAttemptAt,
+}) {
+  return Boolean(dirty) && Number(now) < Number(nextAttemptAt);
 }
 
 export function selectRelocationCamp({

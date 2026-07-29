@@ -25,6 +25,7 @@ import {
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
+  shouldWaitForLevelProgress,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
 import {
@@ -101,6 +102,7 @@ const threatDistance = 20;
 const cooldownMilliseconds = 30_000;
 const relocationIdleMilliseconds = 5_000;
 const relocationCooldownMilliseconds = 300_000;
+const rewardSettlementMilliseconds = 2_000;
 const desiredTrusts = Object.freeze([
   Object.freeze({ observed_name: "Valaineral", spell_name: "Valaineral" }),
   Object.freeze({ observed_name: "Joachim", spell_name: "Joachim" }),
@@ -1401,6 +1403,10 @@ async function handleFight(observation) {
       return;
     }
     levelGoalOverlayDirty = targetLevel > 0;
+    nextLevelGoalOverlayAttemptAt = Math.max(
+      nextLevelGoalOverlayAttemptAt,
+      Date.now() + rewardSettlementMilliseconds,
+    );
     await transition("cooldown");
     await new Promise((resolve) => setTimeout(resolve, 750));
     return;
@@ -1522,6 +1528,14 @@ try {
         handoff: previousTargetId !== null,
         observation,
       });
+      continue;
+    }
+    if (shouldWaitForLevelProgress({
+      dirty: levelGoalOverlayDirty,
+      now: Date.now(),
+      nextAttemptAt: nextLevelGoalOverlayAttemptAt,
+    })) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
       continue;
     }
     if (

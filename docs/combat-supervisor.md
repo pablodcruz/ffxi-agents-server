@@ -300,11 +300,26 @@ The level-17 transition and Valkurm rotation are live-validated:
   during combat.
 - Reward accounting snapshots the event baseline before Trust summons so
   historical rewards from a prior lease cannot inflate the new lease.
+- Above level 17, same-zone rotation returns to below-level metadata instead
+  of spending time checking at-level candidates. Lease
+  `14cb9905-796a-4a99-971e-fc053146539d` then completed 17 fights in 1,003
+  seconds for 7,750 EXP, 16 guarded camp relocations, and seven Combos. It
+  safely drained one reactive Brutal Sheep and recorded zero deaths,
+  target-cycle errors, combat teleports, or recovery actions during combat.
+- Fight 15 triggered a 5,000-EXP reward. FFXI advanced Pablo to level 19 at
+  4,399/4,400; the reactive Sheep's delayed 240-EXP reward then advanced him
+  to level 20. The supervisor originally sampled progress just before that
+  delayed reward and began one unnecessary final Hare. It now holds proactive
+  scouting for two seconds after the combat chain drains so reward and
+  level-up state can settle before the next target decision.
+- The final authoritative state was Monk 20 at 389/4,600 EXP, 100% HP and
+  idle, with Joachim, Valaineral, and Mihli Aliapoh all healthy. The local goal
+  overlay displayed `LEVEL 20 REACHED | AUTOMATED LEVELING COMPLETE`.
 
 ## Next iteration
 
-1. Run the validated Valkurm profile until Monk 20 or a bounded stop condition.
-2. Re-evaluate Sand Hare yield and the next metadata band after each level.
+1. Buy and equip the next level-appropriate Sparks upgrades.
+2. Re-evaluate the next metadata band before resuming automated leveling.
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.
