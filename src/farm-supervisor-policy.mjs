@@ -57,6 +57,90 @@ export function selectProactiveTarget({
   )) || null;
 }
 
+export function selectRelocationCamp({
+  metadata,
+  playerLevel,
+  zoneId,
+  currentPosition,
+  excludedServerIds = new Set(),
+  allowedNames = ["Mad Sheep", "Sand Hare"],
+  clusterRadius = 30,
+  minimumAggroDistance = 40,
+  minimumTravelDistance = 20,
+  maximumElevationDifference = 4,
+}) {
+  if (!currentPosition) return null;
+  const normalizedNames = new Set(
+    allowedNames.map((name) => String(name).toLowerCase()),
+  );
+  const finiteSpawn = (mob) => (
+    mob?.spawn
+    && ["x", "y", "z"].every((axis) => Number.isFinite(Number(mob.spawn[axis])))
+  );
+  const distance = (left, right) => Math.hypot(
+    Number(left.x) - Number(right.x),
+    Number(left.y) - Number(right.y),
+  );
+  const candidates = (metadata || []).filter((mob) => (
+    Number(mob?.zone_id) === Number(zoneId)
+    && normalizedNames.has(String(mob?.name || "").toLowerCase())
+    && !mob?.aggro
+    && finiteSpawn(mob)
+    && Number(mob.maximum_level) <= Number(playerLevel) - 1
+    && Number(mob.maximum_level) >= Number(playerLevel) - 3
+    && !excludedServerIds.has(Number(mob.server_id))
+    && !excludedCombatPocket({
+      zoneId,
+      position: mob.spawn,
+    })
+    && distance(currentPosition, mob.spawn) >= Number(minimumTravelDistance)
+  ));
+  const aggressive = (metadata || []).filter((mob) => (
+    Number(mob?.zone_id) === Number(zoneId)
+    && mob?.aggro
+    && finiteSpawn(mob)
+  ));
+
+  return candidates.map((mob) => {
+    const cluster = candidates.filter((peer) => (
+      distance(mob.spawn, peer.spawn) <= Number(clusterRadius)
+      && Math.abs(Number(mob.spawn.z) - Number(peer.spawn.z))
+        <= Number(maximumElevationDifference)
+    ));
+    const nearestAggroDistance = aggressive
+      .filter((threat) => (
+        Math.abs(Number(mob.spawn.z) - Number(threat.spawn.z)) <= 8
+      ))
+      .reduce(
+        (nearest, threat) => Math.min(
+          nearest,
+          distance(mob.spawn, threat.spawn),
+        ),
+        Number.POSITIVE_INFINITY,
+      );
+    return {
+      server_id: Number(mob.server_id),
+      name: mob.name,
+      position: {
+        x: Number(mob.spawn.x),
+        y: Number(mob.spawn.y),
+        z: Number(mob.spawn.z),
+      },
+      cluster_size: cluster.length,
+      cluster_server_ids: cluster.map((peer) => Number(peer.server_id)),
+      nearest_aggro_distance: nearestAggroDistance,
+      travel_distance: distance(currentPosition, mob.spawn),
+    };
+  }).filter((camp) => (
+    camp.nearest_aggro_distance >= Number(minimumAggroDistance)
+  )).sort((left, right) => (
+    right.cluster_size - left.cluster_size
+    || right.nearest_aggro_distance - left.nearest_aggro_distance
+    || left.travel_distance - right.travel_distance
+    || left.server_id - right.server_id
+  ))[0] || null;
+}
+
 export function safeCombatPosition({
   observation,
   target,

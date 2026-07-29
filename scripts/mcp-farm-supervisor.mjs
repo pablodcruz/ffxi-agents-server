@@ -20,6 +20,7 @@ import {
   readyTrustSupport,
   safeCombatPosition,
   selectProactiveTarget,
+  selectRelocationCamp,
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
@@ -75,6 +76,8 @@ const minimumStartHpPercent = integerArgument(
   100,
 );
 const allowCaution = booleanArgument("--allow-caution");
+const autoRelocate = booleanArgument("--auto-relocate");
+const targetLevel = integerArgument("--target-level", 0, 0, 99);
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
 
 if (!/^[A-Za-z0-9_-]{1,32}$/.test(agentId)) {
@@ -99,6 +102,8 @@ const metadataPath = path.join(
 const pollMilliseconds = 200;
 const threatDistance = 20;
 const cooldownMilliseconds = 30_000;
+const relocationIdleMilliseconds = 5_000;
+const relocationCooldownMilliseconds = 300_000;
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(projectDir, "src", "mcp-server.mjs")],
@@ -127,6 +132,7 @@ const counters = {
   target_cycle_errors: 0,
   teleport_while_engaged: 0,
   recovery_while_engaged: 0,
+  camp_relocations: 0,
 };
 const metrics = {
   aggro_response_samples: 0,
@@ -154,7 +160,9 @@ let cooperativeStopRequestedAt = null;
 let cooperativeStopIdleSamples = 0;
 let recovering = false;
 let leaseOriginPosition = null;
+let noTargetSince = null;
 const cooldowns = new Map();
+const relocationCooldowns = new Map();
 const threatFirstSeen = new Map();
 
 function log(event, details = {}) {
@@ -194,6 +202,8 @@ async function writeState(force = false) {
       scan_radius: scanRadius,
       minimum_start_hp_percent: minimumStartHpPercent,
       allow_caution: allowCaution,
+      auto_relocate: autoRelocate,
+      target_level: targetLevel,
       weapon_skill: weaponSkill,
     },
     counters,
@@ -250,6 +260,44 @@ async function characterState() {
     include_recasts: false,
     max_items: 1,
   });
+}
+
+async function updateLevelGoalOverlay() {
+  if (targetLevel <= 0) return null;
+  const state = await characterState();
+  const player = state?.player;
+  const level = Number(player?.main_job_level);
+  const currentExp = Number(player?.exp_current);
+  const neededExp = Number(player?.exp_needed);
+  if (
+    state?.login_status !== 2
+    || !Number.isInteger(level)
+    || !Number.isFinite(currentExp)
+    || !Number.isFinite(neededExp)
+  ) {
+    return null;
+  }
+  const existing = state?.goal_overlay || {};
+  const gil = Number(existing.current_gil);
+  const targetGil = Number(existing.target_gil);
+  await call("ffxi_set_goal_overlay", {
+    enabled: true,
+    current_gil: Number.isSafeInteger(gil) && gil >= 0 ? gil : 0,
+    target_gil: Number.isSafeInteger(targetGil) && targetGil > 0
+      ? targetGil
+      : 10_000,
+    title: `CURRENT GOAL: MONK LEVEL ${targetLevel}`,
+    progress_label: level >= targetLevel
+      ? `LEVEL ${level} REACHED | AUTOMATED LEVELING COMPLETE`
+      : `LEVEL ${level} | ${currentExp}/${neededExp} EXP | LOCAL AUTOMATION ACTIVE`,
+  });
+  log("level_goal_overlay_updated", {
+    level,
+    exp_current: currentExp,
+    exp_needed: neededExp,
+    target_level: targetLevel,
+  });
+  return { level, reached: level >= targetLevel };
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -813,6 +861,62 @@ async function returnToLeaseOrigin(observation) {
   return after;
 }
 
+function excludedRelocationServerIds() {
+  const now = Date.now();
+  for (const [serverId, expiresAt] of relocationCooldowns) {
+    if (expiresAt <= now) relocationCooldowns.delete(serverId);
+  }
+  return new Set(relocationCooldowns.keys());
+}
+
+async function relocateToCamp(camp, observation) {
+  if (!camp || hasLiveCombat(observation)) return observation;
+  const destination = safeCombatPosition({
+    observation,
+    target: { position: camp.position },
+    offset: 4,
+  });
+  if (!destination) return observation;
+
+  await transition("relocating_camp", {
+    name: camp.name,
+    server_id: camp.server_id,
+    cluster_size: camp.cluster_size,
+    travel_distance: camp.travel_distance,
+    nearest_aggro_distance: camp.nearest_aggro_distance,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("camp_relocation_blocked", { reason: "live_combat" });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    x: destination.x,
+    y: destination.y,
+    z: destination.z,
+    zone_id: zoneId,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+  for (const serverId of camp.cluster_server_ids) {
+    relocationCooldowns.set(
+      Number(serverId),
+      Date.now() + relocationCooldownMilliseconds,
+    );
+  }
+  counters.camp_relocations += 1;
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const after = await sample();
+  log("camp_relocated", {
+    destination,
+    cluster_size: camp.cluster_size,
+    cluster_server_ids: camp.cluster_server_ids,
+    live_combat_after: hasLiveCombat(after),
+  });
+  return after;
+}
+
 async function waitForIdleStance(observation) {
   for (let attempt = 0; attempt < 15; attempt += 1) {
     const threat = selectReactiveThreat(observation, {
@@ -1115,6 +1219,20 @@ async function handleFight(observation) {
       });
       return;
     }
+    const levelGoal = await updateLevelGoalOverlay().catch((error) => {
+      log("level_goal_overlay_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+    if (levelGoal?.reached) {
+      stopReason = "target_level";
+      stopping = true;
+      log("target_level_reached", {
+        level: levelGoal.level,
+        target_level: targetLevel,
+      });
+    }
     await transition("cooldown");
     await new Promise((resolve) => setTimeout(resolve, 750));
     return;
@@ -1161,6 +1279,8 @@ try {
     maximum_fights: maximumFights,
     scan_radius: scanRadius,
     allow_caution: allowCaution,
+    auto_relocate: autoRelocate,
+    target_level: targetLevel,
   });
 
   let observation = await observe();
@@ -1322,9 +1442,29 @@ try {
       excludedServerIds: excludedServerIds(),
     });
     if (!target) {
+      noTargetSince ??= Date.now();
+      if (
+        autoRelocate
+        && Date.now() - noTargetSince >= relocationIdleMilliseconds
+      ) {
+        const camp = selectRelocationCamp({
+          metadata,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          zoneId,
+          currentPosition: observation?.player?.position,
+          excludedServerIds: excludedRelocationServerIds(),
+          clusterRadius: scanRadius,
+        });
+        if (camp) {
+          observation = await relocateToCamp(camp, observation);
+          noTargetSince = null;
+          continue;
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 500));
       continue;
     }
+    noTargetSince = null;
 
     try {
       observation = await positionNear(target, observation);
@@ -1420,6 +1560,11 @@ try {
   await writeState(true).catch(() => {});
   if (recovering) await command("/heal").catch(() => {});
   await command("/attackoff").catch(() => {});
+  await updateLevelGoalOverlay().catch((error) => {
+    log("level_goal_overlay_error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
   await client.callTool({
     name: "ffxi_emergency_stop",
     arguments: { agent_id: agentId },

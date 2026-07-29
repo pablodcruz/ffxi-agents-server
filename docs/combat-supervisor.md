@@ -201,6 +201,21 @@ Live failures also changed the policy:
   53 seconds with zero deaths, attack rejections, exclusions, target-cycle
   errors, combat teleports, or recoveries. It stopped normally at its
   two-fight limit.
+- The local supervisor now supports optional same-zone camp rotation. After
+  five seconds without an approved nearby target, it may select an exact
+  allowlisted family whose metadata level is one to three levels below Pablo,
+  whose spawn cluster is at least 20 yalms away, and whose nearest
+  similar-elevation aggressive spawn is at least 40 yalms away. Relocation is
+  refused during any live combat and uses the existing guarded same-zone
+  private-server service teleport. Every selected cluster receives a
+  five-minute cooldown.
+- Lease `21e6d893-2482-403d-a3e3-320d5b42be5e` live-validated automatic camp
+  rotation at Monk 15. It defeated five Mad Sheep for 780 EXP in 214 seconds,
+  rotated among three vetted clusters, fired Combo once, and stopped at its
+  fight limit. There were no deaths, recoveries, combat teleports, or recovery
+  actions during combat. One moving sheep produced `Unable to see Mad Sheep`;
+  the bounded line-of-sight attempt failed to retain range, so that exact
+  target was cooled down and the supervisor continued at another camp.
 
 ## Usage
 
@@ -238,10 +253,18 @@ pnpm mcp:farm-start -- \
   --maximum-fights 3 \
   --scan-radius 30 \
   --allow-caution true \
+  --auto-relocate true \
+  --target-level 20 \
   --confirmation "ARM PRIVATE SERVER FARM SUPERVISOR"
 ```
 
-Omit `--allow-caution true` to retain the safe-only default.
+Omit `--allow-caution true` to retain the safe-only default. Omit
+`--auto-relocate true` to keep the lease at its starting camp. Automatic
+relocation is currently same-zone only and never weakens the authoritative
+`/check` admission policy. `--target-level 20` makes the local supervisor
+refresh the in-game goal overlay after each completed fight and when the lease
+ends, avoiding a model/MCP round trip just to update EXP progress. It also
+stops the lease once level 20 is observed and no reactive threat remains.
 
 `ffxi_farm_start`, `ffxi_farm_status`, and `ffxi_farm_stop` expose the same
 controls directly to MCP clients. Runtime state and JSON event logs are stored
@@ -249,9 +272,8 @@ under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
 ## Next iteration
 
-1. Continue bounded level-15 batches by service-teleporting among
-   metadata-vetted Mad Sheep clusters while collision-aware routing remains
-   unproven.
+1. Extend the validated same-zone camp rotation through Monk 16 and 17 while
+   collision-aware routing remains unproven.
 2. Revisit the Valkurm Sand Hare camp at level 16; retain exact-check rejection
    for `even match`, `tough`, and higher.
 3. Diagnose Vulture registration separately.

@@ -15,6 +15,7 @@ import {
   readyTrustSupport,
   safeCombatPosition,
   selectProactiveTarget,
+  selectRelocationCamp,
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
@@ -81,6 +82,104 @@ test("selects an approved proactive target and preserves family exclusions", () 
     playerLevel: 10,
   });
   assert.equal(selected?.server_id, 101);
+});
+
+test("selects a dense level-appropriate relocation camp away from aggro", () => {
+  const camp = selectRelocationCamp({
+    metadata: [
+      {
+        server_id: 201,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 13,
+        maximum_level: 14,
+        aggro: false,
+        spawn: { x: 100, y: 100, z: 5 },
+      },
+      {
+        server_id: 202,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 13,
+        maximum_level: 14,
+        aggro: false,
+        spawn: { x: 115, y: 100, z: 5 },
+      },
+      {
+        server_id: 203,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 13,
+        maximum_level: 14,
+        aggro: false,
+        spawn: { x: 300, y: 300, z: 5 },
+      },
+      {
+        server_id: 301,
+        zone_id: 108,
+        name: "Goblin Ambusher",
+        minimum_level: 15,
+        maximum_level: 16,
+        aggro: true,
+        spawn: { x: 335, y: 300, z: 5 },
+      },
+      {
+        server_id: 401,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 16,
+        maximum_level: 17,
+        aggro: false,
+        spawn: { x: 500, y: 500, z: 5 },
+      },
+      {
+        server_id: 501,
+        zone_id: 109,
+        name: "Goblin Ambusher",
+        minimum_level: 15,
+        maximum_level: 16,
+        aggro: true,
+        spawn: { x: 101, y: 100, z: 5 },
+      },
+    ],
+    playerLevel: 15,
+    zoneId: 108,
+    currentPosition: { x: 0, y: 0, z: 5 },
+  });
+  assert.equal(camp.server_id, 201);
+  assert.equal(camp.cluster_size, 2);
+  assert.deepEqual(camp.cluster_server_ids, [201, 202]);
+  assert.ok(camp.nearest_aggro_distance > 300);
+});
+
+test("relocation camps respect cooldowns and the level band", () => {
+  const camp = selectRelocationCamp({
+    metadata: [
+      {
+        server_id: 201,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 13,
+        maximum_level: 14,
+        aggro: false,
+        spawn: { x: 100, y: 100, z: 5 },
+      },
+      {
+        server_id: 202,
+        zone_id: 108,
+        name: "Mad Sheep",
+        minimum_level: 10,
+        maximum_level: 11,
+        aggro: false,
+        spawn: { x: 200, y: 200, z: 5 },
+      },
+    ],
+    playerLevel: 15,
+    zoneId: 108,
+    currentPosition: { x: 0, y: 0, z: 5 },
+    excludedServerIds: new Set([201]),
+  });
+  assert.equal(camp, null);
 });
 
 test("refuses combat positioning whenever a live fight exists", () => {

@@ -11,7 +11,7 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 15, 359/3,600 EXP.
+- Pablo: Hume male, Monk 15, 1,139/3,600 EXP.
 - Currency: 28,815 gil; 2,285 Sparks; 1,000 Unity accolades.
 - Equipment verified through AgentBridge: Brass Baghnakhs, Headgear, Doublet,
   Gloves, Brais, Gaiters, White Belt, and Bastokan Ring.
@@ -37,6 +37,10 @@ resolved failures belong in `docs/`.
 - Level-15 camp: Konschtat Highlands zone 108 near
   `(-40.803, 436.784, 40.0)`, with two level 13–14 Mad Sheep and the nearest
   aggressive spawn about 46 yalms away.
+- The farm supervisor can rotate among same-zone metadata-vetted Mad Sheep
+  clusters after five seconds without an approved target. It requires the
+  current level band, a 40-yalm aggressive-spawn buffer, and a combat-free
+  state before each guarded relocation.
 - Registered travel: Metalworks Home Point #2 and Bastok Markets Home Point
   #3. Guarded private-server teleport remains the default fallback until
   collision-aware navigation meets its reliability target.
@@ -61,26 +65,34 @@ Status: **completed**
 Do not block combat validation on step 1: the balanced Trust roster itself is
 already learned and usable.
 
-## Current Goal 2 — resume supervised level-appropriate combat
+## Current Goal 2 — reach Monk level 20 through local automation
 
-Status: **active; level-15 camp validated**
+Status: **active; 15 → 20**
 
-1. Use Valaineral, Joachim, and Mihli Aliapoh until the pinned server's missing
-   Apururu (UC) spell grant is resolved.
-2. Run short supervised batches against exact-ID Mad Sheep at the level-15
-   Konschtat camp.
-3. Verify reactive aggro defense, target handoff, automatic Combo, recovery,
-   and clean cooperative stop behavior.
-4. Check inventory only at batch boundaries or when capacity telemetry
-   requires it.
-5. Compare the three-Trust party with the earlier Naji calibration before
-   extending batch duration.
+1. Keep Valaineral, Joachim, and Mihli Aliapoh as the automated party until the
+   pinned server's missing Apururu (UC) spell grant is resolved.
+2. Let deterministic local supervisors own target selection, exact checks,
+   approach, battle, weapon skills, recovery, and safe camp rotation. MCP
+   should start bounded leases, inspect milestones, and handle exceptions.
+3. Progress through metadata-vetted camps without weakening the current
+   rejection of high evasion, `even match`, `tough`, or harder targets.
+4. Automate Trust readiness and same-zone camp rotation before adding
+   cross-zone level-band transitions.
+5. Check inventory only at lease boundaries, near capacity, or before selling
+   and seal-storage runs.
 
-Latest bounded result: lease `6cc61920-ec4c-49ed-b91b-8b73af972c70`
-defeated both level-15-camp Mad Sheep for 320 EXP in 53 seconds with
-Valaineral, Mihli Aliapoh, and Joachim. Pablo remained safe and reached
-359/3,600 EXP at level 15. The fight-limit stop was clean: zero deaths, attack
-rejections, exclusions, target-cycle errors, combat teleports, or recoveries.
+Latest completed bounded result: lease
+`21e6d893-2482-403d-a3e3-320d5b42be5e` defeated five Mad Sheep for 780 EXP
+in 214 seconds with Valaineral, Mihli Aliapoh, and Joachim. It autonomously
+rotated among three metadata-vetted camps and fired Combo once. Pablo remained
+safe and reached 1,139/3,600 EXP at level 15. One moving spawn produced a
+bounded visibility rejection and target-cycle cooldown; the supervisor
+continued normally. There were zero deaths, recoveries, combat teleports, or
+recovery actions during combat.
+
+Current lease `206e3488-a072-414e-907b-6b8f323417a6` extends that validation to
+at most 15 fights or 20 minutes. MCP supervision remains milestone- and
+exception-based rather than fight-by-fight.
 
 Valkurm lease `bfaffa06-dcaa-4620-af6a-b7f75e2621db` proved the next-tier
 guard: three metadata candidates each checked `tough` and were excluded
@@ -99,6 +111,7 @@ Safety rules:
 
 Exit criteria:
 
+- Pablo reaches Monk level 20 through normal combat rewards.
 - 30 consecutive approved fights without a preventable aggro death.
 - Three controlled multi-enemy wins with correct target handoff.
 - Aggro-to-attack latency consistently below one second.

@@ -58,6 +58,8 @@ export function farmSupervisorArgs({
   scanRadius,
   minimumStartHpPercent,
   allowCaution,
+  autoRelocate,
+  targetLevel,
   weaponSkill,
 }) {
   return [
@@ -70,6 +72,8 @@ export function farmSupervisorArgs({
     "--scan-radius", String(scanRadius),
     "--minimum-start-hp-percent", String(minimumStartHpPercent),
     "--allow-caution", String(Boolean(allowCaution)),
+    "--auto-relocate", String(Boolean(autoRelocate)),
+    "--target-level", String(targetLevel),
     "--weapon-skill", weaponSkill,
     "--confirmation", FARM_CONFIRMATION,
   ];
@@ -84,6 +88,8 @@ export async function startFarm({
   scanRadius = 50,
   minimumStartHpPercent = 90,
   allowCaution = false,
+  autoRelocate = false,
+  targetLevel = 0,
   weaponSkill = "Combo",
   confirmation,
 }) {
@@ -119,6 +125,8 @@ export async function startFarm({
       scan_radius: scanRadius,
       minimum_start_hp_percent: minimumStartHpPercent,
       allow_caution: Boolean(allowCaution),
+      auto_relocate: Boolean(autoRelocate),
+      target_level: targetLevel,
       weapon_skill: weaponSkill,
     },
     counters: {
@@ -137,6 +145,7 @@ export async function startFarm({
       target_cycle_errors: 0,
       teleport_while_engaged: 0,
       recovery_while_engaged: 0,
+      camp_relocations: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -153,6 +162,8 @@ export async function startFarm({
     scanRadius,
     minimumStartHpPercent,
     allowCaution,
+    autoRelocate,
+    targetLevel,
     weaponSkill,
   });
   const child = spawn(process.execPath, args, {

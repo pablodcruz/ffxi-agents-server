@@ -58,6 +58,8 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     scanRadius: 30,
     minimumStartHpPercent: 90,
     allowCaution: true,
+    autoRelocate: true,
+    targetLevel: 20,
     weaponSkill: "Combo",
   });
   assert.deepEqual(args, [
@@ -70,6 +72,8 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--scan-radius", "30",
     "--minimum-start-hp-percent", "90",
     "--allow-caution", "true",
+    "--auto-relocate", "true",
+    "--target-level", "20",
     "--weapon-skill", "Combo",
     "--confirmation", FARM_CONFIRMATION,
   ]);
