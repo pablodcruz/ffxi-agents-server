@@ -45,11 +45,17 @@ export function parseMobMetadataTsv(tsv, zoneId) {
   for (const line of String(tsv || "").split(/\r?\n/)) {
     if (!line) continue;
     const fields = line.split("\t");
-    if (fields.length < 20) {
-      throw new Error(`Mob metadata row has ${fields.length} fields; expected 20.`);
+    if (![20, 21].includes(fields.length)) {
+      throw new Error(
+        `Mob metadata row has ${fields.length} fields; expected 20 or 21.`,
+      );
     }
+    const normalizedFields = fields.length === 21
+      ? fields
+      : [fields[0], "0", ...fields.slice(1)];
     const [
       mobId,
+      spawnSlotId,
       name,
       minimumLevel,
       maximumLevel,
@@ -69,7 +75,7 @@ export function parseMobMetadataTsv(tsv, zoneId) {
       itemRate,
       itemName,
       baseSell,
-    ] = fields;
+    ] = normalizedFields;
 
     const id = Number(mobId);
     if (!Number.isInteger(id) || id <= 0) {
@@ -79,6 +85,7 @@ export function parseMobMetadataTsv(tsv, zoneId) {
     if (!mob) {
       mob = {
         server_id: id,
+        spawn_slot_id: Number(spawnSlotId),
         name: normalizeName(name),
         zone_id: Number(zoneId),
         minimum_level: Number(minimumLevel),

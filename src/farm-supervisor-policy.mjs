@@ -57,6 +57,47 @@ export function selectProactiveTarget({
   )) || null;
 }
 
+export function selectTrustedCampSweepTarget({
+  observation,
+  metadata,
+  playerLevel,
+  radius = 50,
+  maximumLevelOffset = 1,
+  maximumElevationDifference = 4,
+  excludedServerIds = new Set(),
+  excludedNamePatterns = [/\b(?:worm|stone eater)\b/i],
+}) {
+  const byId = new Map(
+    (metadata || []).map((mob) => [Number(mob.server_id), mob]),
+  );
+  const playerZ = Number(observation?.player?.position?.z);
+  return (observation?.nearby_entities || [])
+    .filter((entity) => {
+      const mob = byId.get(Number(entity.server_id));
+      return entity.entity_type === 2
+        && Number(entity.status) === 0
+        && Number(entity.hp_percent) > 0
+        && Number(entity.distance) <= Number(radius)
+        && !excludedServerIds.has(Number(entity.server_id))
+        && !excludedNamePatterns.some((pattern) => pattern.test(entity.name || ""))
+        && mob
+        && Number(mob.mob_type || 0) === 0
+        && Number(mob.maximum_level) <= Number(playerLevel)
+          + Number(maximumLevelOffset)
+        && Math.abs(Number(entity.position?.z) - playerZ)
+          <= Number(maximumElevationDifference);
+    })
+    .map((entity) => ({
+      ...entity,
+      metadata: byId.get(Number(entity.server_id)),
+    }))
+    .sort((left, right) => (
+      Number(left.distance) - Number(right.distance)
+      || Number(left.metadata.maximum_level) - Number(right.metadata.maximum_level)
+      || Number(left.server_id) - Number(right.server_id)
+    ))[0] || null;
+}
+
 export function relocationMaximumLevelOffset({ zoneId, playerLevel }) {
   return Number(zoneId) === 103 && Number(playerLevel) === 17 ? 0 : -1;
 }
@@ -75,16 +116,21 @@ export function selectRelocationCamp({
   zoneId,
   currentPosition,
   excludedServerIds = new Set(),
+  allowedServerIds = null,
   allowedNames = ["Mad Sheep", "Sand Hare"],
   clusterRadius = 30,
   minimumAggroDistance = 40,
   minimumTravelDistance = 20,
   maximumElevationDifference = 4,
   maximumLevelOffset = -1,
+  allowAggressiveCandidates = false,
 }) {
-  const normalizedNames = new Set(
-    allowedNames.map((name) => String(name).toLowerCase()),
-  );
+  const normalizedNames = allowedNames
+    ? new Set(allowedNames.map((name) => String(name).toLowerCase()))
+    : null;
+  const normalizedServerIds = allowedServerIds
+    ? new Set([...allowedServerIds].map(Number))
+    : null;
   const finiteSpawn = (mob) => (
     mob?.spawn
     && ["x", "y", "z"].every((axis) => Number.isFinite(Number(mob.spawn[axis])))
@@ -95,8 +141,17 @@ export function selectRelocationCamp({
   );
   const candidates = (metadata || []).filter((mob) => (
     Number(mob?.zone_id) === Number(zoneId)
-    && normalizedNames.has(String(mob?.name || "").toLowerCase())
-    && !mob?.aggro
+    && (
+      !normalizedServerIds
+      || normalizedServerIds.has(Number(mob?.server_id))
+    )
+    && (
+      !normalizedNames
+      || normalizedNames.has(String(mob?.name || "").toLowerCase())
+    )
+    && Number(mob?.mob_type || 0) === 0
+    && !/\b(?:worm|stone eater)\b/i.test(String(mob?.name || ""))
+    && (allowAggressiveCandidates || !mob?.aggro)
     && finiteSpawn(mob)
     && Number(mob.maximum_level) <= Number(playerLevel)
       + Number(maximumLevelOffset)

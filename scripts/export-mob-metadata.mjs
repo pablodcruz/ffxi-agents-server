@@ -33,6 +33,7 @@ const mobIdRange = zoneMobIdRange(zoneId);
 const sql = `
 SELECT
   s.mobid,
+  s.spawnslotid,
   REPLACE(s.mobname, '_', ' '),
   s.minLevel,
   s.maxLevel,
@@ -95,7 +96,7 @@ await fs.mkdir(outputDir, { recursive: true, mode: 0o700 });
 await fs.writeFile(
   outputPath,
   `${JSON.stringify({
-    schema_version: 1,
+    schema_version: 2,
     generated_at: new Date().toISOString(),
     zone_id: zoneId,
     source: "local_landsandboat_database",

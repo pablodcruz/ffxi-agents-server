@@ -3,6 +3,11 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+export function isAttackRegistrationFailure(message) {
+  return /^(?:Unable to (?:see|attack)\b|You must wait longer to perform that action\b)/i
+    .test(String(message || ""));
+}
+
 export function shouldRetryAttackRegistration({
   attempts,
   attemptLimit,
@@ -37,6 +42,36 @@ export function shouldRetryAttackRegistration({
   return currentPlayerHp >= startPlayerHp && currentTargetHp >= startTargetHp;
 }
 
+export function shouldRetryReactiveAttackRegistration({
+  exactTargetAlreadyEngaged,
+  attempts,
+  attemptLimit,
+  playerStatus,
+  targetStatus,
+  targetHpPercent,
+}) {
+  return exactTargetAlreadyEngaged === true
+    && Number.isInteger(attempts)
+    && Number.isInteger(attemptLimit)
+    && attempts >= 1
+    && attempts < attemptLimit
+    && Number(playerStatus) !== 1
+    && Number(targetStatus) === 1
+    && Number(targetHpPercent) > 0;
+}
+
+export function shouldPreserveCommittedEngagement({
+  commitOnceEngaged,
+  exactTargetAlreadyEngaged,
+  targetStatus,
+  targetHpPercent,
+}) {
+  return commitOnceEngaged === true
+    && exactTargetAlreadyEngaged === true
+    && Number(targetStatus) === 1
+    && Number(targetHpPercent) > 0;
+}
+
 export function shouldSkipPreCombatRecovery({
   explicitlySkipped,
   exactTargetSelected,
@@ -47,6 +82,32 @@ export function shouldSkipPreCombatRecovery({
       exactTargetSelected === true
       && Number(targetStatus) === 1
     );
+}
+
+export function isCombatCheckApproved({
+  verdict,
+  difficulty,
+  allowCaution = false,
+  allowEvenMatchWithTrusts = false,
+  allowEngagedToughWithTrusts = false,
+  exactTargetAlreadyEngaged = false,
+  healthySupportCount = 0,
+}) {
+  if (verdict === "safe") return true;
+  if (verdict === "caution") return allowCaution === true;
+  if (
+    verdict !== "unsafe"
+    || !Number.isInteger(healthySupportCount)
+    || healthySupportCount < 2
+  ) {
+    return false;
+  }
+  if (difficulty === "even_match") {
+    return allowEvenMatchWithTrusts === true;
+  }
+  return difficulty === "tough"
+    && allowEngagedToughWithTrusts === true
+    && exactTargetAlreadyEngaged === true;
 }
 
 export function shouldUseWeaponSkill({

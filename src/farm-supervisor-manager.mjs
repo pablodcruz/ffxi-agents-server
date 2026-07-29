@@ -61,6 +61,9 @@ export function farmSupervisorArgs({
   autoRelocate,
   autoTransition,
   targetLevel,
+  questItemId,
+  trustedCampSweep,
+  autoJobAbilities,
   weaponSkill,
 }) {
   return [
@@ -76,6 +79,9 @@ export function farmSupervisorArgs({
     "--auto-relocate", String(Boolean(autoRelocate)),
     "--auto-transition", String(Boolean(autoTransition)),
     "--target-level", String(targetLevel),
+    "--quest-item-id", String(questItemId),
+    "--trusted-camp-sweep", String(Boolean(trustedCampSweep)),
+    "--auto-job-abilities", String(Boolean(autoJobAbilities)),
     "--weapon-skill", weaponSkill,
     "--confirmation", FARM_CONFIRMATION,
   ];
@@ -93,6 +99,9 @@ export async function startFarm({
   autoRelocate = false,
   autoTransition = false,
   targetLevel = 0,
+  questItemId = 0,
+  trustedCampSweep = false,
+  autoJobAbilities = false,
   weaponSkill = "Combo",
   confirmation,
 }) {
@@ -131,6 +140,9 @@ export async function startFarm({
       auto_relocate: Boolean(autoRelocate),
       auto_transition: Boolean(autoTransition),
       target_level: targetLevel,
+      quest_item_id: questItemId,
+      trusted_camp_sweep: Boolean(trustedCampSweep),
+      auto_job_abilities: Boolean(autoJobAbilities),
       weapon_skill: weaponSkill,
     },
     counters: {
@@ -152,6 +164,7 @@ export async function startFarm({
       camp_relocations: 0,
       zone_transitions: 0,
       trust_summons: 0,
+      job_abilities: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -171,6 +184,9 @@ export async function startFarm({
     autoRelocate,
     autoTransition,
     targetLevel,
+    questItemId,
+    trustedCampSweep,
+    autoJobAbilities,
     weaponSkill,
   });
   const child = spawn(process.execPath, args, {

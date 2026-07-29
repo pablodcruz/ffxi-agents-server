@@ -22,6 +22,7 @@ import {
   safeCombatPosition,
   selectProactiveTarget,
   selectRelocationCamp,
+  selectTrustedCampSweepTarget,
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
@@ -32,7 +33,12 @@ import {
   playerPartyMember,
   selectReactiveThreat,
 } from "../src/reactive-combat-policy.mjs";
+import {
+  selectQuestDropTarget,
+  selectWatchedDropTarget,
+} from "../src/quest-drop-policy.mjs";
 import { FARM_CONFIRMATION } from "../src/farm-supervisor-manager.mjs";
+import { selectReadyJobAbility } from "../src/job-ability-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -81,7 +87,16 @@ const allowCaution = booleanArgument("--allow-caution");
 const autoRelocate = booleanArgument("--auto-relocate");
 const autoTransition = booleanArgument("--auto-transition");
 const targetLevel = integerArgument("--target-level", 0, 0, 99);
+const questItemId = integerArgument("--quest-item-id", 0, 0, 65534);
+const trustedCampSweep = booleanArgument("--trusted-camp-sweep");
+const autoJobAbilities = booleanArgument("--auto-job-abilities");
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
+const questProfiles = new Map([
+  [537, { zone_id: 103, names: ["Damselfly"], label: "Damselfly Worm" }],
+  [538, { zone_id: 103, names: ["Ghoul"], label: "Magicked Skull" }],
+  [539, { zone_id: 103, names: ["Snipper"], label: "Crab Apron" }],
+]);
+const questProfile = questProfiles.get(questItemId) || null;
 
 if (!/^[A-Za-z0-9_-]{1,32}$/.test(agentId)) {
   throw new Error("--agent-id is invalid.");
@@ -91,6 +106,17 @@ if (!/^[0-9a-f-]{36}$/i.test(leaseId)) {
 }
 if (argument("--confirmation") !== FARM_CONFIRMATION) {
   throw new Error(`Supervisor requires --confirmation "${FARM_CONFIRMATION}".`);
+}
+if (questItemId > 0 && !questProfile && !trustedCampSweep) {
+  throw new Error(
+    "Unknown quest item IDs require --trusted-camp-sweep true so the item is only a stop watcher.",
+  );
+}
+if (questProfile && questProfile.zone_id !== zoneId) {
+  throw new Error(`Quest item ${questItemId} requires zone ${questProfile.zone_id}.`);
+}
+if (questProfile && autoTransition) {
+  throw new Error("Quest-item farming cannot automatically transition zones.");
 }
 
 const runtimeDir = path.join(projectDir, "runtime", "farm-supervisor");
@@ -142,6 +168,7 @@ const counters = {
   camp_relocations: 0,
   zone_transitions: 0,
   trust_summons: 0,
+  job_abilities: 0,
 };
 const metrics = {
   aggro_response_samples: 0,
@@ -162,6 +189,8 @@ let currentMode = null;
 let previousTargetId = null;
 let lastEventId = 0;
 let lastWeaponSkillAt = 0;
+let lastAnyJobAbilityAt = 0;
+const lastJobAbilityAt = new Map();
 let lastStateWriteAt = 0;
 let missingTargetSamples = 0;
 let stopping = false;
@@ -219,6 +248,9 @@ async function writeState(force = false) {
       auto_relocate: autoRelocate,
       auto_transition: autoTransition,
       target_level: targetLevel,
+      quest_item_id: questItemId,
+      trusted_camp_sweep: trustedCampSweep,
+      auto_job_abilities: autoJobAbilities,
       weapon_skill: weaponSkill,
     },
     active_zone_id: activeZoneId,
@@ -273,9 +305,32 @@ async function observe() {
 
 async function characterState() {
   return call("ffxi_character_state", {
+    inventory_container: 0,
     include_recasts: false,
-    max_items: 1,
+    max_items: questItemId > 0 ? 80 : 1,
   });
+}
+
+function questItemCount(state) {
+  if (questItemId <= 0) return 0;
+  return (state?.inventory?.items || [])
+    .filter((item) => Number(item.item_id) === questItemId)
+    .reduce((total, item) => total + Number(item.count || 0), 0);
+}
+
+async function stopIfQuestItemObtained() {
+  if (questItemId <= 0) return false;
+  const state = await characterState();
+  const count = questItemCount(state);
+  if (count <= 0) return false;
+  stopReason = "quest_item_obtained";
+  stopping = true;
+  log("quest_item_obtained", {
+    item_id: questItemId,
+    item_name: questProfile?.label || `item ${questItemId}`,
+    count,
+  });
+  return true;
 }
 
 async function updateLevelGoalOverlay() {
@@ -1165,6 +1220,38 @@ async function maybeWeaponSkill(observation) {
   });
 }
 
+async function maybeJobAbility(observation) {
+  if (!autoJobAbilities || !currentTarget?.engagement_counted) return;
+  const player = playerPartyMember(observation);
+  const entity = entityById(observation, currentTarget.server_id);
+  const ability = selectReadyJobAbility({
+    mainJobId: player?.main_job,
+    mainJobLevel: player?.main_job_level,
+    playerHpPercent: player?.hp_percent,
+    inCombat: (
+      Number(observation?.player?.status) === 1
+      && Number(entity?.status) === 1
+    ),
+    targetHpPercent: entity?.hp_percent,
+    lastUsedAt: lastJobAbilityAt,
+    lastAnyAbilityAt: lastAnyJobAbilityAt,
+  });
+  if (!ability) return;
+
+  await armControl();
+  await command(`/ja "${ability.name}" <me>`);
+  const issuedAt = Date.now();
+  lastJobAbilityAt.set(ability.name, issuedAt);
+  lastAnyJobAbilityAt = issuedAt;
+  counters.job_abilities += 1;
+  log("job_ability", {
+    name: ability.name,
+    main_job_level: player?.main_job_level,
+    player_hp_percent: player?.hp_percent,
+    server_id: currentTarget.server_id,
+  });
+}
+
 async function nudgeThroughTarget(observation, target, {
   attempt,
   requireEngaged,
@@ -1218,6 +1305,45 @@ function clearExpiredCooldowns() {
 function excludedServerIds() {
   clearExpiredCooldowns();
   return new Set(cooldowns.keys());
+}
+
+function watchedDropNames() {
+  if (questItemId <= 0) return [];
+  return [...new Set(
+    metadata
+      .filter((mob) => (
+        Number(mob.mob_type || 0) === 0
+        && (mob.drops || []).some((drop) => (
+          Number(drop.item_id) === questItemId
+          && Number(drop.item_rate) > 0
+        ))
+      ))
+      .map((mob) => String(mob.name)),
+  )];
+}
+
+function watchedSpawnServerIds() {
+  if (questItemId <= 0) return new Set();
+  const dropMobs = metadata.filter((mob) => (
+    Number(mob.mob_type || 0) === 0
+    && (mob.drops || []).some((drop) => (
+      Number(drop.item_id) === questItemId
+      && Number(drop.item_rate) > 0
+    ))
+  ));
+  const dropSlots = new Set(
+    dropMobs
+      .map((mob) => Number(mob.spawn_slot_id))
+      .filter((slotId) => slotId > 0),
+  );
+  return new Set(
+    metadata
+      .filter((mob) => (
+        dropMobs.includes(mob)
+        || dropSlots.has(Number(mob.spawn_slot_id))
+      ))
+      .map((mob) => Number(mob.server_id)),
+  );
 }
 
 async function handleFight(observation) {
@@ -1427,6 +1553,7 @@ async function handleFight(observation) {
     });
     return;
   }
+  await maybeJobAbility(observation);
   await maybeWeaponSkill(observation);
   await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
 }
@@ -1455,6 +1582,9 @@ try {
     auto_relocate: autoRelocate,
     auto_transition: autoTransition,
     target_level: targetLevel,
+    quest_item_id: questItemId,
+    trusted_camp_sweep: trustedCampSweep,
+    auto_job_abilities: autoJobAbilities,
   });
 
   let observation = await observe();
@@ -1530,6 +1660,7 @@ try {
       });
       continue;
     }
+    if (await stopIfQuestItemObtained()) break;
     if (shouldWaitForLevelProgress({
       dirty: levelGoalOverlayDirty,
       now: Date.now(),
@@ -1639,14 +1770,43 @@ try {
 
     await transition("scouting");
     const partyPlayer = playerPartyMember(observation);
-    const target = selectProactiveTarget({
-      observation,
-      metadata,
-      playerLevel: Number(partyPlayer?.main_job_level),
-      zoneId: activeZoneId,
-      radius: scanRadius,
-      excludedServerIds: excludedServerIds(),
-    });
+    const preferredDropTarget = trustedCampSweep && questItemId > 0
+      ? selectWatchedDropTarget({
+          observation,
+          metadata,
+          itemId: questItemId,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+          maximumLevelOffset: 1,
+        })
+      : null;
+    const target = trustedCampSweep
+      ? preferredDropTarget || selectTrustedCampSweepTarget({
+          observation,
+          metadata,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+        })
+      : questProfile
+        ? selectQuestDropTarget({
+          observation,
+          metadata,
+          itemId: questItemId,
+          allowedNames: questProfile.names,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+        })
+        : selectProactiveTarget({
+          observation,
+          metadata,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          zoneId: activeZoneId,
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+        });
     if (!target) {
       noTargetSince ??= Date.now();
       if (
@@ -1686,12 +1846,22 @@ try {
           playerLevel,
           zoneId: activeZoneId,
           currentPosition: observation?.player?.position,
+          allowedServerIds: questItemId > 0
+            ? watchedSpawnServerIds()
+            : null,
+          allowedNames: questItemId > 0
+            ? null
+            : (trustedCampSweep ? null : questProfile?.names),
           excludedServerIds: excludedRelocationServerIds(),
           clusterRadius: scanRadius,
-          maximumLevelOffset: relocationMaximumLevelOffset({
-            zoneId: activeZoneId,
-            playerLevel,
-          }),
+          minimumAggroDistance: questItemId > 0 ? 0 : 40,
+          allowAggressiveCandidates: questItemId > 0,
+          maximumLevelOffset: trustedCampSweep
+            ? 1
+            : relocationMaximumLevelOffset({
+                zoneId: activeZoneId,
+                playerLevel,
+              }),
         });
         if (camp) {
           observation = await relocateToCamp(camp, observation);
@@ -1728,7 +1898,16 @@ try {
         continue;
       }
 
-      const checked = await checkTarget(target, observation);
+      const checked = trustedCampSweep
+        ? {
+            observation: await selectExactTarget(target, scanRadius),
+            threat: null,
+            verdict: {
+              verdict: "trusted_camp",
+              difficulty: "metadata_admitted",
+            },
+          }
+        : await checkTarget(target, observation);
       observation = checked.observation;
       if (checked.threat) {
         await engage(checked.threat, "reactive", {
@@ -1742,7 +1921,16 @@ try {
         playerName: observation.player?.name,
         zoneId: activeZoneId,
       });
-      if (!isFarmCheckApproved({
+      if (trustedCampSweep && !trustSupport.ready) {
+        stopReason = "trusted_camp_support_unavailable";
+        stopping = true;
+        log("farm_supervisor_blocked", {
+          reason: stopReason,
+          available_support: trustSupport.members,
+        });
+        break;
+      }
+      if (!trustedCampSweep && !isFarmCheckApproved({
         checkVerdict: checked.verdict,
         allowCaution,
         trustedSupportReady: trustSupport.ready,
@@ -1758,7 +1946,7 @@ try {
         await transition("cooldown");
         continue;
       }
-      if (checked.verdict?.verdict === "caution") {
+      if (!trustedCampSweep && checked.verdict?.verdict === "caution") {
         log("target_caution_approved", {
           name: target.name,
           server_id: target.server_id,

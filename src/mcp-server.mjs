@@ -1045,6 +1045,9 @@ server.registerTool(
       auto_relocate: z.boolean().default(false),
       auto_transition: z.boolean().default(false),
       target_level: z.number().int().min(0).max(99).default(0),
+      quest_item_id: z.number().int().min(0).max(65534).default(0),
+      trusted_camp_sweep: z.boolean().default(false),
+      auto_job_abilities: z.boolean().default(false),
       weapon_skill: z
         .string()
         .min(1)
@@ -1071,6 +1074,9 @@ server.registerTool(
     auto_relocate,
     auto_transition,
     target_level,
+    quest_item_id,
+    trusted_camp_sweep,
+    auto_job_abilities,
     weapon_skill,
     confirmation,
   }) => {
@@ -1087,6 +1093,9 @@ server.registerTool(
         autoRelocate: auto_relocate,
         autoTransition: auto_transition,
         targetLevel: target_level,
+        questItemId: quest_item_id,
+        trustedCampSweep: trusted_camp_sweep,
+        autoJobAbilities: auto_job_abilities,
         weaponSkill: weapon_skill,
         confirmation,
       }));

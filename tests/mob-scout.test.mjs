@@ -23,6 +23,7 @@ test("parses LandSandBoat rows and maps database axes to AgentBridge axes", () =
   const [mob] = parseMobMetadataTsv(rows, 107);
 
   assert.equal(mob.server_id, 17215530);
+  assert.equal(mob.spawn_slot_id, 0);
   assert.deepEqual(mob.spawn, { x: 313.868, y: -287.789, z: 0.019 });
   assert.equal(mob.drops.length, 2);
   assert.equal(mob.conservative_vendor_value, 0.75);

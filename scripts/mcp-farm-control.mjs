@@ -18,6 +18,8 @@ const agentId = argument("--agent-id", "primary");
 const allowCautionValue = argument("--allow-caution", "false");
 const autoRelocateValue = argument("--auto-relocate", "false");
 const autoTransitionValue = argument("--auto-transition", "false");
+const trustedCampSweepValue = argument("--trusted-camp-sweep", "false");
+const autoJobAbilitiesValue = argument("--auto-job-abilities", "false");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
 }
@@ -29,6 +31,12 @@ if (!["true", "false"].includes(autoRelocateValue)) {
 }
 if (!["true", "false"].includes(autoTransitionValue)) {
   throw new Error("--auto-transition must be true or false.");
+}
+if (!["true", "false"].includes(trustedCampSweepValue)) {
+  throw new Error("--trusted-camp-sweep must be true or false.");
+}
+if (!["true", "false"].includes(autoJobAbilitiesValue)) {
+  throw new Error("--auto-job-abilities must be true or false.");
 }
 
 const transport = new StdioClientTransport({
@@ -78,6 +86,9 @@ try {
       auto_relocate: autoRelocateValue === "true",
       auto_transition: autoTransitionValue === "true",
       target_level: Number(argument("--target-level", "0")),
+      quest_item_id: Number(argument("--quest-item-id", "0")),
+      trusted_camp_sweep: trustedCampSweepValue === "true",
+      auto_job_abilities: autoJobAbilitiesValue === "true",
       weapon_skill: argument("--weapon-skill", "Combo"),
       confirmation: FARM_CONFIRMATION,
     });

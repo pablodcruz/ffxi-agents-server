@@ -6,10 +6,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
 import {
+  isAttackRegistrationFailure,
+  isCombatCheckApproved,
+  shouldPreserveCommittedEngagement,
+  shouldRetryReactiveAttackRegistration,
   shouldRetryAttackRegistration,
   shouldSkipPreCombatRecovery,
   shouldUseWeaponSkill,
 } from "../src/combat-policy.mjs";
+import { lineOfSightNudgeDestination } from "../src/farm-supervisor-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -31,6 +36,12 @@ const attackAttemptsLimit = Number(argument("--attack-attempts", "3"));
 const weaponSkill = argument("--weapon-skill");
 const commitOnceEngaged = process.argv.includes("--commit-once-engaged");
 const allowCaution = process.argv.includes("--allow-caution");
+const allowEvenMatchWithTrusts = process.argv.includes(
+  "--allow-even-match-with-trusts",
+);
+const allowEngagedToughWithTrusts = process.argv.includes(
+  "--allow-engaged-tough-with-trusts",
+);
 const skipRecovery = process.argv.includes("--skip-recovery");
 
 if (!targetName) {
@@ -262,6 +273,31 @@ async function approachExactTarget(serverId, timeoutSeconds) {
   return observation;
 }
 
+async function nudgeThroughExactTarget(observation, target) {
+  const destination = lineOfSightNudgeDestination({
+    player: observation?.player,
+    target,
+    requireEngaged: false,
+  });
+  if (!destination) return null;
+  const response = await client.callTool({
+    name: "ffxi_move_to_position",
+    arguments: {
+      x: destination.x,
+      y: destination.y,
+      max_start_distance: 6,
+      stop_distance: 0.5,
+      timeout_seconds: 2,
+      stuck_seconds: 1,
+    },
+  });
+  if (response.isError) return null;
+  await new Promise((resolve) => setTimeout(resolve, 1400));
+  await client.callTool({ name: "ffxi_stop_movement", arguments: {} })
+    .catch(() => {});
+  return observe();
+}
+
 async function waitForCheckVerdict(afterEventId) {
   const deadline = Date.now() + 3000;
   let observation;
@@ -336,10 +372,14 @@ try {
     arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
   });
   const preRecoveryObservation = await observe();
-  const preRecoveryTarget = preRecoveryObservation.target?.server_id
-    === targetServerId
-    ? preRecoveryObservation.target
-    : null;
+  const preRecoveryTarget = preRecoveryObservation.nearby_entities?.find(
+    (entity) => entity.server_id === targetServerId,
+  ) || (
+    preRecoveryObservation.target?.server_id === targetServerId
+      ? preRecoveryObservation.target
+      : null
+  );
+  const exactTargetAlreadyEngaged = Number(preRecoveryTarget?.status) === 1;
   const recoverySkipped = shouldSkipPreCombatRecovery({
     explicitlySkipped: skipRecovery,
     exactTargetSelected: Boolean(preRecoveryTarget),
@@ -384,10 +424,25 @@ try {
   if (checkVerdict.verdict === "unknown") {
     throw new Error(`No authoritative /check result arrived for ${targetName}.`);
   }
-  if (
-    checkVerdict.verdict === "unsafe"
-    || (checkVerdict.verdict === "caution" && !allowCaution)
-  ) {
+  const playerMember = checked.observation.party?.find(
+    (member) => member.server_id === checked.observation.player?.server_id,
+  ) || checked.observation.party?.find((member) => member.slot === 0);
+  const healthySupportCount = (checked.observation.party || []).filter(
+    (member) => (
+      member.server_id !== playerMember?.server_id
+      && member.zone_id === playerMember?.zone_id
+      && Number(member.hp_percent) > 0
+    ),
+  ).length;
+  if (!isCombatCheckApproved({
+    verdict: checkVerdict.verdict,
+    difficulty: checkVerdict.difficulty,
+    allowCaution,
+    allowEvenMatchWithTrusts,
+    allowEngagedToughWithTrusts,
+    exactTargetAlreadyEngaged,
+    healthySupportCount,
+  })) {
     throw new Error(
       `${targetName} check verdict ${checkVerdict.verdict} is not allowed.`,
     );
@@ -450,8 +505,8 @@ try {
 
     rejectionEvent = observation.recent_events?.find((event) => (
       (Number(event.id) || 0) > attackBaselineEventId
-      && Number(event.mode) === 122
-      && /^Unable to (?:see|attack)\b/i.test(event.message || "")
+      && [122, 123].includes(Number(event.mode))
+      && isAttackRegistrationFailure(event.message)
     ));
     if (rejectionEvent) {
       const retryAllowed = shouldRetryAttackRegistration({
@@ -461,6 +516,13 @@ try {
         currentPlayerHpPercent: observation.player?.hp_percent,
         startTargetHpPercent: attackStartTargetHp,
         currentTargetHpPercent: observedTarget?.hp_percent,
+      }) || shouldRetryReactiveAttackRegistration({
+        exactTargetAlreadyEngaged,
+        attempts: attackAttempts,
+        attemptLimit: attackAttemptsLimit,
+        playerStatus: observation.player?.status,
+        targetStatus: observedTarget?.status,
+        targetHpPercent: observedTarget?.hp_percent,
       });
       rejectedAttempts.push({
         attempt: attackAttempts,
@@ -475,10 +537,13 @@ try {
       await command("/attackoff").catch(() => {});
       let retryObservation;
       try {
-        retryObservation = await approachExactTarget(
-          target.server_id,
-          approachTimeoutSeconds,
-        );
+        retryObservation = await nudgeThroughExactTarget(
+          observation,
+          observedTarget,
+        ) || await approachExactTarget(
+            target.server_id,
+            approachTimeoutSeconds,
+          );
       } catch {
         reason = "attack_retry_approach_failed";
         break;
@@ -550,7 +615,19 @@ try {
     }
   }
 
-  await command("/attackoff").catch(() => {});
+  const exitObservation = await observe();
+  const exitTarget = exitObservation.nearby_entities?.find(
+    (entity) => entity.server_id === target.server_id,
+  );
+  const preservedCommittedEngagement = shouldPreserveCommittedEngagement({
+    commitOnceEngaged,
+    exactTargetAlreadyEngaged,
+    targetStatus: exitTarget?.status,
+    targetHpPercent: exitTarget?.hp_percent,
+  });
+  if (!preservedCommittedEngagement) {
+    await command("/attackoff").catch(() => {});
+  }
   // LandSandBoat emits defeat/EXP events shortly after target HP reaches zero.
   await new Promise((resolve) => setTimeout(resolve, 2200));
   const [after, afterState] = await Promise.all([observe(), characterState()]);
@@ -569,6 +646,10 @@ try {
       minimum_start_hp_percent: minimumStartHpPercent,
       commit_once_engaged: commitOnceEngaged,
       allow_caution: allowCaution,
+      allow_even_match_with_trusts: allowEvenMatchWithTrusts,
+      allow_engaged_tough_with_trusts: allowEngagedToughWithTrusts,
+      exact_target_already_engaged: exactTargetAlreadyEngaged,
+      healthy_support_count: healthySupportCount,
       approach_timeout_seconds: approachTimeoutSeconds,
       combat_timeout_seconds: combatTimeoutSeconds,
       recovery_timeout_seconds: recoveryTimeoutSeconds,
@@ -576,6 +657,7 @@ try {
       recovery_skip_reason: recoverySkipReason,
       attack_attempts_limit: attackAttemptsLimit,
       weapon_skill: weaponSkill || null,
+      preserved_committed_engagement: preservedCommittedEngagement,
     },
     reason,
     rejection_event: rejectionEvent || null,

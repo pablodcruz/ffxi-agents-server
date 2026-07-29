@@ -323,3 +323,156 @@ The level-17 transition and Valkurm rotation are live-validated:
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.
+
+## Exact quest-drop supervisor
+
+`mcp:farm-drop` is a narrow normal-gameplay loop for the Selbina support-job
+quest. It accepts only the pinned Valkurm pairs Magicked Skull/Ghoul,
+Damselfly Worm/Damselfly, and Crab Apron/Snipper. Selection requires a live
+ordinary mob whose exported LandSandBoat drop metadata contains the exact
+requested item with a positive rate. The loop performs no item grants, quest
+state writes, or relocation.
+
+The live local database reports Crab Apron item 539 at `itemRate = 100` on
+all 49 ordinary Valkurm Snipper records. LandSandBoat's drop table uses a
+1,000-point scale and defines 100 as 10%. The server retains the default
+`DROP_RATE_MULTIPLIER = 1.0`, so the effective base chance is 10% per
+qualifying Snipper before any Treasure Hunter effects. A 34-kill dry streak
+therefore has probability `0.9^34`, about 2.8%: unusually unlucky, but not
+evidence that the item is missing from the table.
+
+Magicked Skull item 538 is present at `itemRate = 150` (15%) on all 36
+ordinary Valkurm Ghoul records. Their exported level range is 18–24, which is
+inside the trusted level-23 sweep envelope. The drop-biased relocation policy
+selected a valid two-Ghoul metadata cluster near
+`(-241.769, 121.158, -8.5)`. Ghouls remain subject to their normal
+20:00–04:00 Vana'diel spawn window; the supervisor farms other admitted mobs
+by day and gives a live Ghoul priority at night.
+
+Ghoul records share `spawnslotid` values with ordinary Goblin placeholders.
+Export schema version 2 therefore includes the slot ID, and the watched-drop
+selector admits a live same-slot placeholder when the Ghoul itself is absent.
+It still prefers a live Ghoul over that placeholder and both over unrelated
+camp mobs. This prevents the controller from waiting at static Ghoul
+coordinates while a Goblin occupies the authoritative spawn slot. Live
+validation killed Goblin Gambler `17199472` and Goblin Leecher `17199477`
+from Ghoul-capable slots, then selected Ghoul `17199551` when it spawned. The
+first Ghoul dropped the Magicked Skull; the independent inventory watcher
+stopped the lease with `quest_item_obtained`.
+
+Before selecting a requested drop mob, every iteration checks for a live
+engaged non-party entity. That exact entity is handed to `mcp-combat` with
+pre-combat recovery disabled. The first live quest run exposed an important
+policy mismatch: the supervisor detected a Tough Goblin Leecher correctly,
+but the proactive `/check` gate refused it and Pablo died while the mob
+continued attacking. The corrected reactive lease:
+
+- requires the exact nearby entity to already have engaged status;
+- requires at least two living in-zone Trusts;
+- permits `tough` only for that reactive handoff;
+- never permits a proactive Tough pull or any Very Tough or stronger check;
+- commits once combat begins instead of disengaging at the low-HP threshold.
+
+The fix was validated against two linked Tough Thread Leeches. Both were
+selected without a model/UI decision and defeated normally; the second ended
+with Pablo at 94% HP and advanced Monk to level 21. A current UI target is not
+required because linked mobs may be attacking a Trust while another target is
+still displayed; the authoritative exact entity status is used instead.
+
+A later linked-Leech run exposed a separate registration failure: the mob was
+already fighting a Trust, but Pablo's `/attack` could not see it across a
+small terrain seam. The worker disengaged on the visibility stall and left
+the Trust party fighting alone. Reactive retries now make a bounded
+two-second nudge through the exact live target before reissuing `/attack`.
+If a committed reactive target is still engaged when the worker exits, the
+worker also preserves attack mode instead of sending `/attackoff`.
+The same bounded registration retry recognizes FFXI's short
+`You must wait longer to perform that action` cooldown response; it does not
+wait eight seconds and misclassify that handoff as an engagement stall.
+The nudge is also used for a nearby proactive target after an authoritative
+visibility rejection. Merely entering battle stance is not treated as combat
+evidence: Pablo or the exact target must actually lose HP before weapon-skill
+logic and the longer combat monitor become active.
+
+For unattended farming, use the durable supervisor's exact-item mode:
+
+```sh
+pnpm mcp:farm-start -- \
+  --zone-id 103 \
+  --quest-item-id 539 \
+  --trusted-camp-sweep true \
+  --maximum-seconds 3600 \
+  --maximum-fights 100 \
+  --scan-radius 30 \
+  --minimum-start-hp-percent 80 \
+  --allow-caution true \
+  --auto-relocate true \
+  --confirmation "ARM PRIVATE SERVER FARM SUPERVISOR"
+```
+
+With `--trusted-camp-sweep true`, `--quest-item-id` is a generic optional
+inventory stop watcher for any valid item ID; it does not control target
+admission. It does provide a preference: metadata-confirmed nearby drop
+bearers are selected before other admitted camp mobs, and idle relocation is
+biased toward their spawn family. If none are currently spawned, the
+supervisor continues sweeping ordinary mobs instead of stopping. Without
+trusted sweep, exact-family diagnostic selection remains restricted to the
+three pinned Selbina items. The detached lease attacks every ordinary live mob
+in the current
+camp whose exported maximum level is no more than one level above Pablo,
+provided it is on the same elevation. Worms remain excluded by the explicit
+field preference. Aggressive and linking mobs are admitted because the
+three-Trust composition has already been validated in this level band.
+
+Trusted camp sweep deliberately skips per-pull `/check`. It still requires at
+least two healthy in-zone Trusts immediately before a proactive engagement,
+prioritizes any reactive threat, recovers between fights, and stops on death,
+lost support, a zone/menu/session fault, the lease limits, or the watched
+item. Relocation chooses another ordinary, level-bounded camp rather than a
+camp for one drop-bearing family. This separates the reusable combat policy
+from the optional farming outcome and makes unattended combat independent of
+MCP analysis calls. `mcp:farm-drop` remains a short diagnostic lease.
+
+### Level-aware Monk abilities
+
+`--auto-job-abilities true` enables a conservative main-job-aware Monk
+rotation inside the durable supervisor. It executes abilities directly
+through the same bounded `/ja` gameplay-command surface; a client macro is not
+required. The policy unlocks and schedules:
+
+- Boost at Monk 5, no more often than once per 15.5 seconds;
+- Dodge at Monk 15, no more often than once per 300.5 seconds;
+- Focus at Monk 25, no more often than once per 300.5 seconds;
+- Chakra at Monk 35, no more often than once per 300.5 seconds and only at
+  70% HP or lower.
+
+There is a 2.5-second global gap between job-ability commands. Abilities are
+issued only during a registered live fight and not when the target is below
+10% HP. Hundred Fists is intentionally excluded from routine farming, as are
+riskier or situational higher-level abilities such as Counterstance. Live
+validation at Monk 23 recorded Dodge followed by two Boost uses during one
+Snipper fight; the fight completed at 97% HP and the next fight continued
+using Boost automatically. Pablo later reached Monk 25 during the same
+durable campaign and used Focus automatically; the final Ghoul lease recorded
+one fight, one reactive handoff, one weapon skill, three job abilities, 180
+EXP, and zero deaths.
+
+### Verified Elder Memories completion
+
+The normal quest finished without grants or quest-state writes:
+
+1. The trusted sweep acquired item 538, item 537, and item 539 through
+   ordinary Valkurm combat.
+2. Exact client item commands traded Magicked Skull, Damselfly Worm, and Crab
+   Apron to Isacio in that required order.
+3. Isacio's closing dialogue emitted `You can now designate a support job`.
+4. A read-only server query verified `char_jobs.unlocked = 127`, changed from
+   the pre-quest baseline of 126.
+5. The ordinary Mog House menu selected Warrior as support job; AgentBridge
+   reported main job 2 level 25 and support job 1 level 1.
+
+This run is the reference operating model for future camp goals: Codex chooses
+the camp and stop condition, the detached local supervisor continuously kills
+all admitted ordinary mobs, and Codex returns only for a hard stop or durable
+outcome. Per-fight inventory reads, strength checks, and model decisions are
+not part of trusted-camp mode.

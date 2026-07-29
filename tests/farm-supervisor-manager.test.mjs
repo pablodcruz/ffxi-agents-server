@@ -61,6 +61,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     autoRelocate: true,
     autoTransition: true,
     targetLevel: 20,
+    questItemId: 539,
+    trustedCampSweep: true,
+    autoJobAbilities: true,
     weaponSkill: "Combo",
   });
   assert.deepEqual(args, [
@@ -76,6 +79,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--auto-relocate", "true",
     "--auto-transition", "true",
     "--target-level", "20",
+    "--quest-item-id", "539",
+    "--trusted-camp-sweep", "true",
+    "--auto-job-abilities", "true",
     "--weapon-skill", "Combo",
     "--confirmation", FARM_CONFIRMATION,
   ]);

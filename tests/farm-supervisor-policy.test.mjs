@@ -17,12 +17,104 @@ import {
   safeCombatPosition,
   selectProactiveTarget,
   selectRelocationCamp,
+  selectTrustedCampSweepTarget,
   shouldAutoCancelMenu,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   shouldWaitForLevelProgress,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
+
+test("trusted camp sweep admits ordinary level-bounded mobs without per-pull checks", () => {
+  const sweepMetadata = [
+    {
+      server_id: 201,
+      name: "Snipper",
+      maximum_level: 22,
+      mob_type: 0,
+    },
+    {
+      server_id: 202,
+      name: "Thread Leech",
+      maximum_level: 22,
+      mob_type: 0,
+      aggro: true,
+      links: true,
+    },
+    {
+      server_id: 203,
+      name: "Land Worm",
+      maximum_level: 20,
+      mob_type: 0,
+    },
+    {
+      server_id: 204,
+      name: "Special NM",
+      maximum_level: 20,
+      mob_type: 2,
+    },
+  ];
+  const observed = {
+    player: { position: { x: 0, y: 0, z: 0 } },
+    nearby_entities: [
+      {
+        server_id: 202,
+        name: "Thread Leech",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 3,
+        position: { x: 3, y: 0, z: 0 },
+      },
+      {
+        server_id: 201,
+        name: "Snipper",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 5,
+        position: { x: 5, y: 0, z: 0 },
+      },
+      {
+        server_id: 203,
+        name: "Land Worm",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 1,
+        position: { x: 1, y: 0, z: 0 },
+      },
+      {
+        server_id: 204,
+        name: "Special NM",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 2,
+        position: { x: 2, y: 0, z: 0 },
+      },
+    ],
+  };
+
+  assert.equal(
+    selectTrustedCampSweepTarget({
+      observation: observed,
+      metadata: sweepMetadata,
+      playerLevel: 21,
+    })?.server_id,
+    202,
+  );
+  assert.equal(
+    selectTrustedCampSweepTarget({
+      observation: observed,
+      metadata: sweepMetadata.map((mob) => (
+        mob.server_id === 202 ? { ...mob, maximum_level: 23 } : mob
+      )),
+      playerLevel: 21,
+    })?.server_id,
+    201,
+  );
+});
 
 const metadata = [
   {

@@ -1094,3 +1094,41 @@ Tunnel Worms also have a periodic burrow window in which an entity can remain
 observable but the client refuses to select it. `mcp:check-target` accepts a
 bounded `--targetability-timeout`; every failed attempt emergency-disarms
 control before it waits. Use this before inferring collision or moving closer.
+
+## Death-menu recovery
+
+The normal FFXI death screen highlights `Back to Home Point`. Confirming it
+opens a horizontal `Return to Home Point?` choice with `Yes` on the left and
+`No` on the right. The deterministic sequence is therefore:
+
+1. `confirm` from `menu dead`;
+2. `left` in `menu comyn`;
+3. `confirm`, then allow the zone transition to settle.
+
+Up and Down do not change this prompt. A state sample taken immediately after
+the final confirm can still report `menu dead` while the zone transition is
+starting, so verify the resulting zone rather than treating that early sample
+as a failed confirmation.
+
+## Deterministic Bastok Mog House entry
+
+The pinned `zonelines.sql` record for the south Bastok Markets residential
+entrance is centered at `(-146.168, -6.781, -30.329)` with a two-yalm trigger
+and destination `(-177, -9.4, -30.251)` in the same zone. A guarded placement
+at `(-145.4, -6.781, -30.329)` triggers the ordinary transition after the
+client finishes loading Bastok Markets. The resulting Mog House position is
+`(0, 0, -0.01)`, with Moogle server ID `17739873` 1.5 yalms away.
+
+Because the destination differs from the requested exterior coordinate, the
+generic teleport verifier can report `applied: false` even though the game
+correctly emits `=== Area: Mog House 1F ===`. Treat that area event plus the
+Moogle observation as authoritative for this trigger. Do not retry while the
+second transition is settling.
+
+The verified normal support-job sequence is:
+
+1. Interact with the exact Moogle.
+2. In `menu myroom`, move down twice from Storage and confirm Change Jobs.
+3. In `menu jobchang`, move down once and confirm Support Job.
+4. In `menu jobcselu`, Warrior is the initial selection for this character;
+   confirm it, then verify `sub_job_id = 1` and `sub_job_level = 1`.
