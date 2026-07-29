@@ -13,6 +13,7 @@ import {
   parseCombatRewards,
   playerDefeated,
   readyTrustSupport,
+  relocationMaximumLevelOffset,
   safeCombatPosition,
   selectProactiveTarget,
   selectRelocationCamp,
@@ -222,6 +223,50 @@ test("selects a cross-zone camp without comparing unrelated coordinates", () => 
   assert.equal(camp.cluster_size, 2);
   assert.equal(camp.travel_distance, null);
   assert.equal(camp.nearest_aggro_distance, 70);
+});
+
+test("admits at-level transition metadata only with an explicit offset", () => {
+  const metadata = [
+    {
+      server_id: 701,
+      zone_id: 103,
+      name: "Sand Hare",
+      minimum_level: 16,
+      maximum_level: 17,
+      aggro: false,
+      spawn: { x: 500, y: 300, z: -16 },
+    },
+  ];
+  assert.equal(selectRelocationCamp({
+    metadata,
+    playerLevel: 17,
+    zoneId: 103,
+    currentPosition: null,
+    allowedNames: ["Sand Hare"],
+  }), null);
+  assert.equal(selectRelocationCamp({
+    metadata,
+    playerLevel: 17,
+    zoneId: 103,
+    currentPosition: null,
+    allowedNames: ["Sand Hare"],
+    maximumLevelOffset: 0,
+  })?.server_id, 701);
+});
+
+test("opts Valkurm level 17+ relocation into at-level metadata only", () => {
+  assert.equal(relocationMaximumLevelOffset({
+    zoneId: 103,
+    playerLevel: 17,
+  }), 0);
+  assert.equal(relocationMaximumLevelOffset({
+    zoneId: 103,
+    playerLevel: 16,
+  }), -1);
+  assert.equal(relocationMaximumLevelOffset({
+    zoneId: 108,
+    playerLevel: 17,
+  }), -1);
 });
 
 test("refuses combat positioning whenever a live fight exists", () => {

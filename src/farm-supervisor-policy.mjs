@@ -57,6 +57,10 @@ export function selectProactiveTarget({
   )) || null;
 }
 
+export function relocationMaximumLevelOffset({ zoneId, playerLevel }) {
+  return Number(zoneId) === 103 && Number(playerLevel) >= 17 ? 0 : -1;
+}
+
 export function selectRelocationCamp({
   metadata,
   playerLevel,
@@ -68,6 +72,7 @@ export function selectRelocationCamp({
   minimumAggroDistance = 40,
   minimumTravelDistance = 20,
   maximumElevationDifference = 4,
+  maximumLevelOffset = -1,
 }) {
   const normalizedNames = new Set(
     allowedNames.map((name) => String(name).toLowerCase()),
@@ -85,7 +90,8 @@ export function selectRelocationCamp({
     && normalizedNames.has(String(mob?.name || "").toLowerCase())
     && !mob?.aggro
     && finiteSpawn(mob)
-    && Number(mob.maximum_level) <= Number(playerLevel) - 1
+    && Number(mob.maximum_level) <= Number(playerLevel)
+      + Number(maximumLevelOffset)
     && Number(mob.maximum_level) >= Number(playerLevel) - 3
     && !excludedServerIds.has(Number(mob.server_id))
     && !excludedCombatPocket({

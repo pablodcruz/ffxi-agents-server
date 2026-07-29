@@ -11,7 +11,7 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 17, 229/4,000 EXP.
+- Pablo: Hume male, Monk 17, 3,869/4,000 EXP.
 - Currency: 28,815 gil; 2,285 Sparks; 1,000 Unity accolades.
 - Equipment verified through AgentBridge: Brass Baghnakhs, Headgear, Doublet,
   Gloves, Brais, Gaiters, White Belt, and Bastokan Ring.
@@ -42,9 +42,13 @@ resolved failures belong in `docs/`.
   current level band, a 40-yalm aggressive-spawn buffer, and a combat-free
   state before each guarded relocation.
 - A level-aware lease can repair the Valaineral/Joachim/Mihli party while idle
-  and, at Monk 18, transition from exhausted Konschtat sheep to a
+  and, at Monk 17, transition from exhausted Konschtat sheep to a
   metadata-vetted Valkurm Sand Hare cluster. Cross-zone control remains
   combat-free and exact-check gated.
+- Valkurm rotation explicitly admits level-17 Sand Hare metadata as camp
+  candidates, but the live `/check` result remains authoritative. A live
+  `even match` Hare was excluded before attack while `decent challenge` Hares
+  continued normally.
 - Registered travel: Metalworks Home Point #2 and Bastok Markets Home Point
   #3. Guarded private-server teleport remains the default fallback until
   collision-aware navigation meets its reliability target.
@@ -80,43 +84,24 @@ Status: **active; 15 → 20**
    should start bounded leases, inspect milestones, and handle exceptions.
 3. Progress through metadata-vetted camps without weakening the current
    rejection of high evasion, `even match`, `tough`, or harder targets.
-4. Automate Trust readiness and same-zone camp rotation before adding
-   cross-zone level-band transitions.
+4. Trust readiness, same-zone rotation, and the level-17 Konschtat-to-Valkurm
+   transition are automated and live-validated.
 5. Check inventory only at lease boundaries, near capacity, or before selling
    and seal-storage runs.
 
-Latest completed bounded result: lease
-`21e6d893-2482-403d-a3e3-320d5b42be5e` defeated five Mad Sheep for 780 EXP
-in 214 seconds with Valaineral, Mihli Aliapoh, and Joachim. It autonomously
-rotated among three metadata-vetted camps and fired Combo once. Pablo remained
-safe and reached 1,139/3,600 EXP at level 15. One moving spawn produced a
-bounded visibility rejection and target-cycle cooldown; the supervisor
-continued normally. There were zero deaths, recoveries, combat teleports, or
-recovery actions during combat.
+Latest completed calibration: Valkurm lease
+`75682b7c-9770-47d8-9be2-0bb0ce7d19e8` completed 5/5 Sand Hare fights for
+880 EXP in 267 seconds. It performed four guarded camp relocations, fired
+Combo once, and rejected one live `even match` Hare before attack. All approved
+targets checked `decent challenge` with Valaineral, Joachim, and Mihli Aliapoh
+present. There were zero deaths, attack rejections, target-cycle errors,
+combat teleports, or recovery actions during combat.
 
-Lease `206e3488-a072-414e-907b-6b8f323417a6` then completed 15/15 fights for
-2,350 EXP in 550 seconds, with 13 autonomous camp rotations, five Combos, no
-deaths, no recoveries, and no combat teleport or recovery action. Pablo reached
-3,489/3,600 EXP at level 15.
-
-Lease `8f22d4da-40c8-44ff-afa3-337df3d4e11f` completed 15/15 fights for
-2,340 EXP in 480 seconds, including two reactive handoffs. It fired Combo four
-times, rotated camps fourteen times, and ended with zero deaths, recoveries,
-combat teleports, or recovery actions during combat. Pablo reached Monk 16 at
-2,229/3,800 EXP, and the final local overlay matched authoritative state.
-
-Current lease `a5f909a9-f631-468e-b025-2420aec9ecb2` is bounded to 30 fights or
-30 minutes and enables local Trust repair, same-zone rotation, the level-18
-Valkurm transition, exact-check combat, overlay refresh, and the level-20 stop.
-It reached Monk 17 on fight 12 with four automatic Combos, two safe idle
-recoveries, no deaths, and no combat teleport or recovery action. MCP
-supervision remains milestone- and exception-based rather than fight-by-fight.
-
-Valkurm lease `bfaffa06-dcaa-4620-af6a-b7f75e2621db` proved the next-tier
-guard: three metadata candidates each checked `tough` and were excluded
-without attack. The isolated level 15–16 hare checked `even match` and was
-also excluded. Revisit Sand Hares at level 16; do not weaken the exact-check
-policy.
+Current level-20 lease `c043d9f3-b8f6-4899-aa82-506ac97d6144` is bounded to
+200 fights or 60 minutes. It owns exact checks, approach, combat, Combo,
+recovery, camp rotation, Trust repair, overlay updates, and the level-20 stop.
+MCP supervision remains milestone- and exception-based rather than
+fight-by-fight.
 
 Safety rules:
 

@@ -18,6 +18,7 @@ import {
   parseCombatRewards,
   playerDefeated,
   readyTrustSupport,
+  relocationMaximumLevelOffset,
   safeCombatPosition,
   selectProactiveTarget,
   selectRelocationCamp,
@@ -322,44 +323,70 @@ function partyNames(observation) {
   );
 }
 
+function missingDesiredTrusts(observation) {
+  const names = partyNames(observation);
+  return desiredTrusts.filter(
+    (trust) => !names.has(trust.observed_name),
+  );
+}
+
 async function ensureTrustParty(observation) {
   let current = observation;
-  for (const trust of desiredTrusts) {
-    if (partyNames(current).has(trust.observed_name)) continue;
-    if (
-      hasLiveCombat(current)
-      || Number(current?.player?.status) !== 0
-      || current?.login_status !== 2
-    ) {
-      return current;
-    }
-    const uiState = await characterState();
-    if (uiState?.menu_open) return current;
-    await armControl();
-    await command(`/ma "${trust.spell_name}" <me>`);
-    let summoned = false;
-    for (let attempt = 0; attempt < 32; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      current = await sample();
-      if (hasLiveCombat(current)) return current;
-      if (partyNames(current).has(trust.observed_name)) {
-        summoned = true;
-        counters.trust_summons += 1;
-        log("trust_summoned", {
+  for (let pass = 1; pass <= 2; pass += 1) {
+    for (const trust of missingDesiredTrusts(current)) {
+      if (
+        hasLiveCombat(current)
+        || Number(current?.player?.status) !== 0
+        || current?.login_status !== 2
+      ) {
+        return current;
+      }
+      const uiState = await characterState();
+      if (uiState?.menu_open) return current;
+      await armControl();
+      await command(`/ma "${trust.spell_name}" <me>`);
+      let summoned = false;
+      for (let attempt = 0; attempt < 32; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        current = await sample();
+        if (hasLiveCombat(current)) return current;
+        if (partyNames(current).has(trust.observed_name)) {
+          summoned = true;
+          counters.trust_summons += 1;
+          log("trust_summoned", {
+            name: trust.observed_name,
+            zone_id: activeZoneId,
+            pass,
+          });
+          break;
+        }
+      }
+      if (!summoned) {
+        log("trust_summon_unavailable", {
           name: trust.observed_name,
           zone_id: activeZoneId,
+          pass,
         });
-        break;
       }
     }
-    if (!summoned) {
-      log("trust_summon_unavailable", {
-        name: trust.observed_name,
-        zone_id: activeZoneId,
-      });
-    }
+    if (missingDesiredTrusts(current).length === 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   return current;
+}
+
+function stopForMissingTrusts(observation) {
+  const missing = missingDesiredTrusts(observation);
+  if (missing.length === 0) return false;
+  stopReason = `trust_party_unavailable:${missing
+    .map((trust) => trust.observed_name)
+    .join(",")}`;
+  stopping = true;
+  log("farm_supervisor_blocked", {
+    reason: stopReason,
+    zone_id: activeZoneId,
+  });
+  return true;
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -991,13 +1018,13 @@ function nextLevelBandTransition(playerLevel) {
   if (
     autoTransition
     && activeZoneId === 108
-    && Number(playerLevel) >= 18
+    && Number(playerLevel) >= 17
     && Number(targetLevel || 20) >= 20
   ) {
     return {
       zone_id: 103,
       allowed_names: ["Sand Hare"],
-      reason: "level_18_valkurm_sand_hare_band",
+      reason: "level_17_valkurm_sand_hare_band",
     };
   }
   return null;
@@ -1061,6 +1088,7 @@ async function transitionToLevelBand(profile, camp, observation) {
   ingestEvents(after);
   observeThreats(after);
   after = await ensureTrustParty(after);
+  stopForMissingTrusts(after);
   log("zone_transition_complete", {
     zone_id: activeZoneId,
     destination,
@@ -1424,11 +1452,12 @@ try {
   });
 
   let observation = await observe();
+  lastEventId = maxObservedEventId(observation);
   observation = await ensureTrustParty(observation);
+  stopForMissingTrusts(observation);
   leaseOriginPosition = observation?.player?.position
     ? { ...observation.player.position }
     : null;
-  lastEventId = maxObservedEventId(observation);
   observeThreats(observation);
   await writeState();
   while (!stopping) {
@@ -1607,26 +1636,8 @@ try {
     if (!target) {
       noTargetSince ??= Date.now();
       if (
-        autoRelocate
-        && Date.now() - noTargetSince >= relocationIdleMilliseconds
-      ) {
-        const camp = selectRelocationCamp({
-          metadata,
-          playerLevel: Number(partyPlayer?.main_job_level),
-          zoneId: activeZoneId,
-          currentPosition: observation?.player?.position,
-          excludedServerIds: excludedRelocationServerIds(),
-          clusterRadius: scanRadius,
-        });
-        if (camp) {
-          observation = await relocateToCamp(camp, observation);
-          noTargetSince = null;
-          continue;
-        }
-      }
-      if (
         autoTransition
-        && Date.now() - noTargetSince >= relocationIdleMilliseconds * 2
+        && Date.now() - noTargetSince >= relocationIdleMilliseconds
       ) {
         const profile = nextLevelBandTransition(partyPlayer?.main_job_level);
         if (profile) {
@@ -1639,6 +1650,7 @@ try {
             allowedNames: profile.allowed_names,
             excludedServerIds: new Set(),
             clusterRadius: scanRadius,
+            maximumLevelOffset: 0,
           });
           if (camp) {
             observation = await transitionToLevelBand(
@@ -1648,6 +1660,29 @@ try {
             );
             continue;
           }
+        }
+      }
+      if (
+        autoRelocate
+        && Date.now() - noTargetSince >= relocationIdleMilliseconds
+      ) {
+        const playerLevel = Number(partyPlayer?.main_job_level);
+        const camp = selectRelocationCamp({
+          metadata,
+          playerLevel,
+          zoneId: activeZoneId,
+          currentPosition: observation?.player?.position,
+          excludedServerIds: excludedRelocationServerIds(),
+          clusterRadius: scanRadius,
+          maximumLevelOffset: relocationMaximumLevelOffset({
+            zoneId: activeZoneId,
+            playerLevel,
+          }),
+        });
+        if (camp) {
+          observation = await relocateToCamp(camp, observation);
+          noTargetSince = null;
+          continue;
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));

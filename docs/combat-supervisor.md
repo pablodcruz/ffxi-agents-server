@@ -270,24 +270,41 @@ For the level-20 progression profile, add `--auto-transition true`. The local
 supervisor then:
 
 - verifies or summons Valaineral, Joachim, and Mihli Aliapoh only while idle;
-- keeps Konschtat as the active zone through level 17;
-- after level 18 exhausts the approved sheep band, selects the real Valkurm
+- keeps Konschtat as the active zone through level 16;
+- at level 17, selects the real Valkurm
   Sand Hare cluster around `(647.616, -97.308, 0.312)`;
 - requires the cluster's three level-16–17 candidates and 44.7-yalm nearest
   aggressive-spawn buffer before a guarded cross-zone service teleport;
 - waits for a stable zone-103 observation, repairs missing Trusts, and resumes
-  normal exact-check admission. The transition never runs during live combat.
+  normal exact-check admission. At-level metadata is only a candidate:
+  authoritative `/check` still rejects every actual `even match` result. The
+  transition never runs during live combat.
 
 `ffxi_farm_start`, `ffxi_farm_status`, and `ffxi_farm_stop` expose the same
 controls directly to MCP clients. Runtime state and JSON event logs are stored
 under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
+The level-17 transition and Valkurm rotation are live-validated:
+
+- Zoning dismissed the existing Trust party. The first calibration exposed
+  transient Trust recast ordering, so startup and post-zone repair now make
+  two bounded summon passes and stop before combat unless Valaineral, Joachim,
+  and Mihli Aliapoh are all observed.
+- Valkurm level-17 rotation explicitly admits at-level Sand Hare metadata as a
+  destination candidate. It does not admit that candidate to combat: lease
+  `75682b7c-9770-47d8-9be2-0bb0ce7d19e8` rejected an actual `even match`
+  Hare after `/check`, then continued with approved `decent challenge` Hares.
+- That five-fight calibration earned 880 EXP in 267 seconds, performed four
+  guarded camp relocations, fired Combo once, and recorded zero deaths, attack
+  rejections, target-cycle errors, combat teleports, or recovery actions
+  during combat.
+- Reward accounting snapshots the event baseline before Trust summons so
+  historical rewards from a prior lease cannot inflate the new lease.
+
 ## Next iteration
 
-1. Extend the validated same-zone camp rotation through Monk 16 and 17 while
-   collision-aware routing remains unproven.
-2. Live-validate the automatic level-18 transition to Valkurm; retain
-   exact-check rejection for `even match`, `tough`, and higher.
+1. Run the validated Valkurm profile until Monk 20 or a bounded stop condition.
+2. Re-evaluate Sand Hare yield and the next metadata band after each level.
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.
