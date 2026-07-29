@@ -17,6 +17,12 @@ export function hasLiveCombat(observation) {
     );
 }
 
+export function isRecoverableMovementRace(error) {
+  return /Position waypoint is beyond max_start_distance/i.test(
+    error instanceof Error ? error.message : String(error || ""),
+  );
+}
+
 export function excludedCombatPocket({
   zoneId,
   position,
@@ -100,6 +106,30 @@ export function selectTrustedCampSweepTarget({
 
 export function relocationMaximumLevelOffset({ zoneId, playerLevel }) {
   return Number(zoneId) === 103 && Number(playerLevel) === 17 ? 0 : -1;
+}
+
+export function nextLevelBandTransition({
+  autoTransition,
+  activeZoneId,
+  playerLevel,
+  targetLevel = 20,
+}) {
+  if (!autoTransition || Number(targetLevel) < 20) return null;
+  if (Number(activeZoneId) === 107 && Number(playerLevel) >= 14) {
+    return {
+      zone_id: 108,
+      allowed_names: ["Mad Sheep"],
+      reason: "level_14_konschtat_mad_sheep_band",
+    };
+  }
+  if (Number(activeZoneId) === 108 && Number(playerLevel) >= 17) {
+    return {
+      zone_id: 103,
+      allowed_names: ["Sand Hare"],
+      reason: "level_17_valkurm_sand_hare_band",
+    };
+  }
+  return null;
 }
 
 export function shouldWaitForLevelProgress({
@@ -259,6 +289,20 @@ export function shouldReissueReactiveAttack({
   );
 }
 
+export function shouldRecoverDroppedEngagement({
+  observation,
+  target,
+  lastAttemptAt = 0,
+  now = Date.now(),
+  retryDelayMilliseconds = 3000,
+}) {
+  return Number(observation?.player?.status) !== 1
+    && Number(target?.status) === 1
+    && Number(target?.hp_percent) > 0
+    && Number(target?.distance) <= 6
+    && Number(now) - Number(lastAttemptAt) >= Number(retryDelayMilliseconds);
+}
+
 export function latestLineOfSightFailure(events, {
   afterEventId = 0,
 } = {}) {
@@ -266,7 +310,7 @@ export function latestLineOfSightFailure(events, {
     .filter((event) => (
       Number(event?.id) > Number(afterEventId)
       && Number(event?.mode) === 122
-      && /(?:unable to|cannot) see\b/i.test(
+      && /(?:(?:unable to|cannot) see\b|out of range\b)/i.test(
         String(event?.message || "").replace(/[^\x20-\x7e]+/g, " ").trim(),
       )
     ))
@@ -375,6 +419,13 @@ export function canCompleteCooperativeStop({
     && !hasLiveCombat(observation)
     && Number(observation?.player?.status) === 0
     && Number(idleSamples) >= Number(minimumIdleSamples);
+}
+
+export function shouldSkipEngagementForCooperativeStop({
+  mode,
+  stopRequested,
+}) {
+  return Boolean(stopRequested) && mode === "proactive";
 }
 
 export function isFarmCheckApproved({

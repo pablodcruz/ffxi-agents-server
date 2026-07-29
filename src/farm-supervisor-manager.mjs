@@ -164,6 +164,7 @@ export async function startFarm({
       camp_relocations: 0,
       zone_transitions: 0,
       trust_summons: 0,
+      trust_refreshes: 0,
       job_abilities: 0,
     },
   };

@@ -13,8 +13,10 @@ import {
   hasLiveCombat,
   isClosedMenuInputRace,
   isFarmCheckApproved,
+  isRecoverableMovementRace,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
+  nextLevelBandTransition,
   parseCombatRewards,
   playerDefeated,
   readyTrustSupport,
@@ -24,8 +26,10 @@ import {
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
   shouldAutoCancelMenu,
+  shouldRecoverDroppedEngagement,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
+  shouldSkipEngagementForCooperativeStop,
   shouldWaitForLevelProgress,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
@@ -168,6 +172,7 @@ const counters = {
   camp_relocations: 0,
   zone_transitions: 0,
   trust_summons: 0,
+  trust_refreshes: 0,
   job_abilities: 0,
 };
 const metrics = {
@@ -333,10 +338,21 @@ async function stopIfQuestItemObtained() {
   return true;
 }
 
+const mainJobNames = new Map([
+  [1, "WARRIOR"],
+  [2, "MONK"],
+  [3, "WHITE MAGE"],
+  [4, "BLACK MAGE"],
+  [5, "RED MAGE"],
+  [6, "THIEF"],
+]);
+
 async function updateLevelGoalOverlay() {
   if (targetLevel <= 0) return null;
   const state = await characterState();
   const player = state?.player;
+  const mainJobId = Number(player?.main_job_id);
+  const mainJobName = mainJobNames.get(mainJobId) || `JOB ${mainJobId}`;
   const level = Number(player?.main_job_level);
   const currentExp = Number(player?.exp_current);
   const neededExp = Number(player?.exp_needed);
@@ -348,7 +364,7 @@ async function updateLevelGoalOverlay() {
   ) {
     return null;
   }
-  const progressKey = `${level}:${currentExp}:${neededExp}`;
+  const progressKey = `${mainJobId}:${level}:${currentExp}:${neededExp}`;
   if (progressKey === lastLevelGoalProgressKey) return null;
   const existing = state?.goal_overlay || {};
   const gil = Number(existing.current_gil);
@@ -359,7 +375,7 @@ async function updateLevelGoalOverlay() {
     target_gil: Number.isSafeInteger(targetGil) && targetGil > 0
       ? targetGil
       : 10_000,
-    title: `CURRENT GOAL: MONK LEVEL ${targetLevel}`,
+    title: `CURRENT GOAL: ${mainJobName} LEVEL ${targetLevel}`,
     progress_label: level >= targetLevel
       ? `LEVEL ${level} REACHED | AUTOMATED LEVELING COMPLETE`
       : `LEVEL ${level} | ${currentExp}/${neededExp} EXP | LOCAL AUTOMATION ACTIVE`,
@@ -368,20 +384,27 @@ async function updateLevelGoalOverlay() {
     level,
     exp_current: currentExp,
     exp_needed: neededExp,
+    main_job_id: mainJobId,
+    main_job_name: mainJobName,
     target_level: targetLevel,
   });
   lastLevelGoalProgressKey = progressKey;
   return { level, reached: level >= targetLevel };
 }
 
-function partyNames(observation) {
+function availablePartyNames(observation) {
   return new Set(
-    (observation?.party || []).map((member) => String(member?.name || "")),
+    (observation?.party || [])
+      .filter((member) => (
+        Number(member?.zone_id) === Number(activeZoneId)
+        && Number(member?.hp_percent) > 0
+      ))
+      .map((member) => String(member?.name || "")),
   );
 }
 
 function missingDesiredTrusts(observation) {
-  const names = partyNames(observation);
+  const names = availablePartyNames(observation);
   return desiredTrusts.filter(
     (trust) => !names.has(trust.observed_name),
   );
@@ -407,7 +430,7 @@ async function ensureTrustParty(observation) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         current = await sample();
         if (hasLiveCombat(current)) return current;
-        if (partyNames(current).has(trust.observed_name)) {
+        if (availablePartyNames(current).has(trust.observed_name)) {
           summoned = true;
           counters.trust_summons += 1;
           log("trust_summoned", {
@@ -430,20 +453,6 @@ async function ensureTrustParty(observation) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   return current;
-}
-
-function stopForMissingTrusts(observation) {
-  const missing = missingDesiredTrusts(observation);
-  if (missing.length === 0) return false;
-  stopReason = `trust_party_unavailable:${missing
-    .map((trust) => trust.observed_name)
-    .join(",")}`;
-  stopping = true;
-  log("farm_supervisor_blocked", {
-    reason: stopReason,
-    zone_id: activeZoneId,
-  });
-  return true;
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -691,7 +700,10 @@ async function engage(target, mode, {
     throw new Error(`${target.name} moved outside the melee envelope.`);
   }
   const attackBaselineEventId = maxObservedEventId(targeted);
-  if (await latchCooperativeStopRequest()) {
+  if (shouldSkipEngagementForCooperativeStop({
+    mode,
+    stopRequested: await latchCooperativeStopRequest(),
+  })) {
     log("engagement_skipped", {
       mode,
       name: target.name,
@@ -714,6 +726,8 @@ async function engage(target, mode, {
     last_los_event_id: attackBaselineEventId,
     last_los_recovery_at_ms: 0,
     los_recovery_attempts: 0,
+    last_reengage_attempt_at_ms: 0,
+    reengage_attempts: 0,
   };
   currentMode = mode;
   missingTargetSamples = 0;
@@ -778,6 +792,31 @@ async function engage(target, mode, {
         distance: closedTarget?.distance,
       });
     }
+  }
+}
+
+async function engageReactiveSafely(target, options = {}, context = "reactive") {
+  try {
+    await engage(target, "reactive", options);
+    return true;
+  } catch (error) {
+    counters.target_cycle_errors += 1;
+    log("reactive_engagement_retry", {
+      context,
+      name: target?.name,
+      server_id: target?.server_id,
+      error: error instanceof Error ? error.message : String(error),
+      tracked_target: currentTarget
+        ? {
+            name: currentTarget.name,
+            server_id: currentTarget.server_id,
+            mode: currentMode,
+          }
+        : null,
+    });
+    if (!currentTarget) await transition("cooldown");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return false;
   }
 }
 
@@ -1071,22 +1110,6 @@ async function loadZoneMetadata(nextZoneId) {
   return document.mobs || [];
 }
 
-function nextLevelBandTransition(playerLevel) {
-  if (
-    autoTransition
-    && activeZoneId === 108
-    && Number(playerLevel) >= 17
-    && Number(targetLevel || 20) >= 20
-  ) {
-    return {
-      zone_id: 103,
-      allowed_names: ["Sand Hare"],
-      reason: "level_17_valkurm_sand_hare_band",
-    };
-  }
-  return null;
-}
-
 async function transitionToLevelBand(profile, camp, observation) {
   if (!profile || !camp || hasLiveCombat(observation)) return observation;
   const destination = {
@@ -1145,7 +1168,6 @@ async function transitionToLevelBand(profile, camp, observation) {
   ingestEvents(after);
   observeThreats(after);
   after = await ensureTrustParty(after);
-  stopForMissingTrusts(after);
   log("zone_transition_complete", {
     zone_id: activeZoneId,
     destination,
@@ -1256,11 +1278,13 @@ async function nudgeThroughTarget(observation, target, {
   attempt,
   requireEngaged,
   reason,
+  maximumTargetDistance = 4,
 }) {
   const destination = lineOfSightNudgeDestination({
     player: observation?.player,
     target,
     requireEngaged,
+    maximumTargetDistance,
   });
   if (!destination) return observation;
 
@@ -1272,14 +1296,25 @@ async function nudgeThroughTarget(observation, target, {
     destination,
   });
   await armControl();
-  await call("ffxi_move_to_position", {
-    x: destination.x,
-    y: destination.y,
-    max_start_distance: 6,
-    stop_distance: 0.5,
-    timeout_seconds: 2,
-    stuck_seconds: 1,
-  });
+  try {
+    await call("ffxi_move_to_position", {
+      x: destination.x,
+      y: destination.y,
+      max_start_distance: 6,
+      stop_distance: 0.5,
+      timeout_seconds: 2,
+      stuck_seconds: 1,
+    });
+  } catch (error) {
+    if (!isRecoverableMovementRace(error)) throw error;
+    log("line_of_sight_nudge_race", {
+      name: target.name,
+      server_id: target.server_id,
+      attempt,
+      reason,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   await new Promise((resolve) => setTimeout(resolve, 1400));
   await call("ffxi_stop_movement").catch(() => {});
   const after = await sample();
@@ -1382,12 +1417,51 @@ async function handleFight(observation) {
   }
 
   if (currentTarget.engagement_counted) {
+    if (
+      shouldRecoverDroppedEngagement({
+        observation,
+        target: entity,
+        lastAttemptAt: currentTarget.last_reengage_attempt_at_ms,
+      })
+    ) {
+      currentTarget.last_reengage_attempt_at_ms = Date.now();
+      currentTarget.reengage_attempts += 1;
+      try {
+        const retargeted = await selectExactTarget(entity, threatDistance);
+        currentTarget.attack_baseline_event_id = maxObservedEventId(retargeted);
+        currentTarget.attack_issued_at_ms = Date.now();
+        await command("/attack <t>");
+        log("engagement_reissued", {
+          mode: currentMode,
+          name: currentTarget.name,
+          server_id: currentTarget.server_id,
+          distance: entity.distance,
+          attempt: currentTarget.reengage_attempts,
+          reason: "player_dropped_to_idle",
+        });
+      } catch (error) {
+        log("engagement_reissue_race", {
+          mode: currentMode,
+          name: currentTarget.name,
+          server_id: currentTarget.server_id,
+          attempt: currentTarget.reengage_attempts,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
+      return;
+    }
     const lineOfSightFailure = latestLineOfSightFailure(
       observation.recent_events,
       { afterEventId: currentTarget.last_los_event_id },
     );
     if (lineOfSightFailure) {
       currentTarget.last_los_event_id = Number(lineOfSightFailure.id);
+      const outOfRange = /out of range\b/i.test(
+        String(lineOfSightFailure.message || "")
+          .replace(/[^\x20-\x7e]+/g, " ")
+          .trim(),
+      );
       if (
         Number(currentTarget.los_recovery_attempts) < 3
         && Date.now() - Number(currentTarget.last_los_recovery_at_ms) >= 3000
@@ -1397,7 +1471,10 @@ async function handleFight(observation) {
         await nudgeThroughTarget(observation, entity, {
           attempt: currentTarget.los_recovery_attempts,
           requireEngaged: true,
-          reason: "engaged_visibility_failure",
+          reason: outOfRange
+            ? "engaged_out_of_range"
+            : "engaged_visibility_failure",
+          maximumTargetDistance: outOfRange ? 6 : 4,
         });
         return;
       }
@@ -1445,11 +1522,11 @@ async function handleFight(observation) {
     retryObservation = settled.observation;
     const defensiveThreat = settled.threat;
     if (defensiveThreat) {
-      await engage(defensiveThreat, "reactive", {
+      await engageReactiveSafely(defensiveThreat, {
         handoff: rejectedTarget.handoff,
         attempt: Number(rejectedTarget.attack_attempts) + 1,
         observation: retryObservation,
-      });
+      }, "attack_rejection_defense");
       return;
     }
     const retryTarget = entityById(retryObservation, rejectedTarget.server_id);
@@ -1522,10 +1599,10 @@ async function handleFight(observation) {
       excludedServerIds: [previousTargetId],
     });
     if (nextThreat) {
-      await engage(nextThreat, "reactive", {
+      await engageReactiveSafely(nextThreat, {
         handoff: true,
         observation,
-      });
+      }, "post_fight_handoff");
       return;
     }
     levelGoalOverlayDirty = targetLevel > 0;
@@ -1547,10 +1624,10 @@ async function handleFight(observation) {
     && Number(entity?.status) !== 1
   ) {
     previousTargetId = currentTarget.server_id;
-    await engage(threat, "reactive", {
+    await engageReactiveSafely(threat, {
       handoff: true,
       observation,
-    });
+    }, "tracked_fight_handoff");
     return;
   }
   await maybeJobAbility(observation);
@@ -1590,7 +1667,6 @@ try {
   let observation = await observe();
   lastEventId = maxObservedEventId(observation);
   observation = await ensureTrustParty(observation);
-  stopForMissingTrusts(observation);
   leaseOriginPosition = observation?.player?.position
     ? { ...observation.player.position }
     : null;
@@ -1654,10 +1730,10 @@ try {
       break;
     }
     if (reactiveThreat) {
-      await engage(reactiveThreat, "reactive", {
+      await engageReactiveSafely(reactiveThreat, {
         handoff: previousTargetId !== null,
         observation,
-      });
+      }, "idle_reactive_defense");
       continue;
     }
     if (await stopIfQuestItemObtained()) break;
@@ -1725,10 +1801,10 @@ try {
         maxDistance: threatDistance,
       });
       if (remainingThreat) {
-        await engage(remainingThreat, "reactive", {
+        await engageReactiveSafely(remainingThreat, {
           handoff: true,
           observation,
-        });
+        }, "fight_limit_drain");
         continue;
       }
       if (canStopAtFightLimit({
@@ -1754,10 +1830,10 @@ try {
     }
     if (stopReason) break;
     if (recovery.threat) {
-      await engage(recovery.threat, "reactive", {
+      await engageReactiveSafely(recovery.threat, {
         handoff: previousTargetId !== null,
         observation,
-      });
+      }, "recovery_handoff");
       continue;
     }
     if (Number(observation?.player?.status) !== 0) {
@@ -1768,8 +1844,54 @@ try {
       continue;
     }
 
-    await transition("scouting");
+    const missingTrusts = missingDesiredTrusts(observation);
+    if (missingTrusts.length > 0) {
+      await transition("repairing_trusts", {
+        missing: missingTrusts.map((trust) => trust.observed_name),
+      });
+      observation = await ensureTrustParty(observation);
+      if (hasLiveCombat(observation)) continue;
+      const stillMissing = missingDesiredTrusts(observation);
+      if (stillMissing.length > 0) {
+        log("trust_repair_waiting", {
+          missing: stillMissing.map((trust) => trust.observed_name),
+          player_level: playerPartyMember(observation)?.main_job_level,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        continue;
+      }
+    }
+
     const partyPlayer = playerPartyMember(observation);
+    const levelBandProfile = nextLevelBandTransition({
+      autoTransition,
+      activeZoneId,
+      playerLevel: partyPlayer?.main_job_level,
+      targetLevel: targetLevel || 20,
+    });
+    if (levelBandProfile) {
+      const nextMetadata = await loadZoneMetadata(levelBandProfile.zone_id);
+      const camp = selectRelocationCamp({
+        metadata: nextMetadata,
+        playerLevel: Number(partyPlayer?.main_job_level),
+        zoneId: levelBandProfile.zone_id,
+        currentPosition: null,
+        allowedNames: levelBandProfile.allowed_names,
+        excludedServerIds: new Set(),
+        clusterRadius: scanRadius,
+        maximumLevelOffset: 0,
+      });
+      if (camp) {
+        observation = await transitionToLevelBand(
+          levelBandProfile,
+          camp,
+          observation,
+        );
+        continue;
+      }
+    }
+
+    await transition("scouting");
     const preferredDropTarget = trustedCampSweep && questItemId > 0
       ? selectWatchedDropTarget({
           observation,
@@ -1809,33 +1931,6 @@ try {
         });
     if (!target) {
       noTargetSince ??= Date.now();
-      if (
-        autoTransition
-        && Date.now() - noTargetSince >= relocationIdleMilliseconds
-      ) {
-        const profile = nextLevelBandTransition(partyPlayer?.main_job_level);
-        if (profile) {
-          const nextMetadata = await loadZoneMetadata(profile.zone_id);
-          const camp = selectRelocationCamp({
-            metadata: nextMetadata,
-            playerLevel: Number(partyPlayer?.main_job_level),
-            zoneId: profile.zone_id,
-            currentPosition: null,
-            allowedNames: profile.allowed_names,
-            excludedServerIds: new Set(),
-            clusterRadius: scanRadius,
-            maximumLevelOffset: 0,
-          });
-          if (camp) {
-            observation = await transitionToLevelBand(
-              profile,
-              camp,
-              observation,
-            );
-            continue;
-          }
-        }
-      }
       if (
         autoRelocate
         && Date.now() - noTargetSince >= relocationIdleMilliseconds
@@ -1886,10 +1981,10 @@ try {
         maxDistance: threatDistance,
       });
       if (positionThreat) {
-        await engage(positionThreat, "reactive", {
+        await engageReactiveSafely(positionThreat, {
           handoff: previousTargetId !== null,
           observation,
-        });
+        }, "positioning_handoff");
         continue;
       }
       const positionedTarget = entityById(observation, target.server_id);
@@ -1910,10 +2005,10 @@ try {
         : await checkTarget(target, observation);
       observation = checked.observation;
       if (checked.threat) {
-        await engage(checked.threat, "reactive", {
+        await engageReactiveSafely(checked.threat, {
           handoff: previousTargetId !== null,
           observation,
-        });
+        }, "check_handoff");
         continue;
       }
       const trustSupport = readyTrustSupport({

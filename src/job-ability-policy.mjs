@@ -26,6 +26,42 @@ const monkAbilities = Object.freeze([
   }),
 ]);
 
+const warriorAbilities = Object.freeze([
+  Object.freeze({
+    name: "Defender",
+    minimum_level: 25,
+    cooldown_ms: 300_500,
+    maximum_hp_percent: 50,
+    priority: 0,
+  }),
+  Object.freeze({
+    name: "Berserk",
+    minimum_level: 15,
+    cooldown_ms: 300_500,
+    minimum_hp_percent: 70,
+    priority: 1,
+  }),
+  Object.freeze({
+    name: "Warcry",
+    minimum_level: 35,
+    cooldown_ms: 300_500,
+    minimum_hp_percent: 60,
+    priority: 2,
+  }),
+  Object.freeze({
+    name: "Aggressor",
+    minimum_level: 45,
+    cooldown_ms: 300_500,
+    minimum_hp_percent: 60,
+    priority: 3,
+  }),
+]);
+
+const abilitiesByMainJob = new Map([
+  [1, warriorAbilities],
+  [2, monkAbilities],
+]);
+
 export function selectReadyJobAbility({
   mainJobId,
   mainJobLevel,
@@ -38,15 +74,14 @@ export function selectReadyJobAbility({
   minimumGlobalGapMs = 2_500,
 }) {
   if (
-    Number(mainJobId) !== 2
-    || !inCombat
+    !inCombat
     || Number(targetHpPercent) <= 10
     || Number(now) - Number(lastAnyAbilityAt) < Number(minimumGlobalGapMs)
   ) {
     return null;
   }
 
-  return monkAbilities
+  return (abilitiesByMainJob.get(Number(mainJobId)) || [])
     .filter((ability) => (
       Number(mainJobLevel) >= ability.minimum_level
       && Number(now) - Number(lastUsedAt.get(ability.name) || 0)
@@ -55,10 +90,18 @@ export function selectReadyJobAbility({
         ability.maximum_hp_percent === undefined
         || Number(playerHpPercent) <= ability.maximum_hp_percent
       )
+      && (
+        ability.minimum_hp_percent === undefined
+        || Number(playerHpPercent) >= ability.minimum_hp_percent
+      )
     ))
     .sort((left, right) => left.priority - right.priority)[0] || null;
 }
 
 export function supportedMonkAbilities() {
   return monkAbilities.map((ability) => ({ ...ability }));
+}
+
+export function supportedWarriorAbilities() {
+  return warriorAbilities.map((ability) => ({ ...ability }));
 }

@@ -8,8 +8,10 @@ import {
   hasLiveCombat,
   isClosedMenuInputRace,
   isFarmCheckApproved,
+  isRecoverableMovementRace,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
+  nextLevelBandTransition,
   parseCombatRewards,
   playerDefeated,
   readyTrustSupport,
@@ -19,11 +21,26 @@ import {
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
   shouldAutoCancelMenu,
+  shouldRecoverDroppedEngagement,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
+  shouldSkipEngagementForCooperativeStop,
   shouldWaitForLevelProgress,
   targetDefeated,
 } from "../src/farm-supervisor-policy.mjs";
+
+test("treats only a stale movement start distance as a recoverable race", () => {
+  assert.equal(
+    isRecoverableMovementRace(
+      new Error("Position waypoint is beyond max_start_distance."),
+    ),
+    true,
+  );
+  assert.equal(
+    isRecoverableMovementRace(new Error("Movement control is disarmed.")),
+    false,
+  );
+});
 
 test("trusted camp sweep admits ordinary level-bounded mobs without per-pull checks", () => {
   const sweepMetadata = [
@@ -366,6 +383,41 @@ test("opts only the Valkurm level-17 transition band into at-level metadata", ()
   }), -1);
 });
 
+test("selects the validated level-20 zone progression bands", () => {
+  assert.deepEqual(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 107,
+    playerLevel: 14,
+    targetLevel: 20,
+  }), {
+    zone_id: 108,
+    allowed_names: ["Mad Sheep"],
+    reason: "level_14_konschtat_mad_sheep_band",
+  });
+  assert.deepEqual(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 108,
+    playerLevel: 17,
+    targetLevel: 20,
+  }), {
+    zone_id: 103,
+    allowed_names: ["Sand Hare"],
+    reason: "level_17_valkurm_sand_hare_band",
+  });
+  assert.equal(nextLevelBandTransition({
+    autoTransition: false,
+    activeZoneId: 107,
+    playerLevel: 14,
+    targetLevel: 20,
+  }), null);
+  assert.equal(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 107,
+    playerLevel: 14,
+    targetLevel: 19,
+  }), null);
+});
+
 test("holds proactive scouting while a defeated target's rewards settle", () => {
   assert.equal(shouldWaitForLevelProgress({
     dirty: true,
@@ -463,15 +515,51 @@ test("does not toggle a reactive attack off when it registered during follow", (
   }), true);
 });
 
+test("recovers a dropped engagement while the mob is still fighting", () => {
+  assert.equal(shouldRecoverDroppedEngagement({
+    observation: observation({
+      player: { status: 0, hp_percent: 97 },
+    }),
+    target: { status: 1, hp_percent: 28, distance: 0.8 },
+    lastAttemptAt: 1000,
+    now: 5000,
+  }), true);
+  assert.equal(shouldRecoverDroppedEngagement({
+    observation: observation({
+      player: { status: 1, hp_percent: 97 },
+    }),
+    target: { status: 1, hp_percent: 28, distance: 0.8 },
+    lastAttemptAt: 1000,
+    now: 5000,
+  }), false);
+  assert.equal(shouldRecoverDroppedEngagement({
+    observation: observation({
+      player: { status: 0, hp_percent: 97 },
+    }),
+    target: { status: 1, hp_percent: 28, distance: 0.8 },
+    lastAttemptAt: 3000,
+    now: 5000,
+  }), false);
+  assert.equal(shouldRecoverDroppedEngagement({
+    observation: observation({
+      player: { status: 0, hp_percent: 97 },
+    }),
+    target: { status: 1, hp_percent: 28, distance: 7 },
+    lastAttemptAt: 1000,
+    now: 5000,
+  }), false);
+});
+
 test("identifies only fresh line-of-sight failures from the system channel", () => {
   assert.deepEqual(latestLineOfSightFailure([
     { id: 10, mode: 122, message: "Unable to see the Rock Lizard.\u007f1" },
     { id: 11, mode: 28, message: "The Rock Lizard hits Pablo." },
     { id: 12, mode: 122, message: "You cannot see the Rock Lizard.\u007f1" },
+    { id: 13, mode: 122, message: "The Rock Lizard is out of range.\u007f1" },
   ], { afterEventId: 10 }), {
-    id: 12,
+    id: 13,
     mode: 122,
-    message: "You cannot see the Rock Lizard.\u007f1",
+    message: "The Rock Lizard is out of range.\u007f1",
   });
   assert.equal(latestLineOfSightFailure([
     { id: 10, mode: 122, message: "Unable to attack the Rock Lizard." },
@@ -671,6 +759,21 @@ test("cooperative stops require a stable idle window after combat drains", () =>
     currentTarget: null,
     reactiveThreat: null,
     idleSamples: 20,
+  }), false);
+});
+
+test("cooperative stop blocks new pulls but never skips reactive defense", () => {
+  assert.equal(shouldSkipEngagementForCooperativeStop({
+    mode: "proactive",
+    stopRequested: true,
+  }), true);
+  assert.equal(shouldSkipEngagementForCooperativeStop({
+    mode: "reactive",
+    stopRequested: true,
+  }), false);
+  assert.equal(shouldSkipEngagementForCooperativeStop({
+    mode: "proactive",
+    stopRequested: false,
   }), false);
 });
 

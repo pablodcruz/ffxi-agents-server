@@ -11,11 +11,12 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 25 / Warrior 1, 2,037/5,300 EXP.
-- Currency: 19,976 gil; 4,934 Sparks; 1,100 Unity accolades.
-- Equipment verified through AgentBridge: Brass Baghnakhs, Trader's Chapeau,
-  Trader's Saio, Trader's Cuffs, Trader's Slops, Trader's Pigaches, White
-  Belt, and Bastokan Ring.
+- Pablo: Hume male, Warrior 20 / Monk 10, 342/4,600 EXP, verified through live
+  AgentBridge state after the detached supervisor stopped at its level target.
+- Currency: 20,298 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Current Warrior equipment verified through AgentBridge: Hume Tunic, Hume M
+  Gloves, Hume Slacks, Hume M Boots, and Bastokan Ring. Brass Baghnakhs,
+  Trader's gear, and White Belt remain carried but are not Warrior-compatible.
 - Gil milestone completed: 28,815/10,000 through normal Sparks conversion.
 - Trusts learned: Naji, Valaineral, Mihli Aliapoh, Tenzen, Adelheid, Joachim.
 - Adelheid and Joachim were each summoned successfully through MCP.
@@ -41,9 +42,11 @@ resolved failures belong in `docs/`.
   skips worms, prioritizes engaged adds, requires healthy Trust support, and
   stops on the watched item or a hard safety/lease condition. Per-pull
   `/check` is intentionally disabled in this already validated level band.
-- Level-aware Monk ability automation is active: Dodge, Boost, and Focus are
-  live-validated; Chakra unlocks at 35 and remains HP-gated. Emergency and
-  risky situational abilities remain excluded.
+- Level-aware job ability automation is active. Monk's Dodge, Boost, and Focus
+  are live-validated; Chakra unlocks at 35 and remains HP-gated. Warrior uses
+  Berserk from level 15, emergency-only Defender from 25, party-wide Warcry
+  from 35, and Aggressor from 45. Provoke is intentionally excluded from
+  routine farming so Pablo does not pull hate from the Trust tank.
 - Safe baseline camp: Konschtat Highlands zone 108 near
   `(-326.295, -51.917)`, using Mad Sheep and Strolling Saplings.
 - Level-15 camp: Konschtat Highlands zone 108 near
@@ -53,10 +56,16 @@ resolved failures belong in `docs/`.
   clusters after five seconds without an approved target. It requires the
   current level band, a 40-yalm aggressive-spawn buffer, and a combat-free
   state before each guarded relocation.
-- A level-aware lease can repair the Valaineral/Joachim/Mihli party while idle
-  and, at Monk 17, transition from exhausted Konschtat sheep to a
-  metadata-vetted Valkurm Sand Hare cluster. Cross-zone control remains
-  combat-free and exact-check gated.
+- A level-aware lease treats Valaineral/Joachim/Mihli availability as a combat
+  invariant and repairs only a missing, defeated, or zone-dismissed Trust.
+  It deliberately does not refresh living Trusts merely because Pablo levels;
+  avoiding those dismiss/recast cycles keeps combat continuous. At level 17
+  it transitions from exhausted Konschtat sheep to a metadata-vetted Valkurm
+  Sand Hare cluster. Cross-zone control remains combat-free and exact-check
+  gated.
+- Validated level-band transitions take priority while idle once their level
+  threshold is reached; they no longer wait for a broad sweep to exhaust every
+  respawning lower-level target.
 - Valkurm rotation explicitly admits level-17 Sand Hare metadata as camp
   candidates, but the live `/check` result remains authoritative. A live
   `even match` Hare was excluded before attack while `decent challenge` Hares
@@ -68,34 +77,32 @@ resolved failures belong in `docs/`.
   Treasure Caskets, mobs above the level envelope, and vertically separated
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
-- Inventory is 18/30 after the quest-item turn-in. Equipped combat gear, Meat
+- Inventory is 30/30 after the Warrior run. Equipped combat gear, Meat
   Jerky, and reviewed field drops remain carried; supplies are in the 30-slot
   Mog Sack and spare armor is in Mog Wardrobe 1. Mog Safe 2 is unlocked at
-  0/50. Store the newly carried 11 Beastmen's Seals with Shami on the next
+  0/50. Store the newly carried 19 Beastmen's Seals with Shami on the next
   Port Jeuno visit; 27 are already stored.
 
-## Current Goal 1 — unlock support jobs
+## Current Goal 1 — Warrior level 20
 
 Status: **completed 2026-07-29**
 
-1. Accept `Elder Memories` normally from Isacio in Selbina.
-2. Acquire one Magicked Skull, one Damselfly Worm, and one Crab Apron through
-   ordinary Valkurm combat, using Trusts and the bounded farm supervisor where
-   its current policies fit.
-3. Trade the exact quest items to Isacio in the server-required order:
-   Magicked Skull, Damselfly Worm, then Crab Apron.
-4. Verify the support-job unlock through live system evidence and the
-   `char_jobs.unlocked` value changing from its baseline of 126.
-5. Select one level-1 starter job as Pablo's support job through the normal Mog
-   House job-change menu and verify both client and server state.
-6. Document the pinned quest/drop behavior, automation decisions, and verified
-   result; commit and push the completed workflow.
+1. Select Warrior as the main job and Monk as the support job through the
+   ordinary Mog House interface. **Complete.**
+2. Equip level-appropriate starter gear and run the detached trusted-camp
+   supervisor with Trust repair, broad vetted pulls, guarded relocation,
+   weapon skills, and safe Warrior abilities.
+3. Progress through South Gustaberg, Konschtat Highlands, and Valkurm Dunes as
+   required by the validated level bands.
+4. Verify Warrior level 20 from live client state, document material findings,
+   run the test suite, then commit and push the completed checkpoint.
 
-All six exit criteria are complete without administrative item grants or
-quest/job-state edits. The three items were consumed in the pinned order,
-Isacio emitted the unlock system message, the server unlock bit was verified
-read-only, and the final client state is main job 2 level 25 with support job
-1 level 1.
+All four exit criteria are complete. The final clean Valkurm lease restored
+three Trusts after death recovery, completed 24 fights for 4,670 EXP, used 10
+weapon skills and four Berserks, performed no level-gap Trust refreshes, and
+recorded no deaths. It stopped itself at Warrior 20 after draining reactive
+combat; live state independently verified Warrior 20 / Monk 10 and the
+completed goal overlay.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.

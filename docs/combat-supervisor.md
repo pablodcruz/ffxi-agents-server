@@ -269,6 +269,9 @@ stops the lease once level 20 is observed and no reactive threat remains.
 For the level-20 progression profile, add `--auto-transition true`. The local
 supervisor then:
 
+- when started in South Gustaberg, keeps using same-zone camp rotation through
+  level 13, then selects a metadata-vetted level-14 Mad Sheep cluster and
+  performs a guarded combat-free transition to Konschtat Highlands;
 - verifies or summons Valaineral, Joachim, and Mihli Aliapoh only while idle;
 - keeps Konschtat as the active zone through level 16;
 - at level 17, selects the real Valkurm
@@ -456,6 +459,105 @@ using Boost automatically. Pablo later reached Monk 25 during the same
 durable campaign and used Focus automatically; the final Ghoul lease recorded
 one fight, one reactive handoff, one weapon skill, three job abilities, 180
 EXP, and zero deaths.
+
+Warrior uses the same level-aware gate. Berserk becomes eligible at level 15
+and retains its normal five-minute cooldown. The future low-friction ladder
+adds Defender at 25 only when Pablo is at 50% HP or lower, party-wide Warcry at
+35 while at least 60% HP, and Aggressor at 45 while at least 60% HP. Berserk
+itself now requires at least 70% HP, preventing it from immediately replacing
+an emergency defensive response. Provoke is deliberately excluded from
+routine Trust-supported farming: Valaineral should retain tanking
+responsibility, and a generic damage loop should not force Pablo to take hate.
+Retaliation is excluded because its movement penalty conflicts with routing;
+two-hour abilities remain reserved for explicit emergencies.
+
+Long job-leveling leases treat Trust availability—not Trust level parity—as an
+idle-state invariant. Before every proactive pull, the supervisor requires
+Valaineral, Joachim, and Mihli Aliapoh to be alive and in the current zone. A
+missing, defeated, or zone-dismissed Trust pauses new pulls while local summon
+retries continue through the normal recast delay. Living Trusts are no longer
+dismissed merely because Pablo gained levels; the extra strength did not
+justify repeated refresh and recast friction.
+
+This closes a live South Gustaberg failure: an Ornery Sheep used Sheep Song,
+Valaineral died while the party slept, and the older lease continued pulling
+until the remaining support failed. The first refresh calibration also showed
+why a failed summon must not terminate the supervisor: two Trusts remained in
+their post-dismiss unavailable window, and a nearby Goblin aggroed after the
+lease stopped. The repaired policy stays alive, blocks proactive combat, and
+retries locally. Live verification restored Valaineral, Joachim, and Mihli at
+Warrior level 6 before the next pull.
+
+The same calibration exposed a cooperative-stop edge case. A stop request
+correctly blocked new pulls but also skipped repeated reactive attempts against
+a Hornet already attacking Valaineral. Cooperative drain now suppresses only
+proactive engagements; existing and newly observed reactive threats are always
+finished before the idle window can complete. The replacement lease engaged
+that exact Hornet in 196 milliseconds and continued farming.
+
+The Warrior level-10 run exposed a second reactive edge case. A Goblin Thug
+remained engaged with Valaineral at 28% HP after Pablo dropped to idle, while
+the supervisor's target record still said `fighting`. The lease heartbeated
+normally for more than a minute but could not finish the mob until an exact-ID
+guarded attack was issued. The fight then ended at 97% HP. A policy-backed
+recovery now detects an engaged, living reactive target within six yalms while
+Pablo is idle, retargets its exact server ID, and reissues `/attack` after a
+three-second gate. This keeps the Trust from fighting alone and avoids a
+model-driven rescue for the same condition. The replacement lease
+live-validated the branch on its next Goblin handoff:
+`reactive_engagement_reissued` fired once at 0.94 yalms and the fight completed
+immediately at 98% HP.
+
+The same dropped-stance failure later appeared on a proactive Goblin at
+Warrior 15. Pablo remained idle at melee distance while the untouched Goblin
+reduced him to 42% HP. The recovery is therefore mode-independent: any tracked
+living, engaged target within six yalms triggers an exact retarget and bounded
+attack reissue when Pablo drops to idle. The replacement lease live-validated
+the generalized branch on a proactive Mist Lizard at 1.16 yalms; it emitted
+`engagement_reissued` once and completed the fight about 250 ms later.
+
+An engaged Rock Eater also exposed a related range stall. At 4.56 yalms, Pablo
+remained in battle stance but repeatedly received `out of range` while the
+worm continued damaging the party. Mode-122 out-of-range events now enter the
+same bounded line-of-sight movement recovery with a six-yalm maximum and the
+existing three-attempt cap.
+
+The first Warrior-19 Valkurm lease then exposed a movement sampling race:
+Pablo moved more than six yalms from the computed nudge destination before
+`ffxi_move_to_position` accepted it, so the bridge correctly rejected the
+stale waypoint. That exact `max_start_distance` rejection is now treated as a
+recoverable no-move result; other movement errors remain fatal. A focused
+policy test pins the distinction. The interrupted reactive fight petrified and
+defeated Pablo after the old process had exited, but the replacement lease
+correctly returned to the Home Point. A guarded private-server combat-position
+teleport returned him to the previously validated camp, where the supervisor
+rebuilt the missing Trust party before resuming pulls.
+
+The final Warrior-20 lease completed 24 fights for 4,670 EXP with 10 weapon
+skills, four automatic Berserks, three post-zone Trust summons, no Trust
+refreshes, and no deaths. It observed Warrior 20 / Monk 10 at 342/4,600 EXP,
+updated the in-game goal overlay, drained the last reactive threat, and stopped
+itself with reason `target_level`. A separate live character-state read
+confirmed the same job levels and completed overlay.
+
+An earlier complete level-10 refresh live-validated the long retry path:
+after a partial repair immediately followed by a full refresh, Joachim and
+Mihli remained unavailable for roughly four minutes. The supervisor stayed
+alive at the vetted camp, blocked proactive pulls, retried both locally,
+restored the complete party, and resumed combat without a process restart.
+This is an edge case rather than the normal refresh duration: the clean
+level-12 rebuild restored Valaineral, Mihli, and Joachim in 34 seconds. These
+level-gap refreshes are retained as historical calibration only and are no
+longer part of the active farming policy.
+
+The first no-level-refresh lease also exposed a routing priority issue:
+cross-zone progression was evaluated only after five seconds with no admitted
+target. A broad sweep over respawning low-level mobs might never satisfy that
+condition. Validated level-band transitions now run first whenever the player
+is idle at the threshold. At Warrior 14 the replacement lease immediately
+zoned from South Gustaberg to the vetted Konschtat Mad Sheep camp, repaired the
+Trusts removed by zoning, and resumed combat without dismissing a living Trust
+for level parity.
 
 ### Verified Elder Memories completion
 
