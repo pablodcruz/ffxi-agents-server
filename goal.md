@@ -12,7 +12,7 @@ resolved failures belong in `docs/`.
 ## Current state
 
 - Pablo: Hume male, Monk 20, 389/4,600 EXP.
-- Currency: 29,914 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Currency: 19,574 gil; 4,934 Sparks; 1,100 Unity accolades.
 - Equipment verified through AgentBridge: Brass Baghnakhs, Trader's Chapeau,
   Trader's Saio, Trader's Cuffs, Trader's Slops, Trader's Pigaches, White
   Belt, and Bastokan Ring.
@@ -29,10 +29,9 @@ resolved failures belong in `docs/`.
   `/ma "Apururu (UC)" <me>` correctly fails because Pablo's `char_spells`
   record lacks 955. Mihli Aliapoh remains the healer until that server gap is
   fixed normally.
-- Control: AgentBridge 0.25.0, exact-ID targeting, exact normal-client RoE
-  activation, guarded private-server
-  travel, automatic Combo, local-only activity feed, and bounded farm
-  supervisor.
+- Control: AgentBridge 0.27.0, exact-ID targeting, exact normal-client RoE
+  activation and container transfers, guarded private-server travel, automatic
+  Combo, local-only activity feed, and bounded farm supervisor.
 - Safe baseline camp: Konschtat Highlands zone 108 near
   `(-326.295, -51.917)`, using Mad Sheep and Strolling Saplings.
 - Level-15 camp: Konschtat Highlands zone 108 near
@@ -55,25 +54,34 @@ resolved failures belong in `docs/`.
   collision-aware navigation meets its reliability target.
 - Farming exclusions: worms, Stone Eaters, Huge Hornets, Vultures, Treasure
   Caskets, and the western South Gustaberg Quadav pocket.
-- Inventory remains auto-sorted at 22/30 slots. Store future Beastmen's Seal
-  batches with Shami in Port Jeuno; Pablo currently has 27 stored and none
-  carried.
+- Inventory is reorganized at 9/30 slots: equipped combat gear and Meat Jerky
+  remain carried, supplies are in the 30-slot Mog Sack, and nine spare armor
+  pieces are in Mog Wardrobe 1. Mog Safe 2 is unlocked at 0/50. Store future
+  Beastmen's Seal batches with Shami in Port Jeuno; Pablo currently has 27
+  stored and none carried.
 
-## Current Goal 1 — upgrade Pablo's level-20 equipment
+## Current Goal 1 — expand usable inventory
 
-Status: **completed**
+Status: **completed 2026-07-29**
 
-1. Stored all 13 carried Beastmen's Seals with Shami, raising the verified
-   stored balance from 14 to 27.
-2. Sold only reviewed non-food drops: Sheepskins, Rabbit Hides, Grain Seeds,
-   Sheep Teeth, and Treant Bulbs. Gil increased from 28,815 to 29,914.
-3. Bought the exact level-20 Trader's set from Isakoth for 351 Sparks:
-   Chapeau 15207, Saio 14446, Cuffs 14053, Slops 15404, and Pigaches 15343.
-4. Equipped all five pieces with native `/equip` commands through the
-   allowlisted MCP control plane. AgentBridge verified every exact slot and
-   item ID.
-5. Final state verified: inventory 22/30, 29,914 gil, 4,934 Sparks, 1,100
-   Unity accolades, and no carried seals.
+1. Buy a 30-slot Mog Sack from an Artisan Moogle for exactly 9,980 gil.
+2. Buy Amaryllis, Marguerite, and Lilac from Areebah in Upper Jeuno.
+3. Complete `A Lady's Heart`, `Growing Flowers`, and `Flower Child` through
+   exact-item trades to their intended NPCs.
+4. Enter Pablo's Bastok Mog House and verify the second floor and Mog Safe 2
+   unlock normally.
+5. Move equipment to a Mog Wardrobe and supplies to the Case or Sack while
+   preserving field-use food and all protected items.
+6. Assess normal sources for the four Gobbiebag Part I materials without
+   administrative item grants or an uneconomical 150,000-gil stew purchase.
+7. Verify capacities, inventory, gil, quest state, and protected items before
+   declaring the goal complete.
+
+All seven exit criteria are complete. The live map server accepted an exact
+Sack-to-Safe-2 item transfer and its reversal after the unlock cutscene,
+authoritatively proving runtime access to the 50-slot container. The online
+`chars.moghouse` database value had not yet flushed; verify it after a normal
+logout before treating that field as persistence evidence.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.
@@ -88,6 +96,9 @@ credentials ignored and local.
 - Level-11 Sparks equipment set bought and equipped.
 - Level-20 Trader's armor set bought and equipped after a guarded inventory
   cleanup and seal-storage run.
+- Mog Sack purchased, all three starter-city Mog House exit quests completed,
+  Mog Safe 2 unlocked, and carried inventory reduced from 23/30 to 9/30
+  without administrative item grants.
 - Trust/Unity progression completed, including Joachim, `All for One`,
   Apururu's Unity membership, Concordoll, and 1,000 Unity accolades.
 - Automated Monk 15→20 progression completed with exact-check combat, guarded

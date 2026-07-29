@@ -20,6 +20,7 @@ const destination = {
 const zoneId = Number(argument("--zone"));
 const reason = argument("--reason");
 const allowedReasons = new Set([
+  "quest_npc",
   "vendor",
   "travel_node",
   "combat_position",
@@ -34,7 +35,7 @@ if (!Number.isInteger(zoneId) || zoneId < 0 || zoneId > 298) {
 }
 if (!allowedReasons.has(reason)) {
   throw new Error(
-    "Service teleport requires --reason vendor|travel_node|combat_position|stuck_recovery.",
+    "Service teleport requires --reason quest_npc|vendor|travel_node|combat_position|stuck_recovery.",
   );
 }
 

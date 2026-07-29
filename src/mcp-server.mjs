@@ -917,7 +917,7 @@ server.registerTool(
   {
     title: "Teleport the private-server character for service travel",
     description:
-      "Queue one guarded LandSandBoat !pos command for the local private-server character. Coordinates use AgentBridge world axes: x/y are horizontal and z is elevation. This is for vendor, registered travel-node, short combat positioning, or stuck-recovery travel only; arbitrary GM command text is never accepted.",
+      "Queue one guarded LandSandBoat !pos command for the local private-server character. Coordinates use AgentBridge world axes: x/y are horizontal and z is elevation. This is for an exact quest NPC, vendor, registered travel node, short combat positioning, or stuck recovery only; arbitrary GM command text is never accepted.",
     inputSchema: {
       agent_id: agentIdSchema,
       x: z.number().min(-10000).max(10000),
@@ -925,6 +925,7 @@ server.registerTool(
       z: z.number().min(-10000).max(10000),
       zone_id: z.number().int().min(0).max(298),
       reason: z.enum([
+        "quest_npc",
         "vendor",
         "travel_node",
         "combat_position",
@@ -951,6 +952,71 @@ server.registerTool(
             z: elevation,
             zone_id,
             reason,
+            confirmation,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_move_inventory_item",
+  {
+    title: "Move one exact FFXI inventory item",
+    description:
+      "Move an exact item and quantity between Inventory, Mog Sack, Mog Case, Mog Wardrobe 1, or Mog Safe 2 using FFXI's normal 0x029 client packet. AgentBridge rechecks the source slot and item ID, rejects equipped items and locked destinations, and never exposes arbitrary packet injection.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      source_container: z.number().int().refine(
+        (value) => [0, 6, 7, 8, 9].includes(value),
+        "source_container must be 0, 6, 7, 8, or 9",
+      ),
+      source_slot: z.number().int().min(1).max(80),
+      destination_container: z.number().int().refine(
+        (value) => [0, 6, 7, 8, 9].includes(value),
+        "destination_container must be 0, 6, 7, 8, or 9",
+      ),
+      item_id: z.number().int().min(1).max(65534),
+      quantity: z.number().int().min(1).max(999999),
+      confirmation: z.literal("MOVE PRIVATE SERVER INVENTORY ITEM"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    source_container,
+    source_slot,
+    destination_container,
+    item_id,
+    quantity,
+    confirmation,
+  }) => {
+    try {
+      if (source_container === destination_container) {
+        throw new BridgeError(
+          "Source and destination containers must be different.",
+          "invalid_item_transfer",
+        );
+      }
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "move_inventory_item",
+          {
+            source_container,
+            source_slot,
+            destination_container,
+            item_id,
+            quantity,
             confirmation,
           },
           { write: true },

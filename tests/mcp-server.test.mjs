@@ -30,6 +30,7 @@ async function createMockBridge(token) {
         "menu_input",
         "move_to_entity",
         "move_to_position",
+        "move_inventory_item",
         "service_teleport",
         "start_roe_objective",
         "set_activity_feed",
@@ -164,6 +165,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_interact",
       "ffxi_menu_input",
       "ffxi_move_to_entity",
+      "ffxi_move_inventory_item",
       "ffxi_move_to_position",
       "ffxi_observe",
       "ffxi_recent_events",
@@ -351,6 +353,20 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(serviceTeleport.isError, undefined);
   assert.equal(serviceTeleport.structuredContent.operation, "service_teleport");
+
+  const itemMove = await client.callTool({
+    name: "ffxi_move_inventory_item",
+    arguments: {
+      source_container: 6,
+      source_slot: 5,
+      destination_container: 9,
+      item_id: 8711,
+      quantity: 1,
+      confirmation: "MOVE PRIVATE SERVER INVENTORY ITEM",
+    },
+  });
+  assert.equal(itemMove.isError, undefined);
+  assert.equal(itemMove.structuredContent.operation, "move_inventory_item");
 
   const interaction = await client.callTool({
     name: "ffxi_interact",

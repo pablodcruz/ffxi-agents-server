@@ -11,9 +11,10 @@ defaults to the dedicated `ffxi_service_teleport` MCP operation. This avoids
 spending an open-ended number of movement probes on decorative collision,
 canals, disconnected navmesh corridors, and camera-relative recovery.
 
-Use teleport for only four allowlisted reasons:
+Use teleport for only five allowlisted reasons:
 
 - `combat_position`;
+- `quest_npc`;
 - `vendor`;
 - `travel_node`; or
 - `stuck_recovery`.
@@ -22,7 +23,8 @@ Until short-range approach is reliable, field target acquisition may teleport
 to a bounded safe offset from one policy-approved mob. It does not teleport
 during an active fight or alter combat results. A verified normal route remains
 useful for gameplay testing, but unverified navigation is no longer the
-default way to reach a merchant, registered travel node, or approved target.
+default way to reach an exact quest NPC, merchant, registered travel node, or
+approved target.
 
 The host helper accepts AgentBridge coordinates, where `x` and `y` are the
 horizontal plane and `z` is elevation:
@@ -916,10 +918,88 @@ allowlisted MCP gameplay-command path. AgentBridge then authoritatively
 reported exact item IDs 15207, 14446, 14053, 15404, and 15343 in the head,
 body, hands, legs, and feet slots. Final inventory was 22/30. A read-only
 LandSandBoat database query verified 4,934 Sparks, 1,100 Unity accolades, and
-27 stored Beastmen's Seals. The bridge's aggregate `defense` observation
-remained 93 despite the exact equipment-change events and slot updates, so
-the listed +12 armor-defense difference is data-derived rather than claimed
-as a live aggregate-stat observation.
+27 stored Beastmen's Seals. The bridge initially retained an aggregate
+`defense` observation of 93, but a later zone transition refreshed it to 105,
+matching the expected +12 armor-defense increase.
+
+### Inventory expansion and exact container transfers
+
+Pablo bought a 30-slot Mog Sack normally from an Artisan Moogle for exactly
+9,980 gil, reducing the balance to 19,934. Areebah in Upper Jeuno then sold
+Amaryllis, Marguerite, and Lilac for 120 gil each. Exact-item trades completed
+the three starter-city Mog House exit quests:
+
+| Quest | NPC | Flower |
+|---|---|---|
+| `A Lady's Heart` | Valah Molkot, Bastok Markets | Amaryllis |
+| `Growing Flowers` | Kuu Mohzolhi, Northern San d'Oria | Marguerite |
+| `Flower Child` | Ojha Rhawash, Windurst Walls | Lilac |
+
+Each item was consumed by its intended quest. The server's nation-fame values
+all reached 120. Pablo then crossed the normal Bastok Markets Mog House zone
+line. The first entry presented the standard Mog House tutorial; interacting
+with the Moogle a second time played the actual second-floor unlock cutscene.
+The ordinary storage menu subsequently listed `Mog Safe2`.
+
+Runtime access was verified independently of the menu label. AgentBridge moved
+one exact Copper Voucher from Mog Sack to Mog Safe 2 and then back through
+FFXI's normal `0x029` item-move packet. LandSandBoat accepted both operations;
+its packet handler rejects Safe 2 access unless the live Mog House flag contains
+the unlock bit. The live container reported 50 slots. While Pablo remained
+online, `chars.moghouse` still read `1`, so that database field is not recorded
+as persistence proof until it is checked after a normal logout.
+
+AgentBridge 0.27.0 and the host helper constrain item movement to exact source
+slot, item ID, quantity, and two different allowlisted containers. Equipped
+items, open menus, locked destinations, and ambiguous results stop safely:
+
+```sh
+pnpm mcp:move-item -- \
+  --source 0 \
+  --slot 12 \
+  --destination 6 \
+  --item-id 8711 \
+  --quantity 1
+```
+
+The final organization is:
+
+| Container | Used / capacity | Contents |
+|---|---:|---|
+| Inventory | 9 / 30 | Eight equipped combat pieces and Meat Jerky |
+| Mog Sack | 5 / 30 | Two stacks of G. Sheep Meat, Hare Meat, Instant Warp, Copper Voucher |
+| Mog Wardrobe 1 | 9 / 80 | The prior level-11 armor and starting Hume armor |
+| Mog Safe 2 | 0 / 50 | Empty after the reversible access proof |
+
+This leaves 21 immediately usable Inventory slots while keeping every
+protected item.
+
+#### Gobbiebag Part I assessment
+
+Bluffnix requires Dhalmel Leather (848), Steel Ingot (652), Linen Cloth (826),
+and Peridot (788), or one 150,000-gil Goblin Stew 880. The stew is
+uneconomical at 19,574 gil, and the local auction house had no active material
+listings.
+
+Normal acquisition is possible but not yet efficient:
+
+- Dhalmel Leather is a Leathercraft 21 synthesis. Farming Dhalmel Hides and
+  crafting the leather is more plausible than its roughly one-percent direct
+  Goblin Furrier drop.
+- Linen Cloth is a Clothcraft 22 synthesis from three Linen Threads. Kuzah
+  Hpirohpon sells the threads, but Pablo does not yet have the craft rank.
+- Kamilah's dynamic guild stock can carry Steel Ingots, with a configured
+  maximum buy price of 26,250 gil. Check the live price after saving beyond
+  that amount.
+- The immediately visible 8,000-gil Peridot listing is rank-gated to a
+  Goldsmithing apprentice. The low-level Green Rock synthesis yields Peridot
+  only as an HQ result, so it is not a reliable present route.
+
+The normal plan is therefore to defer Gobbiebag I: save enough to inspect
+Kamilah's live Steel Ingot price, develop Leathercraft 21 and Clothcraft 22 (or
+use a legitimate player crafter), farm Dhalmel Hides, buy Linen Threads, and
+obtain Peridot after reaching the relevant Goldsmithing rank or later BCNM
+content. No administrative item grant is warranted.
 
 ### Verified travel-node cache
 

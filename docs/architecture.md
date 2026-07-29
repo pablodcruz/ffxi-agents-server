@@ -37,6 +37,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_target_entity` | Yes | Select one nearby entity |
 | `ffxi_move_to_entity` | Yes | Start a short, progress-checked auto-follow lease |
 | `ffxi_move_to_position` | Yes | Move toward one bounded world-coordinate waypoint |
+| `ffxi_move_inventory_item` | Yes | Move one exact item between five allowlisted containers |
 | `ffxi_directional_input` | Yes | Send one automatically released fallback input pulse |
 | `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command, including a standard NPC trade window |
 | `ffxi_farm_start` | Yes | Start one bounded local proactive/reactive combat lease |
@@ -111,8 +112,9 @@ command string crosses MCP, and the normal command validator still rejects GM,
 chat, addon, console, script, and chained commands. The local character has
 audited GM level 1 only so LandSandBoat will accept this dedicated operation.
 
-The allowlisted reasons are vendor travel, registered travel-node travel,
-bounded pre-combat positioning, and stuck recovery. Pre-combat positioning
+The allowlisted reasons are exact quest-NPC travel, vendor travel, registered
+travel-node travel, bounded pre-combat positioning, and stuck recovery.
+Pre-combat positioning
 places the character at a safe offset from one policy-approved target; it does
 not run during an active fight or change combat outcomes. Same-zone positioning
 omits LandSandBoat's zone argument so it does not reload the area or dismiss
@@ -137,7 +139,12 @@ assets.
   console commands, scripts, or arbitrary GM commands. The guarded service
   teleport is the sole dedicated GM-backed operation. One separate exact RoE
   helper emits only FFXI's normal `0x10C` objective-start packet after explicit
-  private-server confirmation; LandSandBoat retains normal validation.
+  private-server confirmation. AgentBridge 0.27.0 also exposes one exact item
+  transfer operation using FFXI's normal `0x029` packet. It accepts only
+  Inventory, Mog Sack, Mog Case, Mog Wardrobe 1, and Mog Safe 2; rechecks the
+  source slot, item ID, quantity, equipment state, menu state, and destination
+  access; and requires an exact confirmation phrase. Neither helper permits
+  arbitrary packet IDs or payloads, and LandSandBoat retains normal validation.
 
 If Codex is not on the Windows client host, the preferred order is:
 

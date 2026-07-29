@@ -3,15 +3,15 @@ AgentBridge exposes a narrow, localhost-only JSON-lines interface for an AI
 agent operating on a private LandSandBoat server.
 
 It intentionally does not support arbitrary GM commands, chat, arbitrary
-console commands, scripts, packet injection, or remote network binding. Two
-dedicated private-server operations are exposed: validated LandSandBoat !pos
-service travel and exact Records of Eminence objective activation using the
-normal client packet.
+console commands, scripts, packet injection, or remote network binding. Three
+narrow private-server operations are exposed: validated LandSandBoat !pos
+service travel, exact Records of Eminence activation, and exact inventory
+transfers using their normal client packets.
 --]]
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.25.0';
+addon.version = '0.27.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -112,6 +112,7 @@ local modified_menu_actions =
 local allowed_teleport_reasons =
 {
     combat_position = true,
+    quest_npc = true,
     vendor = true,
     travel_node = true,
     stuck_recovery = true,
@@ -1482,6 +1483,135 @@ local function start_roe_objective(params)
     };
 end
 
+local function move_inventory_item(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    local inventory = memory:GetInventory();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Item transfer requires a logged-in private-server character.');
+    end
+    if (player:GetIsZoning() ~= 0) then
+        error('Item transfer is unavailable while zoning.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Item transfer requires all in-game menus and dialogue to be closed.');
+    end
+    if (params.confirmation ~= 'MOVE PRIVATE SERVER INVENTORY ITEM') then
+        error('Item transfer requires the exact private-server confirmation phrase.');
+    end
+
+    local allowed_containers =
+    {
+        [0] = true, -- Inventory
+        [6] = true, -- Mog Sack
+        [7] = true, -- Mog Case
+        [8] = true, -- Mog Wardrobe
+        [9] = true, -- Mog Safe 2
+    };
+    local source_container = tonumber(params.source_container);
+    local destination_container = tonumber(params.destination_container);
+    local source_slot = tonumber(params.source_slot);
+    local item_id = tonumber(params.item_id);
+    local quantity = tonumber(params.quantity);
+    if (
+        source_container == nil or source_container ~= math.floor(source_container) or
+        destination_container == nil or destination_container ~= math.floor(destination_container) or
+        not allowed_containers[source_container] or
+        not allowed_containers[destination_container] or
+        source_container == destination_container
+    ) then
+        error('Item transfer containers must be different allowlisted container IDs.');
+    end
+    if (
+        source_slot == nil or source_slot ~= math.floor(source_slot) or
+        source_slot < 1 or source_slot > 80
+    ) then
+        error('Item transfer source_slot must be an integer from 1 through 80.');
+    end
+    if (
+        item_id == nil or item_id ~= math.floor(item_id) or
+        item_id < 1 or item_id > 65534
+    ) then
+        error('Item transfer item_id must be an integer from 1 through 65534.');
+    end
+    if (
+        quantity == nil or quantity ~= math.floor(quantity) or
+        quantity < 1 or quantity > 999999
+    ) then
+        error('Item transfer quantity must be an integer from 1 through 999999.');
+    end
+
+    local source_item = inventory:GetContainerItem(source_container, source_slot);
+    if (
+        source_item == nil or
+        tonumber(source_item.Id) ~= item_id or
+        (tonumber(source_item.Count) or 0) < quantity
+    ) then
+        error('The exact source slot, item ID, and quantity are no longer available.');
+    end
+    for equipment_slot = 0, 15 do
+        local equipment_entry = inventory:GetEquippedItem(equipment_slot);
+        local packed_index = equipment_entry ~= nil and tonumber(equipment_entry.Index) or 0;
+        if (
+            packed_index > 0 and
+            bit.band(packed_index, 0xFF00) / 0x0100 == source_container and
+            packed_index % 0x0100 == source_slot
+        ) then
+            error('Equipped items must be unequipped before an item transfer.');
+        end
+    end
+
+    local destination_capacity =
+        tonumber(inventory:GetContainerCountMax(destination_container)) or 0;
+    if (destination_capacity <= 0) then
+        error('The destination container is not unlocked.');
+    end
+
+    stop_movement('item_transfer');
+    stop_input_pulse('item_transfer');
+    stop_heading_hold('item_transfer');
+
+    -- LandSandBoat GP_CLI_COMMAND_ITEM_MOVE (0x029):
+    -- uint32 quantity, uint8 source container, uint8 destination container,
+    -- uint8 source slot, uint8 destination slot (0xFF selects a free slot).
+    local packet =
+    {
+        0x29, 0x06, 0x00, 0x00,
+        quantity % 0x0100,
+        math.floor(quantity / 0x0100) % 0x0100,
+        math.floor(quantity / 0x010000) % 0x0100,
+        math.floor(quantity / 0x01000000) % 0x0100,
+        source_container,
+        destination_container,
+        source_slot,
+        0xFF,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x029, packet);
+    add_event(
+        -1,
+        ('Agent moved exact item %u x%u from container %u to %u.'):fmt(
+            item_id,
+            quantity,
+            source_container,
+            destination_container
+        )
+    );
+    return
+    {
+        queued = true,
+        item_id = item_id,
+        quantity = quantity,
+        source_container = source_container,
+        source_slot = source_slot,
+        destination_container = destination_container,
+        packet_id = 0x029,
+        normal_client_packet = true,
+    };
+end
+
 local function dispatch(request)
     if (type(request) ~= 'table') then
         error('Request must be a JSON object.');
@@ -1631,6 +1761,8 @@ local function dispatch(request)
         return service_teleport(params);
     elseif (request.operation == 'start_roe_objective') then
         return start_roe_objective(params);
+    elseif (request.operation == 'move_inventory_item') then
+        return move_inventory_item(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);
