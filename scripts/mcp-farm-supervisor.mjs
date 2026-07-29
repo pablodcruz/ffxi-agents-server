@@ -77,6 +77,7 @@ const minimumStartHpPercent = integerArgument(
 );
 const allowCaution = booleanArgument("--allow-caution");
 const autoRelocate = booleanArgument("--auto-relocate");
+const autoTransition = booleanArgument("--auto-transition");
 const targetLevel = integerArgument("--target-level", 0, 0, 99);
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
 
@@ -93,17 +94,20 @@ if (argument("--confirmation") !== FARM_CONFIRMATION) {
 const runtimeDir = path.join(projectDir, "runtime", "farm-supervisor");
 const statePath = path.join(runtimeDir, `${agentId}.json`);
 const stopPath = path.join(runtimeDir, `${leaseId}.stop`);
-const metadataPath = path.join(
-  projectDir,
-  "runtime",
-  "mob-metadata",
-  `zone-${zoneId}.json`,
-);
+const metadataDirectory = path.join(projectDir, "runtime", "mob-metadata");
 const pollMilliseconds = 200;
 const threatDistance = 20;
 const cooldownMilliseconds = 30_000;
 const relocationIdleMilliseconds = 5_000;
 const relocationCooldownMilliseconds = 300_000;
+const desiredTrusts = Object.freeze([
+  Object.freeze({ observed_name: "Valaineral", spell_name: "Valaineral" }),
+  Object.freeze({ observed_name: "Joachim", spell_name: "Joachim" }),
+  Object.freeze({
+    observed_name: "MihliAliapoh",
+    spell_name: "Mihli Aliapoh",
+  }),
+]);
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(projectDir, "src", "mcp-server.mjs")],
@@ -133,6 +137,8 @@ const counters = {
   teleport_while_engaged: 0,
   recovery_while_engaged: 0,
   camp_relocations: 0,
+  zone_transitions: 0,
+  trust_summons: 0,
 };
 const metrics = {
   aggro_response_samples: 0,
@@ -159,8 +165,13 @@ let stopping = false;
 let cooperativeStopRequestedAt = null;
 let cooperativeStopIdleSamples = 0;
 let recovering = false;
+let activeZoneId = zoneId;
+let metadata = [];
 let leaseOriginPosition = null;
 let noTargetSince = null;
+let levelGoalOverlayDirty = targetLevel > 0;
+let lastLevelGoalProgressKey = null;
+let nextLevelGoalOverlayAttemptAt = 0;
 const cooldowns = new Map();
 const relocationCooldowns = new Map();
 const threatFirstSeen = new Map();
@@ -203,9 +214,11 @@ async function writeState(force = false) {
       minimum_start_hp_percent: minimumStartHpPercent,
       allow_caution: allowCaution,
       auto_relocate: autoRelocate,
+      auto_transition: autoTransition,
       target_level: targetLevel,
       weapon_skill: weaponSkill,
     },
+    active_zone_id: activeZoneId,
     counters,
     metrics,
   };
@@ -277,6 +290,8 @@ async function updateLevelGoalOverlay() {
   ) {
     return null;
   }
+  const progressKey = `${level}:${currentExp}:${neededExp}`;
+  if (progressKey === lastLevelGoalProgressKey) return null;
   const existing = state?.goal_overlay || {};
   const gil = Number(existing.current_gil);
   const targetGil = Number(existing.target_gil);
@@ -297,7 +312,54 @@ async function updateLevelGoalOverlay() {
     exp_needed: neededExp,
     target_level: targetLevel,
   });
+  lastLevelGoalProgressKey = progressKey;
   return { level, reached: level >= targetLevel };
+}
+
+function partyNames(observation) {
+  return new Set(
+    (observation?.party || []).map((member) => String(member?.name || "")),
+  );
+}
+
+async function ensureTrustParty(observation) {
+  let current = observation;
+  for (const trust of desiredTrusts) {
+    if (partyNames(current).has(trust.observed_name)) continue;
+    if (
+      hasLiveCombat(current)
+      || Number(current?.player?.status) !== 0
+      || current?.login_status !== 2
+    ) {
+      return current;
+    }
+    const uiState = await characterState();
+    if (uiState?.menu_open) return current;
+    await armControl();
+    await command(`/ma "${trust.spell_name}" <me>`);
+    let summoned = false;
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      current = await sample();
+      if (hasLiveCombat(current)) return current;
+      if (partyNames(current).has(trust.observed_name)) {
+        summoned = true;
+        counters.trust_summons += 1;
+        log("trust_summoned", {
+          name: trust.observed_name,
+          zone_id: activeZoneId,
+        });
+        break;
+      }
+    }
+    if (!summoned) {
+      log("trust_summon_unavailable", {
+        name: trust.observed_name,
+        zone_id: activeZoneId,
+      });
+    }
+  }
+  return current;
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -385,7 +447,7 @@ function verifySession(observation) {
   }
   const partyPlayer = playerPartyMember(observation);
   const observedZoneId = Number(partyPlayer?.zone_id);
-  if (observedZoneId !== zoneId) {
+  if (observedZoneId !== activeZoneId) {
     stopReason = `zone_changed:${observedZoneId || "unknown"}`;
     return false;
   }
@@ -811,7 +873,7 @@ async function positionNear(target, observation, {
     x: destination.x,
     y: destination.y,
     z: destination.z,
-    zone_id: zoneId,
+    zone_id: activeZoneId,
     reason: "combat_position",
     confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
   });
@@ -848,7 +910,7 @@ async function returnToLeaseOrigin(observation) {
     x: Number(leaseOriginPosition.x),
     y: Number(leaseOriginPosition.y),
     z: Number(leaseOriginPosition.z),
-    zone_id: zoneId,
+    zone_id: activeZoneId,
     reason: "combat_position",
     confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
   });
@@ -895,7 +957,7 @@ async function relocateToCamp(camp, observation) {
     x: destination.x,
     y: destination.y,
     z: destination.z,
-    zone_id: zoneId,
+    zone_id: activeZoneId,
     reason: "combat_position",
     confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
   });
@@ -914,6 +976,97 @@ async function relocateToCamp(camp, observation) {
     cluster_server_ids: camp.cluster_server_ids,
     live_combat_after: hasLiveCombat(after),
   });
+  return after;
+}
+
+async function loadZoneMetadata(nextZoneId) {
+  const document = JSON.parse(await fs.readFile(
+    path.join(metadataDirectory, `zone-${nextZoneId}.json`),
+    "utf8",
+  ));
+  return document.mobs || [];
+}
+
+function nextLevelBandTransition(playerLevel) {
+  if (
+    autoTransition
+    && activeZoneId === 108
+    && Number(playerLevel) >= 18
+    && Number(targetLevel || 20) >= 20
+  ) {
+    return {
+      zone_id: 103,
+      allowed_names: ["Sand Hare"],
+      reason: "level_18_valkurm_sand_hare_band",
+    };
+  }
+  return null;
+}
+
+async function transitionToLevelBand(profile, camp, observation) {
+  if (!profile || !camp || hasLiveCombat(observation)) return observation;
+  const destination = {
+    x: Number(camp.position.x) - 4,
+    y: Number(camp.position.y),
+    z: Number(camp.position.z),
+  };
+  await transition("transitioning_zone", {
+    from_zone_id: activeZoneId,
+    to_zone_id: profile.zone_id,
+    reason: profile.reason,
+    name: camp.name,
+    cluster_size: camp.cluster_size,
+    nearest_aggro_distance: camp.nearest_aggro_distance,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("zone_transition_blocked", { reason: "live_combat" });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    ...destination,
+    zone_id: profile.zone_id,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+
+  let after = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    after = await observe();
+    const observedZoneId = Number(playerPartyMember(after)?.zone_id);
+    if (
+      after?.login_status === 2
+      && observedZoneId === Number(profile.zone_id)
+      && after?.player?.position
+    ) {
+      break;
+    }
+  }
+  if (
+    after?.login_status !== 2
+    || Number(playerPartyMember(after)?.zone_id) !== Number(profile.zone_id)
+  ) {
+    throw new Error(`Level-band transition to zone ${profile.zone_id} did not settle.`);
+  }
+
+  activeZoneId = Number(profile.zone_id);
+  metadata = await loadZoneMetadata(activeZoneId);
+  leaseOriginPosition = { ...after.player.position };
+  cooldowns.clear();
+  relocationCooldowns.clear();
+  noTargetSince = null;
+  counters.zone_transitions += 1;
+  ingestEvents(after);
+  observeThreats(after);
+  after = await ensureTrustParty(after);
+  log("zone_transition_complete", {
+    zone_id: activeZoneId,
+    destination,
+    party_members: (after.party || []).map((member) => member.name),
+  });
+  await writeState(true);
   return after;
 }
 
@@ -1219,20 +1372,7 @@ async function handleFight(observation) {
       });
       return;
     }
-    const levelGoal = await updateLevelGoalOverlay().catch((error) => {
-      log("level_goal_overlay_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    });
-    if (levelGoal?.reached) {
-      stopReason = "target_level";
-      stopping = true;
-      log("target_level_reached", {
-        level: levelGoal.level,
-        target_level: targetLevel,
-      });
-    }
+    levelGoalOverlayDirty = targetLevel > 0;
     await transition("cooldown");
     await new Promise((resolve) => setTimeout(resolve, 750));
     return;
@@ -1266,8 +1406,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
-  const metadataDocument = JSON.parse(await fs.readFile(metadataPath, "utf8"));
-  const metadata = metadataDocument.mobs || [];
+  metadata = await loadZoneMetadata(activeZoneId);
   await client.connect(transport);
   await armControl();
   status = "running";
@@ -1280,10 +1419,12 @@ try {
     scan_radius: scanRadius,
     allow_caution: allowCaution,
     auto_relocate: autoRelocate,
+    auto_transition: autoTransition,
     target_level: targetLevel,
   });
 
   let observation = await observe();
+  observation = await ensureTrustParty(observation);
   leaseOriginPosition = observation?.player?.position
     ? { ...observation.player.position }
     : null;
@@ -1353,6 +1494,28 @@ try {
         observation,
       });
       continue;
+    }
+    if (
+      levelGoalOverlayDirty
+      && Date.now() >= nextLevelGoalOverlayAttemptAt
+    ) {
+      const levelGoal = await updateLevelGoalOverlay().catch((error) => {
+        log("level_goal_overlay_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      });
+      nextLevelGoalOverlayAttemptAt = Date.now() + 500;
+      if (levelGoal) levelGoalOverlayDirty = false;
+      if (levelGoal?.reached) {
+        stopReason = "target_level";
+        stopping = true;
+        log("target_level_reached", {
+          level: levelGoal.level,
+          target_level: targetLevel,
+        });
+        break;
+      }
     }
     if (cooperativeStopRequestedAt !== null) {
       cooperativeStopIdleSamples = (
@@ -1437,7 +1600,7 @@ try {
       observation,
       metadata,
       playerLevel: Number(partyPlayer?.main_job_level),
-      zoneId,
+      zoneId: activeZoneId,
       radius: scanRadius,
       excludedServerIds: excludedServerIds(),
     });
@@ -1450,7 +1613,7 @@ try {
         const camp = selectRelocationCamp({
           metadata,
           playerLevel: Number(partyPlayer?.main_job_level),
-          zoneId,
+          zoneId: activeZoneId,
           currentPosition: observation?.player?.position,
           excludedServerIds: excludedRelocationServerIds(),
           clusterRadius: scanRadius,
@@ -1459,6 +1622,32 @@ try {
           observation = await relocateToCamp(camp, observation);
           noTargetSince = null;
           continue;
+        }
+      }
+      if (
+        autoTransition
+        && Date.now() - noTargetSince >= relocationIdleMilliseconds * 2
+      ) {
+        const profile = nextLevelBandTransition(partyPlayer?.main_job_level);
+        if (profile) {
+          const nextMetadata = await loadZoneMetadata(profile.zone_id);
+          const camp = selectRelocationCamp({
+            metadata: nextMetadata,
+            playerLevel: Number(partyPlayer?.main_job_level),
+            zoneId: profile.zone_id,
+            currentPosition: null,
+            allowedNames: profile.allowed_names,
+            excludedServerIds: new Set(),
+            clusterRadius: scanRadius,
+          });
+          if (camp) {
+            observation = await transitionToLevelBand(
+              profile,
+              camp,
+              observation,
+            );
+            continue;
+          }
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1502,7 +1691,7 @@ try {
       const trustSupport = readyTrustSupport({
         party: observation.party,
         playerName: observation.player?.name,
-        zoneId,
+        zoneId: activeZoneId,
       });
       if (!isFarmCheckApproved({
         checkVerdict: checked.verdict,

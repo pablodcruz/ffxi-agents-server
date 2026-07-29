@@ -69,7 +69,6 @@ export function selectRelocationCamp({
   minimumTravelDistance = 20,
   maximumElevationDifference = 4,
 }) {
-  if (!currentPosition) return null;
   const normalizedNames = new Set(
     allowedNames.map((name) => String(name).toLowerCase()),
   );
@@ -93,7 +92,10 @@ export function selectRelocationCamp({
       zoneId,
       position: mob.spawn,
     })
-    && distance(currentPosition, mob.spawn) >= Number(minimumTravelDistance)
+    && (
+      !currentPosition
+      || distance(currentPosition, mob.spawn) >= Number(minimumTravelDistance)
+    )
   ));
   const aggressive = (metadata || []).filter((mob) => (
     Number(mob?.zone_id) === Number(zoneId)
@@ -129,14 +131,16 @@ export function selectRelocationCamp({
       cluster_size: cluster.length,
       cluster_server_ids: cluster.map((peer) => Number(peer.server_id)),
       nearest_aggro_distance: nearestAggroDistance,
-      travel_distance: distance(currentPosition, mob.spawn),
+      travel_distance: currentPosition
+        ? distance(currentPosition, mob.spawn)
+        : null,
     };
   }).filter((camp) => (
     camp.nearest_aggro_distance >= Number(minimumAggroDistance)
   )).sort((left, right) => (
     right.cluster_size - left.cluster_size
     || right.nearest_aggro_distance - left.nearest_aggro_distance
-    || left.travel_distance - right.travel_distance
+    || Number(left.travel_distance || 0) - Number(right.travel_distance || 0)
     || left.server_id - right.server_id
   ))[0] || null;
 }

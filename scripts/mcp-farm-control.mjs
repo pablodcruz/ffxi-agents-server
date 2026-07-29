@@ -17,6 +17,7 @@ const action = argument("--action", "status");
 const agentId = argument("--agent-id", "primary");
 const allowCautionValue = argument("--allow-caution", "false");
 const autoRelocateValue = argument("--auto-relocate", "false");
+const autoTransitionValue = argument("--auto-transition", "false");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
 }
@@ -25,6 +26,9 @@ if (!["true", "false"].includes(allowCautionValue)) {
 }
 if (!["true", "false"].includes(autoRelocateValue)) {
   throw new Error("--auto-relocate must be true or false.");
+}
+if (!["true", "false"].includes(autoTransitionValue)) {
+  throw new Error("--auto-transition must be true or false.");
 }
 
 const transport = new StdioClientTransport({
@@ -72,6 +76,7 @@ try {
       ),
       allow_caution: allowCautionValue === "true",
       auto_relocate: autoRelocateValue === "true",
+      auto_transition: autoTransitionValue === "true",
       target_level: Number(argument("--target-level", "0")),
       weapon_skill: argument("--weapon-skill", "Combo"),
       confirmation: FARM_CONFIRMATION,

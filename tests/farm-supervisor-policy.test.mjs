@@ -182,6 +182,48 @@ test("relocation camps respect cooldowns and the level band", () => {
   assert.equal(camp, null);
 });
 
+test("selects a cross-zone camp without comparing unrelated coordinates", () => {
+  const camp = selectRelocationCamp({
+    metadata: [
+      {
+        server_id: 601,
+        zone_id: 103,
+        name: "Sand Hare",
+        minimum_level: 16,
+        maximum_level: 17,
+        aggro: false,
+        spawn: { x: 500, y: 300, z: -16 },
+      },
+      {
+        server_id: 602,
+        zone_id: 103,
+        name: "Sand Hare",
+        minimum_level: 16,
+        maximum_level: 17,
+        aggro: false,
+        spawn: { x: 510, y: 300, z: -16 },
+      },
+      {
+        server_id: 603,
+        zone_id: 103,
+        name: "Goblin Ambusher",
+        minimum_level: 17,
+        maximum_level: 20,
+        aggro: true,
+        spawn: { x: 570, y: 300, z: -16 },
+      },
+    ],
+    playerLevel: 18,
+    zoneId: 103,
+    currentPosition: null,
+    allowedNames: ["Sand Hare"],
+  });
+  assert.equal(camp.server_id, 601);
+  assert.equal(camp.cluster_size, 2);
+  assert.equal(camp.travel_distance, null);
+  assert.equal(camp.nearest_aggro_distance, 70);
+});
+
 test("refuses combat positioning whenever a live fight exists", () => {
   const target = { position: { x: 10, y: 0, z: 1 } };
   assert.equal(safeCombatPosition({

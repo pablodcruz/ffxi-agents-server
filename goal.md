@@ -11,7 +11,7 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 15, 1,139/3,600 EXP.
+- Pablo: Hume male, Monk 17, 229/4,000 EXP.
 - Currency: 28,815 gil; 2,285 Sparks; 1,000 Unity accolades.
 - Equipment verified through AgentBridge: Brass Baghnakhs, Headgear, Doublet,
   Gloves, Brais, Gaiters, White Belt, and Bastokan Ring.
@@ -41,6 +41,10 @@ resolved failures belong in `docs/`.
   clusters after five seconds without an approved target. It requires the
   current level band, a 40-yalm aggressive-spawn buffer, and a combat-free
   state before each guarded relocation.
+- A level-aware lease can repair the Valaineral/Joachim/Mihli party while idle
+  and, at Monk 18, transition from exhausted Konschtat sheep to a
+  metadata-vetted Valkurm Sand Hare cluster. Cross-zone control remains
+  combat-free and exact-check gated.
 - Registered travel: Metalworks Home Point #2 and Bastok Markets Home Point
   #3. Guarded private-server teleport remains the default fallback until
   collision-aware navigation meets its reliability target.
@@ -90,9 +94,23 @@ bounded visibility rejection and target-cycle cooldown; the supervisor
 continued normally. There were zero deaths, recoveries, combat teleports, or
 recovery actions during combat.
 
-Current lease `206e3488-a072-414e-907b-6b8f323417a6` extends that validation to
-at most 15 fights or 20 minutes. MCP supervision remains milestone- and
-exception-based rather than fight-by-fight.
+Lease `206e3488-a072-414e-907b-6b8f323417a6` then completed 15/15 fights for
+2,350 EXP in 550 seconds, with 13 autonomous camp rotations, five Combos, no
+deaths, no recoveries, and no combat teleport or recovery action. Pablo reached
+3,489/3,600 EXP at level 15.
+
+Lease `8f22d4da-40c8-44ff-afa3-337df3d4e11f` completed 15/15 fights for
+2,340 EXP in 480 seconds, including two reactive handoffs. It fired Combo four
+times, rotated camps fourteen times, and ended with zero deaths, recoveries,
+combat teleports, or recovery actions during combat. Pablo reached Monk 16 at
+2,229/3,800 EXP, and the final local overlay matched authoritative state.
+
+Current lease `a5f909a9-f631-468e-b025-2420aec9ecb2` is bounded to 30 fights or
+30 minutes and enables local Trust repair, same-zone rotation, the level-18
+Valkurm transition, exact-check combat, overlay refresh, and the level-20 stop.
+It reached Monk 17 on fight 12 with four automatic Combos, two safe idle
+recoveries, no deaths, and no combat teleport or recovery action. MCP
+supervision remains milestone- and exception-based rather than fight-by-fight.
 
 Valkurm lease `bfaffa06-dcaa-4620-af6a-b7f75e2621db` proved the next-tier
 guard: three metadata candidates each checked `tough` and were excluded

@@ -59,6 +59,7 @@ export function farmSupervisorArgs({
   minimumStartHpPercent,
   allowCaution,
   autoRelocate,
+  autoTransition,
   targetLevel,
   weaponSkill,
 }) {
@@ -73,6 +74,7 @@ export function farmSupervisorArgs({
     "--minimum-start-hp-percent", String(minimumStartHpPercent),
     "--allow-caution", String(Boolean(allowCaution)),
     "--auto-relocate", String(Boolean(autoRelocate)),
+    "--auto-transition", String(Boolean(autoTransition)),
     "--target-level", String(targetLevel),
     "--weapon-skill", weaponSkill,
     "--confirmation", FARM_CONFIRMATION,
@@ -89,6 +91,7 @@ export async function startFarm({
   minimumStartHpPercent = 90,
   allowCaution = false,
   autoRelocate = false,
+  autoTransition = false,
   targetLevel = 0,
   weaponSkill = "Combo",
   confirmation,
@@ -126,6 +129,7 @@ export async function startFarm({
       minimum_start_hp_percent: minimumStartHpPercent,
       allow_caution: Boolean(allowCaution),
       auto_relocate: Boolean(autoRelocate),
+      auto_transition: Boolean(autoTransition),
       target_level: targetLevel,
       weapon_skill: weaponSkill,
     },
@@ -146,6 +150,8 @@ export async function startFarm({
       teleport_while_engaged: 0,
       recovery_while_engaged: 0,
       camp_relocations: 0,
+      zone_transitions: 0,
+      trust_summons: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -163,6 +169,7 @@ export async function startFarm({
     minimumStartHpPercent,
     allowCaution,
     autoRelocate,
+    autoTransition,
     targetLevel,
     weaponSkill,
   });

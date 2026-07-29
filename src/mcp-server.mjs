@@ -977,6 +977,7 @@ server.registerTool(
       minimum_start_hp_percent: z.number().int().min(50).max(100).default(90),
       allow_caution: z.boolean().default(false),
       auto_relocate: z.boolean().default(false),
+      auto_transition: z.boolean().default(false),
       target_level: z.number().int().min(0).max(99).default(0),
       weapon_skill: z
         .string()
@@ -1002,6 +1003,7 @@ server.registerTool(
     minimum_start_hp_percent,
     allow_caution,
     auto_relocate,
+    auto_transition,
     target_level,
     weapon_skill,
     confirmation,
@@ -1017,6 +1019,7 @@ server.registerTool(
         minimumStartHpPercent: minimum_start_hp_percent,
         allowCaution: allow_caution,
         autoRelocate: auto_relocate,
+        autoTransition: auto_transition,
         targetLevel: target_level,
         weaponSkill: weapon_skill,
         confirmation,

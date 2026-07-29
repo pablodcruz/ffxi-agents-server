@@ -266,6 +266,18 @@ refresh the in-game goal overlay after each completed fight and when the lease
 ends, avoiding a model/MCP round trip just to update EXP progress. It also
 stops the lease once level 20 is observed and no reactive threat remains.
 
+For the level-20 progression profile, add `--auto-transition true`. The local
+supervisor then:
+
+- verifies or summons Valaineral, Joachim, and Mihli Aliapoh only while idle;
+- keeps Konschtat as the active zone through level 17;
+- after level 18 exhausts the approved sheep band, selects the real Valkurm
+  Sand Hare cluster around `(647.616, -97.308, 0.312)`;
+- requires the cluster's three level-16–17 candidates and 44.7-yalm nearest
+  aggressive-spawn buffer before a guarded cross-zone service teleport;
+- waits for a stable zone-103 observation, repairs missing Trusts, and resumes
+  normal exact-check admission. The transition never runs during live combat.
+
 `ffxi_farm_start`, `ffxi_farm_status`, and `ffxi_farm_stop` expose the same
 controls directly to MCP clients. Runtime state and JSON event logs are stored
 under the ignored, owner-only `runtime/farm-supervisor/` directory.
@@ -274,8 +286,8 @@ under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
 1. Extend the validated same-zone camp rotation through Monk 16 and 17 while
    collision-aware routing remains unproven.
-2. Revisit the Valkurm Sand Hare camp at level 16; retain exact-check rejection
-   for `even match`, `tough`, and higher.
+2. Live-validate the automatic level-18 transition to Valkurm; retain
+   exact-check rejection for `even match`, `tough`, and higher.
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains
    exact on a future shared server.

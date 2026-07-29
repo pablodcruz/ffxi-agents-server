@@ -59,6 +59,7 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     minimumStartHpPercent: 90,
     allowCaution: true,
     autoRelocate: true,
+    autoTransition: true,
     targetLevel: 20,
     weaponSkill: "Combo",
   });
@@ -73,6 +74,7 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--minimum-start-hp-percent", "90",
     "--allow-caution", "true",
     "--auto-relocate", "true",
+    "--auto-transition", "true",
     "--target-level", "20",
     "--weapon-skill", "Combo",
     "--confirmation", FARM_CONFIRMATION,
