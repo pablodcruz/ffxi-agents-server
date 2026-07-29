@@ -521,6 +521,20 @@ If a control test behaves unexpectedly, call `ffxi_emergency_stop` or close
 the FFXI client. Writes are disabled after every addon load and every emergency
 stop.
 
+## AgentBridge reload reports `foreground=Idle`
+
+On the Windows 11 ARM client, the live game can be visible and the bridge can
+be healthy while Windows exposes exactly one interactive `xiloader.exe` with
+no top-level window. `GetForegroundWindow` then resolves to the Idle process,
+so a foreground-only reload check is impossible.
+
+`client:reload-agentbridge` accepts this narrow windowless case only when the
+bridge health check already passed and exactly one `xiloader.exe` exists in
+interactive session 1. It still types only the fixed
+`/addon reload agentbridge` command through bounded Parallels key events. Any
+other process count, session, bridge failure, or non-Idle unexpected foreground
+continues to fail closed.
+
 ## Streaming and evidence
 
 Keep OBS stopped or use a tightly cropped game-window source while any of these

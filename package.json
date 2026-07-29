@@ -19,6 +19,7 @@
     "mcp:prepare-trade": "./scripts/run-node.sh scripts/mcp-prepare-trade.mjs",
     "mcp:select-item": "./scripts/run-node.sh scripts/mcp-select-item.mjs",
     "mcp:sell-loot": "./scripts/run-node.sh scripts/mcp-sell-loot.mjs",
+    "mcp:sell-sparks": "./scripts/run-node.sh scripts/mcp-sell-sparks-item.mjs",
     "mcp:store-seals": "./scripts/run-node.sh scripts/mcp-store-seals.mjs",
     "mcp:trade-item": "./scripts/run-node.sh scripts/mcp-trade-item.mjs",
     "mcp:dialogue": "./scripts/run-node.sh scripts/mcp-dialogue.mjs",

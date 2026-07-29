@@ -137,6 +137,18 @@ Live failures also changed the policy:
   Lease `c9713602-84a4-4383-9639-59affe30b6d3` validated the new path: one
   Sapling was defeated, Pablo returned exactly to the safe-camp origin, no live
   combat remained, and guarded control was then disabled.
+- A disposable-menu race appeared after the gil milestone. The supervisor
+  observed a known casket/player menu, but it closed before the queued cancel
+  reached AgentBridge. The bridge correctly rejected a cancel with no open
+  menu; the old supervisor treated that safe race as fatal. The loop now
+  refreshes character menu state immediately before canceling and treats only
+  the bridge's exact closed-menu rejection as a no-op. The focused follow-up
+  lease `bb7454ae-69e7-4237-826f-d023e93db92d` defeated a Rock Lizard for
+  90 EXP and stopped at its one-fight limit with no error or unsafe counter.
+- That same pass live-triggered the bounded line-of-sight nudge against a
+  Sapling. The recovery remained non-teleporting and safe, but two moving
+  Sapling spawns still produced repeated visibility/registration failures.
+  They are inefficient targets; the nearby Rock Lizard remained clean.
 
 ## Usage
 
@@ -170,7 +182,8 @@ under the ignored, owner-only `runtime/farm-supervisor/` directory.
 
 ## Next iteration
 
-1. Continue the 10,000-gil and Records of Eminence progression loop.
+1. Continue Records of Eminence and Unity progression; the 10,000-gil
+   milestone is complete at 28,815 gil.
 2. Live-validate the bounded line-of-sight nudge if the geometry repeats.
 3. Diagnose Vulture registration separately.
 4. Record incoming action packets in AgentBridge so aggressor identity remains

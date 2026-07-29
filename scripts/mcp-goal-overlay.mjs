@@ -29,6 +29,21 @@ function parseGil(name) {
 const enabled = rawEnabled === "true";
 const currentGil = parseGil("--current-gil");
 const targetGil = parseGil("--target-gil");
+const title = option("--title");
+const progressLabel = option("--progress");
+if ((title === undefined) !== (progressLabel === undefined)) {
+  throw new Error("--title and --progress must be provided together.");
+}
+if (title?.includes("\n") || title?.includes("\r") || title?.length > 96) {
+  throw new Error("--title must be a single-line string up to 96 characters.");
+}
+if (
+  progressLabel?.includes("\n")
+  || progressLabel?.includes("\r")
+  || progressLabel?.length > 128
+) {
+  throw new Error("--progress must be a single-line string up to 128 characters.");
+}
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(projectDir, "src", "mcp-server.mjs")],
@@ -58,9 +73,12 @@ try {
       enabled,
       current_gil: currentGil,
       target_gil: targetGil,
+      ...(title === undefined
+        ? {}
+        : { title, progress_label: progressLabel }),
     },
   });
-  if (goal.isError) throw new Error("Could not change the local gil-goal overlay.");
+  if (goal.isError) throw new Error("Could not change the local goal overlay.");
 
   const emergencyStop = await client.callTool({
     name: "ffxi_emergency_stop",

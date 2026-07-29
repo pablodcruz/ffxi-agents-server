@@ -67,6 +67,8 @@ async function createMockBridge(token) {
           enabled: request.params.enabled,
           current_gil: request.params.current_gil,
           target_gil: request.params.target_gil,
+          title: request.params.title,
+          progress_label: request.params.progress_label,
           local_overlay_only: true,
         };
       } else {
@@ -252,12 +254,26 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
 
   const goalOverlay = await client.callTool({
     name: "ffxi_set_goal_overlay",
-    arguments: { enabled: true, current_gil: 80, target_gil: 10000 },
+    arguments: {
+      enabled: true,
+      current_gil: 80,
+      target_gil: 10000,
+      title: "UNLOCK UNITY VIA RECORDS OF EMINENCE",
+      progress_label: "VANQUISH: 90 / 200",
+    },
   });
   assert.equal(goalOverlay.isError, undefined);
   assert.equal(goalOverlay.structuredContent.enabled, true);
   assert.equal(goalOverlay.structuredContent.current_gil, 80);
   assert.equal(goalOverlay.structuredContent.target_gil, 10000);
+  assert.equal(
+    goalOverlay.structuredContent.title,
+    "UNLOCK UNITY VIA RECORDS OF EMINENCE",
+  );
+  assert.equal(
+    goalOverlay.structuredContent.progress_label,
+    "VANQUISH: 90 / 200",
+  );
   assert.equal(goalOverlay.structuredContent.local_overlay_only, true);
 
   const menuInput = await client.callTool({

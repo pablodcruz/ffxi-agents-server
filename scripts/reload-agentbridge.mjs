@@ -29,7 +29,11 @@ const foregroundGameCheck = [
   "[uint32]$foregroundProcessId = 0;",
   "[void][Win32.NativeMethods]::GetWindowThreadProcessId($window, [ref]$foregroundProcessId);",
   "$foregroundProcess = Get-Process -Id $foregroundProcessId -ErrorAction SilentlyContinue;",
-  "if ($null -eq $foregroundProcess -or $foregroundProcess.ProcessName -notin @('pol', 'xiloader')) { Write-Output ('foreground=' + $(if ($null -eq $foregroundProcess) { 'unknown' } else { $foregroundProcess.ProcessName })); exit 42 }",
+  "if ($null -ne $foregroundProcess -and $foregroundProcess.ProcessName -in @('pol', 'xiloader')) { exit 0 }",
+  "$windowlessLoaders = @(Get-Process -Name xiloader -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq 1 });",
+  "if ($null -ne $foregroundProcess -and $foregroundProcess.ProcessName -eq 'Idle' -and $windowlessLoaders.Count -eq 1) { Write-Output 'foreground=Idle windowless=xiloader'; exit 0 }",
+  "Write-Output ('foreground=' + $(if ($null -eq $foregroundProcess) { 'unknown' } else { $foregroundProcess.ProcessName }) + ' windowless_loaders=' + $windowlessLoaders.Count);",
+  "exit 42",
 ].join(" ");
 
 function requireLiveBridge() {
@@ -70,7 +74,7 @@ function requireForegroundGame() {
   if (child.error || child.status !== 0) {
     const observed = child.stdout?.trim();
     throw new Error(
-      `Refusing to type the addon reload command because neither pol.exe nor the live xiloader.exe client is the foreground Windows process${observed ? ` (${observed})` : ""}.`,
+      `Refusing to type the addon reload command because neither a foreground game process nor exactly one interactive windowless xiloader.exe was verified${observed ? ` (${observed})` : ""}.`,
     );
   }
 }

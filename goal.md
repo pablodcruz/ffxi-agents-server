@@ -16,15 +16,20 @@ repository now exist.
 ## Current state
 
 - Character: Pablo, Hume male, Monk level 13.
-- Progress: 1,719/3,200 EXP.
-- Gil goal: 1,145/10,000 gil. The local stream overlay is synchronized to this
-  verified balance.
-- Records of Eminence: `Vanquish Multiple Enemies I` at 82/200. A completed
-  objective awarded 1,500 bonus EXP and a Copper Voucher; the new sparks
-  balance still needs an authoritative menu check.
+- Progress: 2,599/3,200 EXP.
+- Gil goal: **completed at 28,815/10,000 gil**. One Acheron Shield bought
+  normally for 2,755 earned Sparks sold to Balthilda for 27,550 gil, moving
+  the verified balance from 1,265 to 28,815.
+- Records of Eminence: `Vanquish Multiple Enemies I` at 92/200. The repeatable
+  `Spoils (Treant Bulb)` objective completed during the latest farm batch,
+  awarding 300 EXP and bringing the authoritative Sparks balance to 3,200.
+  The verified Acheron Shield exchange left 445 Sparks.
 - Trust: Naji acquired and validated; he uses Provoke after Pablo engages.
-- Control: AgentBridge 0.20.0, guarded service travel, exact-ID combat,
+- Control: AgentBridge 0.21.0, guarded service travel, exact-ID combat,
   automatic Combo, allowlisted loot sales, and a bounded reactive aggro guard.
+- Stream visibility: the bounded goal overlay now names the active
+  Records of Eminence/Unity objective and shows `VANQUISH: 92 / 200`; the
+  sanitized local-only Agent Activity feed is enabled.
 - Travel: Metalworks Home Point #2 and Bastok Markets Home Point #3 are
   registered and cached.
 - Farming exclusions: no proactive worms, Stone Eaters, Huge Hornets, or
@@ -32,12 +37,14 @@ repository now exist.
 - Treasure Caskets are ignored during farming. Disposable casket prompts and
   the player menu are canceled; caskets will be revisited only for a specific
   quest or a known valuable reward.
-- Inventory is currently 10/30 after a batched allowlisted sale, Beastmen's
+- Inventory is currently 9/30 after a batched allowlisted sale, Beastmen's
   Seal storage, and a verified inventory sort. Persistent Auto-Sort is enabled
   under `Config -> Gameplay -> Inventory -> Sort: ON`. A one-time
   `Items -> Sort -> Auto` pass combined two loose seals into one
   `Beastmen's Seal x2` stack and two loose bulbs into one `Treant Bulb x2`
-  stack, reducing inventory from 12/30 to 10/30.
+  stack, reducing inventory from 12/30 to 10/30. Subsequent live drops joined
+  both stacks automatically: seals and bulbs each reached three without using
+  another slot. The three-bulb stack then sold for 120 gil.
 - Shami in Port Jeuno stores 14 Beastmen's Seals for Pablo. Deposit future
   batches there instead of consuming inventory slots; his first Cloudy Orb
   costs 20 stored seals. The guarded helper accepts only item 1126 and exact
@@ -147,24 +154,36 @@ whole encounter instead of competing scripts.
   `reactive_attack_registered_during_follow` and won.
 - Line-of-sight recovery: a bounded non-teleport nudge through the exact live
   target is implemented for fresh `cannot see` events. It is unit-tested but
-  awaits a repeat of that geometry in normal farming for live validation.
+  has now fired in live farming. It remained bounded and combat-safe, although
+  two moving Sapling spawns still failed registration and remain poor targets.
+- Disposable-menu race: **repaired and live-validated**. A casket/player menu
+  can close after observation but before the cancel pulse. The supervisor now
+  refreshes menu state and treats only AgentBridge's exact closed-menu rejection
+  as a safe no-op. Lease `bb7454ae-69e7-4237-826f-d023e93db92d` then defeated
+  one Rock Lizard for 90 EXP and stopped normally with zero rejections, deaths,
+  excluded pulls, target-cycle errors, combat teleports, or combat recovery.
 
 ## Goal 2 — reach 10,000 gil while leveling
 
-Status: **active**
+Status: **completed**
 
 - Continue selling only fixed allowlisted loot in sensible batches.
 - Check inventory between farming batches, not after every fight.
 - Keep the numeric stream overlay synchronized with verified gil events.
 - Prefer normal drops and Records of Eminence rewards over administrative
   grants.
-- Reach 2,755 sparks and validate the normal Acheron Shield sparks-to-vendor
-  conversion if it remains available on this server. Its local base sell value
-  is 27,550 gil, so one legitimate conversion completes this milestone.
+- The normal Acheron Shield Sparks-to-vendor conversion was live-validated.
+  The shop deducted exactly 2,755 Sparks, inventory gained exact item ID 12385,
+  and exact vendor Balthilda removed that one item for exactly 27,550 gil.
+  Final verified balance: 28,815 gil.
+- `mcp:sell-sparks` is intentionally separate from the ordinary loot
+  allowlist. It requires exact item ID 12385, exact Balthilda server ID
+  17739803 within six yalms in zone 235, exactly one shield, the open sell
+  list, and exact item/gil deltas.
 
 ## Goal 3 — compound normal play with Records of Eminence
 
-Status: in progress passively
+Status: **active**
 
 - Keep only objectives matching the current camp and combat behavior active.
 - Continue the general damage, weapon-skill, defeat, and spoils counters.

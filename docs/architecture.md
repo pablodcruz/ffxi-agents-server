@@ -31,7 +31,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_recent_events` | No | Read a bounded event tail |
 | `ffxi_enable_control` | Yes | Explicitly arm private-server client writes |
 | `ffxi_set_activity_feed` | Yes | Toggle sanitized action summaries in local game chat only |
-| `ffxi_set_goal_overlay` | Yes | Display numeric gil-goal progress in a fixed-purpose local overlay |
+| `ffxi_set_goal_overlay` | Yes | Display bounded current-goal progress in a local stream overlay |
 | `ffxi_emergency_stop` | Yes | Disarm writes, movement, and combat immediately |
 | `ffxi_stop_movement` | Yes | Cancel a movement lease |
 | `ffxi_target_entity` | Yes | Select one nearby entity |
@@ -68,6 +68,24 @@ It displays target selections, bounded movement start/stop events, input
 pulses, heading changes, and only the verb of an allowlisted gameplay command.
 It accepts no arbitrary message string, strips control characters, truncates
 output, and never sends `/say`, `/tell`, linkshell, or any other server chat.
+
+### Local current-goal overlay
+
+AgentBridge 0.21.0 keeps the original numeric gil fields for compatibility but
+also accepts one bounded single-line goal title and progress label. Both labels
+must be supplied together, are length-limited, cannot contain line breaks, stay
+inside the local font overlay, and are never sent to server chat:
+
+```sh
+pnpm mcp:goal -- \
+  --enabled true \
+  --current-gil 28815 \
+  --target-gil 10000 \
+  --title "UNLOCK UNITY VIA RECORDS OF EMINENCE" \
+  --progress "VANQUISH: 90 / 200"
+```
+
+Omitting both labels preserves the legacy gil-goal rendering.
 Normal combat, EXP, and `/check` results remain the game's own chat events.
 
 The separate goal banner above the activity feed displays only numeric gil

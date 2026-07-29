@@ -206,14 +206,16 @@ server.registerTool(
 server.registerTool(
   "ffxi_set_goal_overlay",
   {
-    title: "Set the local FFXI gil-goal overlay",
+    title: "Set the local FFXI goal overlay",
     description:
-      "Show or hide a fixed-purpose local stream overlay with current and target gil. It accepts no arbitrary text and never sends server chat.",
+      "Show or hide a local stream overlay. Numeric gil progress remains required for compatibility; optional bounded single-line title and progress labels can describe the current non-gil goal. It never sends server chat.",
     inputSchema: {
       agent_id: agentIdSchema,
       enabled: z.boolean(),
       current_gil: z.number().int().min(0).max(999_999_999),
       target_gil: z.number().int().min(1).max(999_999_999),
+      title: z.string().min(1).max(96).regex(/^[^\r\n]+$/).optional(),
+      progress_label: z.string().min(1).max(128).regex(/^[^\r\n]+$/).optional(),
     },
     annotations: {
       readOnlyHint: false,
@@ -222,13 +224,30 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ agent_id, enabled, current_gil, target_gil }) => {
+  async ({
+    agent_id,
+    enabled,
+    current_gil,
+    target_gil,
+    title,
+    progress_label,
+  }) => {
     try {
+      if ((title === undefined) !== (progress_label === undefined)) {
+        throw new Error(
+          "Goal overlay title and progress_label must be provided together.",
+        );
+      }
       return agentResult(
         await agents.request(
           agent_id,
           "set_goal_overlay",
-          { enabled, current_gil, target_gil },
+          {
+            enabled,
+            current_gil,
+            target_gil,
+            ...(title === undefined ? {} : { title, progress_label }),
+          },
           { write: true },
         ),
       );

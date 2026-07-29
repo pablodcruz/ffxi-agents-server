@@ -10,6 +10,7 @@ import {
   canStopAtFightLimit,
   classifyReactiveTiming,
   hasLiveCombat,
+  isClosedMenuInputRace,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
   parseCombatRewards,
@@ -1167,7 +1168,24 @@ try {
       const menuName = String(uiState.menu_name || "").trim();
       if (shouldAutoCancelMenu({ menuName, reactiveThreat })) {
         await armControl();
-        await call("ffxi_menu_input", { action: "cancel" });
+        const freshUiState = await characterState();
+        if (!freshUiState?.menu_open) {
+          log("menu_cancel_skipped", {
+            menu_name: menuName || "unknown",
+            reason: "menu_closed_before_cancel",
+          });
+          continue;
+        }
+        try {
+          await call("ffxi_menu_input", { action: "cancel" });
+        } catch (error) {
+          if (!isClosedMenuInputRace(error)) throw error;
+          log("menu_cancel_skipped", {
+            menu_name: menuName || "unknown",
+            reason: "menu_closed_during_cancel",
+          });
+          continue;
+        }
         log("menu_cancelled", {
           menu_name: menuName || "unknown",
           reason: reactiveThreat ? "reactive_defense" : "known_disposable_menu",

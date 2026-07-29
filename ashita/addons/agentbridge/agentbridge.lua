@@ -10,7 +10,7 @@ command for vendor, registered travel-node, or stuck-recovery travel.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.20.0';
+addon.version = '0.21.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -42,6 +42,8 @@ local bridge =
     goal_font = nil,
     goal_current_gil = 0,
     goal_target_gil = 10000,
+    goal_title = nil,
+    goal_progress_label = nil,
 };
 
 local allowed_commands =
@@ -228,10 +230,16 @@ local function refresh_goal_overlay()
         bridge.goal_font.text = '';
         return;
     end
-    bridge.goal_font.text =
-        'CURRENT GOAL: EARN ' .. format_integer(bridge.goal_target_gil) .. ' GIL BEFORE QUESTING\n' ..
-        'PROGRESS: ' .. format_integer(bridge.goal_current_gil) .. ' / ' ..
-        format_integer(bridge.goal_target_gil) .. ' GIL';
+    if (bridge.goal_title ~= nil and bridge.goal_progress_label ~= nil) then
+        bridge.goal_font.text =
+            'CURRENT GOAL: ' .. bridge.goal_title .. '\n' ..
+            'PROGRESS: ' .. bridge.goal_progress_label;
+    else
+        bridge.goal_font.text =
+            'CURRENT GOAL: EARN ' .. format_integer(bridge.goal_target_gil) .. ' GIL BEFORE QUESTING\n' ..
+            'PROGRESS: ' .. format_integer(bridge.goal_current_gil) .. ' / ' ..
+            format_integer(bridge.goal_target_gil) .. ' GIL';
+    end
 end
 
 local function add_event(mode, message)
@@ -389,6 +397,8 @@ local function goal_overlay_snapshot()
         object_visible = object_visible,
         current_gil = bridge.goal_current_gil,
         target_gil = bridge.goal_target_gil,
+        title = bridge.goal_title,
+        progress_label = bridge.goal_progress_label,
         local_overlay_only = true,
     };
 end
@@ -1408,6 +1418,8 @@ local function dispatch(request)
         end
         local current_gil = tonumber(params.current_gil);
         local target_gil = tonumber(params.target_gil);
+        local title = params.title;
+        local progress_label = params.progress_label;
         if (
             current_gil == nil or current_gil ~= math.floor(current_gil) or
             current_gil < 0 or current_gil > 999999999
@@ -1420,23 +1432,49 @@ local function dispatch(request)
         ) then
             error('Goal overlay target_gil must be an integer between 1 and 999999999.');
         end
+        if ((title == nil) ~= (progress_label == nil)) then
+            error('Goal overlay title and progress_label must be provided together.');
+        end
+        if (title ~= nil) then
+            if (
+                type(title) ~= 'string' or #title < 1 or #title > 96 or
+                title:find('[\r\n]') ~= nil
+            ) then
+                error('Goal overlay title must be a single-line string from 1 through 96 bytes.');
+            end
+            if (
+                type(progress_label) ~= 'string' or #progress_label < 1 or
+                #progress_label > 128 or progress_label:find('[\r\n]') ~= nil
+            ) then
+                error('Goal overlay progress_label must be a single-line string from 1 through 128 bytes.');
+            end
+        end
         bridge.goal_overlay_enabled = params.enabled;
         bridge.goal_current_gil = current_gil;
         bridge.goal_target_gil = target_gil;
+        bridge.goal_title = title;
+        bridge.goal_progress_label = progress_label;
         refresh_goal_overlay();
         add_event(
             -1,
-            ('Agent gil goal overlay %s at %s of %s.'):fmt(
-                params.enabled and 'enabled' or 'disabled',
-                format_integer(current_gil),
-                format_integer(target_gil)
-            )
+            title ~= nil and
+                ('Agent goal overlay %s: %s.'):fmt(
+                    params.enabled and 'enabled' or 'disabled',
+                    title
+                ) or
+                ('Agent gil goal overlay %s at %s of %s.'):fmt(
+                    params.enabled and 'enabled' or 'disabled',
+                    format_integer(current_gil),
+                    format_integer(target_gil)
+                )
         );
         return
         {
             enabled = bridge.goal_overlay_enabled,
             current_gil = bridge.goal_current_gil,
             target_gil = bridge.goal_target_gil,
+            title = bridge.goal_title,
+            progress_label = bridge.goal_progress_label,
             local_overlay_only = true,
             goal_overlay = goal_overlay_snapshot(),
             control = control_snapshot(),

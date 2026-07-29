@@ -172,6 +172,11 @@ export function shouldAutoCancelMenu({ menuName, reactiveThreat }) {
     || normalizedMenuName === "menu    playermo";
 }
 
+export function isClosedMenuInputRace(error) {
+  return String(error?.message || error || "")
+    .includes("require an open menu or dialogue");
+}
+
 export function classifyReactiveTiming({
   firstSeenAt,
   now = Date.now(),

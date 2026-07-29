@@ -225,6 +225,14 @@ only enters rearrangement mode and does not stack items. Inspect inventory
 between farming batches rather than after every fight, and open inventory
 menus only in a safe city or service area.
 
+The next farm batch live-validated persistent stacking: one new seal and one
+new bulb each joined their existing stack, leaving inventory at 10/30 rather
+than creating new slots. Selling the resulting three-bulb stack exposed
+`menu    itemctrl`, FFXI's intermediate quantity control. The guarded seller
+now accepts that bounded quantity step only after selecting an allowlisted item
+ID, then verifies the actual item-unit decrease and gil increase. The live
+three-bulb sale produced 120 gil and reduced inventory to 9/30.
+
 Beastmen's Seal is local item ID 1126, has a stack size of 99, and has no
 vendor value in the pinned LandSandBoat data. Shami in Port Jeuno (zone 246,
 exact server ID 17784905) is therefore the durable storage sink. The guarded
@@ -836,9 +844,30 @@ or no-progress failures, not poll the camera continuously.
 Records of Eminence also creates a legitimate path to the 10,000-gil goal.
 The live sparks shop prices an Acheron Shield at 2,755 sparks, while this
 server's local `item_basic` table gives it a 27,550-gil base sell value. Pablo
-now has 900 sparks and needs 1,855 more before that conversion is available.
-Do not alter currency, teleport, or grant the item administratively; the
-objective events and normal NPC exchange remain the gameplay authority.
+earned 3,200 Sparks through normal objectives, bought exact item ID 12385 from
+Isakoth, and the live shop showed 445 Sparks afterward. Exact vendor Balthilda
+then bought the shield for 27,550 gil, moving the verified balance from 1,265
+to 28,815 and completing the milestone. No currency, item, or objective state
+was granted administratively.
+
+The resale is deliberately isolated from ordinary loot automation:
+
+```sh
+pnpm mcp:sell-sparks
+```
+
+It requires exact item ID 12385, exactly one unit, Bastok Markets zone 235,
+exact Balthilda server ID 17739803 within six yalms, and her already-open sell
+list. It then verifies that the shield count reaches zero and that gil rises
+by exactly 27,550 before updating the stream overlay. The shield is not part of
+`mcp:sell-loot`'s farming allowlist.
+
+A Parallels trial reminder appeared over the VM during the first live attempt
+and intercepted the confirm pulse. The helper observed no menu transition and
+stopped before selling; inventory and gil remained unchanged. After dismissing
+the host-level modal, the unchanged guarded helper completed and verified the
+sale. This is useful failure evidence: desktop focus loss produces a safe
+no-op, not a guessed confirmation.
 
 ### Verified travel-node cache
 

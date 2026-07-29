@@ -136,7 +136,16 @@ try {
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       await input("confirm");
-      current = await waitFor((value) => menuName(value) === "menu    shopsell");
+      current = await waitFor((value) =>
+        ["menu    itemctrl", "menu    shopsell"].includes(menuName(value))
+      );
+      if (menuName(current) === "menu    itemctrl") {
+        // Auto-Sort means sellable loot normally arrives as a stack. Accept
+        // FFXI's bounded default quantity, then verify the actual unit and gil
+        // deltas below. The next loop handles any units left in the stack.
+        await input("confirm");
+        current = await waitFor((value) => menuName(value) === "menu    shopsell");
+      }
       if (menuName(current) === "menu    shopsell") break;
       if (menuName(current) !== "menu    shop") {
         throw new Error(`Unexpected menu while selecting ${selected.name}.`);
@@ -167,6 +176,7 @@ try {
 
     sales.push({
       ...selected,
+      units_sold: beforeUnits - afterUnits,
       gil_received: afterGil - beforeGil,
       gil_after: afterGil,
     });

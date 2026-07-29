@@ -5,6 +5,7 @@ import {
   classifyReactiveTiming,
   excludedCombatPocket,
   hasLiveCombat,
+  isClosedMenuInputRace,
   latestLineOfSightFailure,
   lineOfSightNudgeDestination,
   parseCombatRewards,
@@ -271,6 +272,17 @@ test("auto-cancels known disposable menus unless reactive defense needs it", () 
     menuName: "menu    shopmain",
     reactiveThreat: { server_id: 42 },
   }), true);
+});
+
+test("recognizes only the closed-menu input race as a safe cancel no-op", () => {
+  assert.equal(isClosedMenuInputRace(
+    new Error(
+      "ffxi_menu_input failed: Confirm, cancel, up, down, left, and right require an open menu or dialogue.",
+    ),
+  ), true);
+  assert.equal(isClosedMenuInputRace(
+    new Error("ffxi_menu_input failed: Agent writes are disabled."),
+  ), false);
 });
 
 test("separates immediate aggro latency from intentional add queue time", () => {
