@@ -543,7 +543,7 @@ async function updateNmRouteOverlay({ complete = false } = {}) {
     target_gil: Number.isSafeInteger(targetGil) && targetGil > 0
       ? targetGil
       : 10_000,
-    title: complete ? "FIVE-CAMP NM LOOP COMPLETE" : "FIVE-CAMP NM LOOP",
+    title: complete ? "NM CAMP LOOP COMPLETE" : "NM CAMP LOOP",
     progress_label: progress,
   });
   log("nm_route_overlay_updated", {
@@ -596,7 +596,10 @@ function missingDesiredTrusts(observation) {
 
 async function ensureTrustParty(observation) {
   let current = observation;
-  for (let pass = 1; pass <= 2; pass += 1) {
+  // A successful Trust cast can make the immediately following cast report
+  // "Unable to cast spells at this time." A third bounded pass lets the last
+  // Trust recover from that action-cooldown race without an unbounded loop.
+  for (let pass = 1; pass <= 3; pass += 1) {
     for (const trust of missingDesiredTrusts(current)) {
       if (
         hasLiveCombat(current)
@@ -1421,6 +1424,14 @@ async function transitionToNmRouteCamp(profile, observation) {
   if (fromZoneId !== activeZoneId) counters.zone_transitions += 1;
   ingestEvents(after);
   observeThreats(after);
+  if (fromZoneId !== activeZoneId) {
+    log("nm_route_post_zone_trust_delay", {
+      camp_name: profile.name,
+      delay_ms: 2_000,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    after = await sample();
+  }
   after = await ensureTrustParty(after);
   log("nm_route_transition_complete", {
     camp_name: profile.name,
@@ -1473,7 +1484,7 @@ async function exitNmRouteSafely(observation) {
     );
   }
   activeZoneId = NM_ROUTE_SAFE_EXIT.zone_id;
-  metadata = await loadZoneMetadata(activeZoneId);
+  metadata = [];
   leaseOriginPosition = { ...after.player.position };
   cooldowns.clear();
   relocationCooldowns.clear();
@@ -1496,11 +1507,12 @@ async function prepareNmRouteCamp(observation) {
   const inventoryState = await characterState(0);
   if (!inventoryHasFreeSlots(inventoryState, minimumFreeInventorySlots)) {
     stopReason = "inventory_pressure";
-    stopping = true;
+    cooperativeStopRequestedAt ??= Date.now();
     log("nm_route_inventory_guard", {
       count: inventoryState?.inventory?.count,
       capacity: inventoryState?.inventory?.capacity,
       required_free_slots: minimumFreeInventorySlots,
+      mode: "drain_then_safe_exit",
     });
     return observation;
   }
@@ -1638,8 +1650,7 @@ async function recordNmRouteDefeat(target) {
   } else if (profile.placeholder_server_ids.includes(serverId)) {
     nmRoutePlaceholderKills.add(serverId);
     counters.nm_placeholders_killed += 1;
-    nmRoutePostKillScanUntil = Date.now() + 8_000;
-    nmRouteSweepIndex = 0;
+    nmRoutePostKillScanUntil = 0;
     log("nm_route_placeholder_defeated", {
       camp_name: profile.name,
       name: target.name,
@@ -2200,7 +2211,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
-  metadata = await loadZoneMetadata(activeZoneId);
+  metadata = nmRoute ? [] : await loadZoneMetadata(activeZoneId);
   await client.connect(transport);
   await armControl();
   status = "running";
@@ -2228,7 +2239,9 @@ try {
 
   let observation = await observe();
   lastEventId = maxObservedEventId(observation);
-  observation = await ensureTrustParty(observation);
+  if (!nmRoute) {
+    observation = await ensureTrustParty(observation);
+  }
   leaseOriginPosition = observation?.player?.position
     ? { ...observation.player.position }
     : null;
@@ -2349,6 +2362,14 @@ try {
           idle_samples: cooperativeStopIdleSamples,
           drain_ms: Date.now() - cooperativeStopRequestedAt,
         });
+        if (nmRoute && stopReason === "inventory_pressure") {
+          const safeExit = await exitNmRouteSafely(observation);
+          observation = safeExit.observation;
+          if (!safeExit.applied) {
+            cooperativeStopIdleSamples = 0;
+            continue;
+          }
+        }
         break;
       }
       await transition("draining_stop", {
@@ -2406,6 +2427,12 @@ try {
       continue;
     }
 
+    if (nmRoute && !nmRouteCampPrepared) {
+      observation = await prepareNmRouteCamp(observation);
+      if (stopping) break;
+      continue;
+    }
+
     const missingTrusts = missingDesiredTrusts(observation);
     if (missingTrusts.length > 0) {
       await transition("repairing_trusts", {
@@ -2425,11 +2452,6 @@ try {
     }
 
     const partyPlayer = playerPartyMember(observation);
-    if (nmRoute && !nmRouteCampPrepared) {
-      observation = await prepareNmRouteCamp(observation);
-      if (stopping) break;
-      continue;
-    }
     const levelBandProfile = nextLevelBandTransition({
       autoTransition,
       activeZoneId,
@@ -2540,20 +2562,25 @@ try {
         );
         if (!inventoryOkay) {
           stopReason = "inventory_pressure";
-          stopping = true;
+          cooperativeStopRequestedAt ??= Date.now();
           log("nm_route_inventory_guard", {
             count: uiState?.inventory?.count,
             capacity: uiState?.inventory?.capacity,
             required_free_slots: minimumFreeInventorySlots,
+            mode: "drain_then_safe_exit",
           });
-          break;
+          continue;
         }
         const campTimedOut = Date.now() - nmRouteCampStartedAt >= 180_000;
+        const placeholdersComplete = routePlaceholderIds(
+          profile,
+          nmRoutePlaceholderKills,
+        ).length === 0;
         const sweepComplete = !nextRoutePosition({
           profile,
           sweepIndex: nmRouteSweepIndex,
         });
-        if (nmRouteNmKilled || campTimedOut) {
+        if (nmRouteNmKilled || placeholdersComplete || campTimedOut) {
           observation = await advanceNmRouteCamp(observation);
           continue;
         }

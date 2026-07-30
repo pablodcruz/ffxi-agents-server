@@ -12,7 +12,7 @@ import {
   watchedItemsOwned,
 } from "../src/nm-route-policy.mjs";
 
-test("defines the guarded five-camp NM route with unique exact IDs", () => {
+test("defines the guarded four-camp NM route with unique exact IDs", () => {
   assert.deepEqual(
     NM_ROUTE_PROFILES.map((profile) => profile.name),
     [
@@ -20,7 +20,6 @@ test("defines the guarded five-camp NM route with unique exact IDs", () => {
       "Stinging Sophie",
       "Jaggedy-Eared Jack",
       "Spiny Spipi",
-      "Hoo Mjuu the Torrent",
     ],
   );
   const allServerIds = NM_ROUTE_PROFILES.flatMap((profile) => [
@@ -53,9 +52,9 @@ test("requires configured inventory headroom", () => {
 });
 
 test("only skips a camp after every watched reward is owned", () => {
-  const hoo = NM_ROUTE_PROFILES.at(-1);
-  assert.equal(watchedItemsOwned(hoo, new Set([12798])), false);
-  assert.equal(watchedItemsOwned(hoo, new Set([12798, 17132])), true);
+  const spipi = NM_ROUTE_PROFILES.at(-1);
+  assert.equal(watchedItemsOwned(spipi, new Set()), false);
+  assert.equal(watchedItemsOwned(spipi, new Set([13607])), true);
 });
 
 test("removes defeated placeholder IDs and enforces the visit cap", () => {
@@ -85,7 +84,7 @@ test("walks bounded sweep positions and advances rounds", () => {
   assert.deepEqual(nextRouteCamp({
     campIndex: 0,
     round: 1,
-    profileCount: 5,
+    profileCount: 4,
     maximumRounds: 2,
   }), {
     complete: false,
@@ -93,9 +92,9 @@ test("walks bounded sweep positions and advances rounds", () => {
     round: 1,
   });
   assert.deepEqual(nextRouteCamp({
-    campIndex: 4,
+    campIndex: 3,
     round: 1,
-    profileCount: 5,
+    profileCount: 4,
     maximumRounds: 2,
   }), {
     complete: false,
@@ -103,13 +102,13 @@ test("walks bounded sweep positions and advances rounds", () => {
     round: 2,
   });
   assert.deepEqual(nextRouteCamp({
-    campIndex: 4,
+    campIndex: 3,
     round: 2,
-    profileCount: 5,
+    profileCount: 4,
     maximumRounds: 2,
   }), {
     complete: true,
-    camp_index: 4,
+    camp_index: 3,
     round: 2,
   });
 });

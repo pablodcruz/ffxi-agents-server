@@ -1,8 +1,8 @@
-# Five-camp notorious-monster loop
+# Four-camp notorious-monster loop
 
 ## Goal
 
-Build one detached, low-call route that cycles through five useful low-level
+Build one detached, low-call route that cycles through four useful low-level
 notorious monsters on the isolated LandSandBoat server. The route owns exact
 placeholder selection, NM priority, guarded zone changes, Trust repair,
 reactive defense, inventory stop conditions, and its own bounded lease.
@@ -23,11 +23,8 @@ The route comes from the pinned server's exported mob/drop metadata and NM Lua
 | Stinging Sophie | North Gustaberg (106) | `17211531`–`17211536`, `17211556`–`17211560` | `17211537`, `17211561` | Beestinger `16486`, 15% |
 | Jaggedy-Eared Jack | West Ronfaure (100) | `17187110` | `17187111` | Rabbit Charm `13112`, 1% |
 | Spiny Spipi | East Sarutabaruta (116) | `17252656` | `17252657` | Mist Silk Cape `13607`, 15% |
-| Hoo Mjuu the Torrent | Giddeus (145) | `17371513` | `17371515` | Zealot's Mitts `12798`, 15%; Monster Signa `17132`, 5% |
-
-The highest NM is Hoo Mjuu at level 16–17. The other four are level 9–11,
-so the first route is deliberately conservative for Pablo at level 20 with
-Valaineral, Joachim, and Mihli Aliapoh.
+All four NMs are level 9–11, so the route is deliberately conservative for
+Pablo at level 20 with Valaineral, Joachim, and Mihli Aliapoh.
 
 ## Operating policy
 
@@ -37,24 +34,24 @@ One round should:
 2. Skip a camp if every configured unique watched reward is already present
    in a searched player container.
 3. Perform a guarded combat-free zone transition to the camp's first vetted
-   observation point and rebuild zone-dismissed Trusts.
+   observation point, wait two seconds for the zone transition to settle, and
+   rebuild zone-dismissed Trusts.
 4. Sweep a small set of profile-owned observation points. Select only a live
    exact NM or placeholder ID; an NM always outranks its placeholder.
-5. Kill each eligible placeholder at most once in that camp visit. After a
-   kill, allow a short settlement/spawn window, rescan for the NM, then move
-   to the next camp. Do not wait through a five-minute respawn.
+5. Kill each eligible placeholder at most once in that camp visit, then move
+   immediately to the next camp. Do not rescan after the configured
+   placeholder quota is dead and do not wait through a five-minute respawn.
 6. Defend against a real engaged threat through the existing reactive path,
    but never broaden proactive admission to unrelated mobs.
 7. Update the local overlay with route round, camp number/name, placeholder
    progress, and collected reward count.
 8. After the final round drains every reactive fight, return to the validated
-   Bastok Markets safe endpoint before disarming. Never leave an unattended
-   character in the final Giddeus aggro pocket.
+   Bastok Markets safe endpoint before disarming.
 
 Cycling is the timer strategy. The live Lizzy calibration measured about
-five to five-and-a-half minutes between placeholder kills. A five-camp round
-should naturally exceed that interval, making the earlier placeholders ready
-again without idle camping.
+five to five-and-a-half minutes between placeholder kills. A four-camp round
+can be shorter, so a repeated round may simply sweep past a placeholder that
+has not respawned yet instead of waiting in place.
 
 ## Live Lizzy calibration
 
@@ -74,7 +71,7 @@ seconds produced 327 guarded relocations. The route implementation should
 derive compact per-camp observation points from placeholder/spawn data, scan
 at a slower bounded cadence, and move to the next camp after one pass.
 
-## Five-camp live validation
+## Early five-camp live validation
 
 The 2026-07-30 one-round lease completed normally in 8 minutes 40 seconds with
 `nm_route_complete`:
@@ -102,6 +99,32 @@ Digger Wasp began hitting Pablo after control disarmed, proving that
 Pablo was moved to the validated Bastok Markets endpoint
 `(-304, -161.5, -10.32)` in zone 235, and the durable route now performs that
 same guarded cross-zone exit before it reports a completed final round.
+
+Later validation found that Hoo's dense Giddeus pocket added too much risk and
+latency for this low-level loop. One run killed Spiny Spipi itself, proving NM
+priority, but entered Giddeus before Trust reconstruction completed and died.
+A staging-point revision assembled all three Trusts successfully and killed
+Hoo's placeholder plus four linked enemies, but inventory pressure disarmed
+the lease while Pablo remained in the aggro pocket; two later enemies then
+defeated him. The inventory guard now drains reactive combat and safe-exits
+before disarming, and Hoo Mjuu has been removed from this route.
+
+## Four-camp live validation
+
+The 2026-07-30 simplified one-round lease completed normally in 4 minutes
+12 seconds with `nm_route_complete`:
+
+- Four camps completed and the final safe exit returned Pablo to Bastok
+  Markets.
+- Six exact placeholders were killed: one each for Lizzy, Jack, and Spipi,
+  plus three distinct Sophie placeholders.
+- Every camp advanced immediately after its configured placeholder quota; no
+  post-placeholder NM scan or repeated sweep occurred.
+- The two-second post-zone delay preceded Trust reconstruction. All three
+  Trusts were available before combat in each new zone.
+- There were zero deaths, reactive engagements, combat recoveries, teleports
+  while engaged, or recovery commands while engaged.
+- No NM spawned and no watched rare item dropped in this round.
 
 ## Controls
 
@@ -151,4 +174,4 @@ Use `pnpm mcp:farm-status` for the compact lease/route state and
    multi-placeholder Sophie behavior, owned-item skipping, inventory pressure,
    route advancement, reactive-defense precedence, and time/round limits.
 5. **Complete.** Validate every camp's local metadata/profile constraints and
-   live-validate one bounded five-camp round before enabling repeated rounds.
+   live-validate one bounded four-camp round before enabling repeated rounds.

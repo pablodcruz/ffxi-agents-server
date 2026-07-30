@@ -93,23 +93,6 @@ export const NM_ROUTE_PROFILES = Object.freeze([
       { x: 410, y: 270, z: -5 },
     ],
   }),
-  profile({
-    id: "hoo_mjuu_the_torrent",
-    name: "Hoo Mjuu the Torrent",
-    zone_id: 145,
-    placeholder_server_ids: [17371513],
-    notorious_monster_server_ids: [17371515],
-    watched_items: [
-      { item_id: 12798, name: "Zealot's Mitts" },
-      { item_id: 17132, name: "Monster Signa" },
-    ],
-    maximum_placeholder_kills_per_visit: 1,
-    maximum_elevation_difference: 8,
-    sweep_positions: [
-      { x: -50, y: -90, z: 0 },
-      { x: -50, y: -120, z: 0 },
-    ],
-  }),
 ]);
 
 export const NM_ROUTE_SAFE_EXIT = Object.freeze({

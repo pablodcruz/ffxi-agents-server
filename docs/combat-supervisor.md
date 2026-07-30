@@ -667,9 +667,10 @@ limit with zero deaths. The measured placeholder cycle was approximately
 five to five-and-a-half minutes.
 
 The prototype's two-second four-point sweep was intentionally diagnostic and
-produced 327 relocations. Do not generalize that cadence. The planned
-five-camp implementation moves on after one placeholder pass and lets the
-route itself absorb respawn time. See `docs/notorious-monster-loop.md`.
+produced 327 relocations. Do not generalize that cadence. The validated
+four-camp implementation moves on immediately after its configured
+placeholder quota is dead and lets the route itself absorb respawn time. See
+`docs/notorious-monster-loop.md`.
 
 ### Verified Elder Memories completion
 
