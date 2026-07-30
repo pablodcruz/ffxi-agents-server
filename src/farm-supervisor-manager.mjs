@@ -68,6 +68,9 @@ export function farmSupervisorArgs({
   combatSpell,
   maximumCombatSpellsPerFight,
   minimumCastMpPercent,
+  nmRoute,
+  maximumRouteRounds,
+  minimumFreeInventorySlots,
 }) {
   return [
     path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
@@ -89,6 +92,9 @@ export function farmSupervisorArgs({
     "--combat-spell", combatSpell,
     "--maximum-combat-spells-per-fight", String(maximumCombatSpellsPerFight),
     "--minimum-cast-mp-percent", String(minimumCastMpPercent),
+    "--nm-route", String(Boolean(nmRoute)),
+    "--maximum-route-rounds", String(maximumRouteRounds),
+    "--minimum-free-inventory-slots", String(minimumFreeInventorySlots),
     "--confirmation", FARM_CONFIRMATION,
   ];
 }
@@ -112,6 +118,9 @@ export async function startFarm({
   combatSpell = "",
   maximumCombatSpellsPerFight = 0,
   minimumCastMpPercent = 35,
+  nmRoute = false,
+  maximumRouteRounds = 1,
+  minimumFreeInventorySlots = 5,
   confirmation,
 }) {
   if (confirmation !== FARM_CONFIRMATION) {
@@ -156,6 +165,9 @@ export async function startFarm({
       combat_spell: combatSpell,
       maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
       minimum_cast_mp_percent: minimumCastMpPercent,
+      nm_route: Boolean(nmRoute),
+      maximum_route_rounds: maximumRouteRounds,
+      minimum_free_inventory_slots: minimumFreeInventorySlots,
     },
     counters: {
       fights_completed: 0,
@@ -179,6 +191,11 @@ export async function startFarm({
       trust_refreshes: 0,
       job_abilities: 0,
       combat_spells: 0,
+      nm_camps_completed: 0,
+      nm_rounds_completed: 0,
+      nm_placeholders_killed: 0,
+      notorious_monsters_killed: 0,
+      nm_sweeps: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -205,6 +222,9 @@ export async function startFarm({
     combatSpell,
     maximumCombatSpellsPerFight,
     minimumCastMpPercent,
+    nmRoute,
+    maximumRouteRounds,
+    minimumFreeInventorySlots,
   });
   const child = spawn(process.execPath, args, {
     cwd: projectDir,

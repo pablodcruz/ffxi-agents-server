@@ -47,6 +47,9 @@ One round should:
    but never broaden proactive admission to unrelated mobs.
 7. Update the local overlay with route round, camp number/name, placeholder
    progress, and collected reward count.
+8. After the final round drains every reactive fight, return to the validated
+   Bastok Markets safe endpoint before disarming. Never leave an unattended
+   character in the final Giddeus aggro pocket.
 
 Cycling is the timer strategy. The live Lizzy calibration measured about
 five to five-and-a-half minutes between placeholder kills. A five-camp round
@@ -71,16 +74,81 @@ seconds produced 327 guarded relocations. The route implementation should
 derive compact per-camp observation points from placeholder/spawn data, scan
 at a slower bounded cadence, and move to the next camp after one pass.
 
-## Implementation checkpoints
+## Five-camp live validation
 
-1. Move NM profiles out of the farm script into a validated data module.
-2. Add a route policy that tracks camp, round, per-visit placeholder kills,
-   watched rewards, respawn cooldowns, and completion reasons.
-3. Add a detached route manager and `start/status/stop` MCP surface with the
-   same lease ownership, confirmation, runtime permissions, and emergency
-   disarm contract as the farm supervisor.
-4. Unit-test exact-ID exclusion, NM-over-placeholder priority, multi-
-   placeholder Sophie behavior, owned-item skipping, inventory pressure,
+The 2026-07-30 one-round lease completed normally in 8 minutes 40 seconds with
+`nm_route_complete`:
+
+- Five camps completed and all five cross-zone entries settled.
+- Seven exact placeholders were killed: one each for Lizzy, Jack, Spipi, and
+  Hoo Mjuu, plus three distinct Sophie placeholders.
+- No NM spawned and no watched rare item dropped during this round.
+- Five unrelated mobs that actually engaged Pablo or a Trust were handled by
+  the reactive path. All five occurred in the final Giddeus pocket; maximum
+  observed handoff queue time was 1,629 ms.
+- The run completed 12 fights, earned 1,140 EXP and 96 gil, and had zero
+  deaths, zero recovery cycles, zero teleports while engaged, and zero
+  recovery commands while engaged.
+- Twenty-two slower profile-owned sweeps replaced the earlier Lizzy
+  experiment's 327 two-second relocations.
+- One stale exact-target race and four attack-registration/visibility
+  rejections recovered through the existing bounded retry paths.
+- Inventory moved from 17/30 to 21/30 and retained nine free slots, above the
+  configured five-slot stop threshold.
+
+The first build stopped safely but remained in the Giddeus camp. A nearby
+Digger Wasp began hitting Pablo after control disarmed, proving that
+"combat-free at stop time" was not a sufficient unattended exit condition.
+Pablo was moved to the validated Bastok Markets endpoint
+`(-304, -161.5, -10.32)` in zone 235, and the durable route now performs that
+same guarded cross-zone exit before it reports a completed final round.
+
+## Controls
+
+The route reuses the detached farm lease and its existing start/status/stop
+surface. Route mode owns targeting and travel, so quest-item, target-level,
+trusted-sweep, general auto-transition, and general auto-relocation options
+must remain disabled.
+
+```bash
+pnpm mcp:farm-start -- \
+  --zone-id 235 \
+  --maximum-seconds 1800 \
+  --maximum-fights 100 \
+  --scan-radius 50 \
+  --minimum-start-hp-percent 75 \
+  --allow-caution true \
+  --auto-relocate false \
+  --auto-transition false \
+  --target-level 0 \
+  --quest-item-id 0 \
+  --trusted-camp-sweep false \
+  --auto-job-abilities true \
+  --weapon-skill Combo \
+  --combat-spell Blizzard \
+  --maximum-combat-spells-per-fight 1 \
+  --minimum-cast-mp-percent 35 \
+  --nm-route true \
+  --maximum-route-rounds 1 \
+  --minimum-free-inventory-slots 5 \
+  --confirmation 'ARM PRIVATE SERVER FARM SUPERVISOR'
+```
+
+Use `pnpm mcp:farm-status` for the compact lease/route state and
+`pnpm mcp:farm-stop` for a cooperative stop that drains live combat.
+
+## Completed implementation checkpoints
+
+1. **Complete.** Move NM profiles out of the farm script into a validated data
+   module.
+2. **Complete.** Add a route policy that tracks camp, round, per-visit
+   placeholder kills, watched rewards, respawn cooldowns, and completion
+   reasons.
+3. **Complete.** Extend the detached farm manager and `start/status/stop` MCP
+   surface with the same lease ownership, confirmation, runtime permissions,
+   and emergency disarm contract as the farm supervisor.
+4. **Complete.** Unit-test exact-ID exclusion, NM-over-placeholder priority,
+   multi-placeholder Sophie behavior, owned-item skipping, inventory pressure,
    route advancement, reactive-defense precedence, and time/round limits.
-5. Dry-run every camp as observation-only, then live-validate one bounded
-   five-camp round before enabling repeated rounds.
+5. **Complete.** Validate every camp's local metadata/profile constraints and
+   live-validate one bounded five-camp round before enabling repeated rounds.

@@ -1106,6 +1106,9 @@ server.registerTool(
         .min(10)
         .max(100)
         .default(35),
+      nm_route: z.boolean().default(false),
+      maximum_route_rounds: z.number().int().min(1).max(20).default(1),
+      minimum_free_inventory_slots: z.number().int().min(1).max(20).default(5),
       confirmation: z.literal(FARM_CONFIRMATION),
     },
     annotations: {
@@ -1133,6 +1136,9 @@ server.registerTool(
     combat_spell,
     maximum_combat_spells_per_fight,
     minimum_cast_mp_percent,
+    nm_route,
+    maximum_route_rounds,
+    minimum_free_inventory_slots,
     confirmation,
   }) => {
     try {
@@ -1155,6 +1161,9 @@ server.registerTool(
         combatSpell: combat_spell,
         maximumCombatSpellsPerFight: maximum_combat_spells_per_fight,
         minimumCastMpPercent: minimum_cast_mp_percent,
+        nmRoute: nm_route,
+        maximumRouteRounds: maximum_route_rounds,
+        minimumFreeInventorySlots: minimum_free_inventory_slots,
         confirmation,
       }));
     } catch (error) {

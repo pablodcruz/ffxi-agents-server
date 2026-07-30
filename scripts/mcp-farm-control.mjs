@@ -20,6 +20,7 @@ const autoRelocateValue = argument("--auto-relocate", "false");
 const autoTransitionValue = argument("--auto-transition", "false");
 const trustedCampSweepValue = argument("--trusted-camp-sweep", "false");
 const autoJobAbilitiesValue = argument("--auto-job-abilities", "false");
+const nmRouteValue = argument("--nm-route", "false");
 const combatSpell = argument("--combat-spell", "");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
@@ -38,6 +39,9 @@ if (!["true", "false"].includes(trustedCampSweepValue)) {
 }
 if (!["true", "false"].includes(autoJobAbilitiesValue)) {
   throw new Error("--auto-job-abilities must be true or false.");
+}
+if (!["true", "false"].includes(nmRouteValue)) {
+  throw new Error("--nm-route must be true or false.");
 }
 
 const transport = new StdioClientTransport({
@@ -97,6 +101,11 @@ try {
       ),
       minimum_cast_mp_percent: Number(
         argument("--minimum-cast-mp-percent", "35"),
+      ),
+      nm_route: nmRouteValue === "true",
+      maximum_route_rounds: Number(argument("--maximum-route-rounds", "1")),
+      minimum_free_inventory_slots: Number(
+        argument("--minimum-free-inventory-slots", "5"),
       ),
       confirmation: FARM_CONFIRMATION,
     });

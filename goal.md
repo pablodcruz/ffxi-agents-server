@@ -12,11 +12,13 @@ resolved failures belong in `docs/`.
 ## Current state
 
 - Pablo: Hume male, Monk 30 / Warrior 15 and Black Mage 20 / Warrior 10,
-  with Black Mage at 153/4,600 EXP and Bastok Rank 3.
+  with Black Mage at 1,293/4,600 EXP and Bastok Rank 3.
   The final Emissary turn-in awarded the Adventurer's Certificate and
   Certified Adventurer title; a zone reload refreshed the client rank cache.
-- Currency: 23,221 gil; last documented balances are 4,934 Sparks and
+- Currency: 23,317 gil; last documented balances are 4,934 Sparks and
   1,100 Unity accolades.
+- Current location: the validated Bastok Markets safe endpoint in zone 235.
+  Pablo is idle and agent control is disarmed after the NM route.
 - Current Monk equipment verified through AgentBridge: Brass Baghnakhs, full
   Trader's armor, White Belt, and Bastokan Ring. The job change restored this
   owned set automatically from Inventory and Mog Wardrobe 1.
@@ -89,10 +91,9 @@ resolved failures belong in `docs/`.
   Treasure Caskets, mobs above the level envelope, and vertically separated
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
-- Inventory is 29/30 after Black Mage 20. The Empress Band remains in
-  Inventory and Mog Safe 2 is unlocked at 0/50. Perform a reviewed
-  storage/selling pass before the next long drop-dependent objective; do not
-  add routine inventory polling to combat.
+- Inventory is 21/30 after the five-camp NM route, with nine open slots. The
+  Empress Band remains in Inventory and Mog Safe 2 is unlocked at 0/50.
+  Route inventory checks happen at camp boundaries, not after every fight.
 
 ## Current Goal 1 — Black Mage 20
 
@@ -110,25 +111,31 @@ Status: **complete**
 5. **Complete.** Independently verify Black Mage 20 / Warrior 10 at
    153/4,600 EXP and publish one tested checkpoint.
 
-## Next Goal — five-camp notorious-monster loop
+## Current Goal — five-camp notorious-monster loop
 
-Status: **planned**
+Status: **complete**
 
-1. Clean Inventory to preserve several open slots before any rare-drop route.
-2. Convert the live Leaping Lizzy experiment into a data-driven route over
-   Leaping Lizzy, Stinging Sophie, Jaggedy-Eared Jack, Spiny Spipi, and
-   Hoo Mjuu the Torrent.
-3. At each camp, target only exact local placeholder/NM server IDs, prioritize
-   an active NM, defend against actual aggro, and move on after one bounded
-   placeholder pass instead of waiting through its respawn.
-4. Skip completed camps when their watched unique item is already owned; stop
-   on inventory pressure, death, session faults, route limits, or a hard
-   safety condition.
-5. Show route/round/camp progress in the local overlay, live-validate one
-   complete five-camp round, document outcomes, and publish one checkpoint.
+1. **Complete.** Clean Inventory from 29/30 to 17/30 while preserving
+   protected items.
+2. **Complete.** Convert the live Leaping Lizzy experiment into a data-driven
+   route over Leaping Lizzy, Stinging Sophie, Jaggedy-Eared Jack, Spiny Spipi,
+   and Hoo Mjuu the Torrent.
+3. **Complete.** At each camp, target only exact local placeholder/NM server
+   IDs, prioritize an active NM, defend against actual aggro, and move on
+   after one bounded placeholder pass instead of waiting through its respawn.
+4. **Complete.** Skip completed camps when their watched unique item is already
+   owned; stop on inventory pressure, death, session faults, route limits, or
+   a hard safety condition.
+5. **Complete.** Show route/round/camp progress in the local overlay and
+   live-validate one complete five-camp round. The route visited all five
+   camps, killed seven exact placeholders, handled five reactive adds, and
+   stopped with zero deaths.
+6. **Complete.** Add a guarded Bastok Markets safe exit after the last round;
+   the live finding showed that merely disarming in Giddeus can leave a
+   nearby aggressor hitting the unattended character.
 
 See `docs/notorious-monster-loop.md` for the authoritative local IDs, drops,
-and implementation plan.
+controls, live results, and safety findings.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.
@@ -157,6 +164,9 @@ credentials ignored and local.
 - Automated Black Mage 1→20 progression completed with normal spell
   purchases, guarded scroll use, Fire/Blizzard combat casting, deterministic
   level-band transitions, and zero deaths in the final lease.
+- The first guarded five-camp NM loop completed in 8m40s with seven exact
+  placeholder kills, five reactive defenses, zero deaths, a local route
+  overlay, inventory guards, and a safe Bastok exit.
 - `Elder Memories` completed through ordinary combat and exact-item trades.
   Spawn-slot-aware trusted sweeping acquired the final Magicked Skull, and the
   normal Mog House menu established Monk 25 / Warrior 1.

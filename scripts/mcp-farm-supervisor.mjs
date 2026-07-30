@@ -44,6 +44,17 @@ import {
 } from "../src/quest-drop-policy.mjs";
 import { FARM_CONFIRMATION } from "../src/farm-supervisor-manager.mjs";
 import { selectReadyJobAbility } from "../src/job-ability-policy.mjs";
+import {
+  NM_ROUTE_PROFILES,
+  NM_ROUTE_SAFE_EXIT,
+} from "../src/nm-route-profiles.mjs";
+import {
+  inventoryHasFreeSlots,
+  nextRouteCamp,
+  nextRoutePosition,
+  routePlaceholderIds,
+  watchedItemsOwned,
+} from "../src/nm-route-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 
@@ -112,6 +123,19 @@ const minimumCastMpPercent = integerArgument(
   10,
   100,
 );
+const nmRoute = booleanArgument("--nm-route");
+const maximumRouteRounds = integerArgument(
+  "--maximum-route-rounds",
+  1,
+  1,
+  20,
+);
+const minimumFreeInventorySlots = integerArgument(
+  "--minimum-free-inventory-slots",
+  5,
+  1,
+  20,
+);
 if (!combatSpell && maximumCombatSpellsPerFight > 0) {
   throw new Error("--combat-spell is required when combat spell casts are enabled.");
 }
@@ -173,6 +197,20 @@ if (questProfile && questProfile.zone_id !== zoneId) {
 if (questProfile && autoTransition) {
   throw new Error("Quest-item farming cannot automatically transition zones.");
 }
+if (
+  nmRoute
+  && (
+    questItemId > 0
+    || targetLevel > 0
+    || trustedCampSweep
+    || autoTransition
+    || autoRelocate
+  )
+) {
+  throw new Error(
+    "NM route mode owns targeting and travel; quest, target-level, trusted-sweep, auto-transition, and auto-relocate options must be disabled.",
+  );
+}
 
 const runtimeDir = path.join(projectDir, "runtime", "farm-supervisor");
 const statePath = path.join(runtimeDir, `${agentId}.json`);
@@ -226,6 +264,11 @@ const counters = {
   trust_refreshes: 0,
   job_abilities: 0,
   combat_spells: 0,
+  nm_camps_completed: 0,
+  nm_rounds_completed: 0,
+  nm_placeholders_killed: 0,
+  notorious_monsters_killed: 0,
+  nm_sweeps: 0,
 };
 const metrics = {
   aggro_response_samples: 0,
@@ -260,6 +303,16 @@ let leaseOriginPosition = null;
 let noTargetSince = null;
 let lotterySweepIndex = 0;
 let lastLotterySweepAt = 0;
+let nmRouteCampIndex = 0;
+let nmRouteRound = 1;
+let nmRouteCampPrepared = false;
+let nmRouteCampStartedAt = 0;
+let nmRouteSweepIndex = 0;
+let lastNmRouteSweepAt = 0;
+let nmRoutePostKillScanUntil = 0;
+let nmRouteNmKilled = false;
+const nmRoutePlaceholderKills = new Set();
+const nmRouteObservedRewards = new Set();
 let levelGoalOverlayDirty = targetLevel > 0;
 let lastLevelGoalProgressKey = null;
 let nextLevelGoalOverlayAttemptAt = 0;
@@ -314,7 +367,22 @@ async function writeState(force = false) {
       combat_spell: combatSpell,
       maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
       minimum_cast_mp_percent: minimumCastMpPercent,
+      nm_route: nmRoute,
+      maximum_route_rounds: maximumRouteRounds,
+      minimum_free_inventory_slots: minimumFreeInventorySlots,
     },
+    nm_route: nmRoute
+      ? {
+          camp_index: nmRouteCampIndex,
+          camp_count: NM_ROUTE_PROFILES.length,
+          camp_name: NM_ROUTE_PROFILES[nmRouteCampIndex]?.name || null,
+          round: nmRouteRound,
+          maximum_rounds: maximumRouteRounds,
+          placeholder_kills_this_visit: nmRoutePlaceholderKills.size,
+          sweep_index: nmRouteSweepIndex,
+          observed_reward_item_ids: [...nmRouteObservedRewards],
+        }
+      : null,
     active_zone_id: activeZoneId,
     counters,
     metrics,
@@ -365,11 +433,11 @@ async function observe() {
   });
 }
 
-async function characterState() {
+async function characterState(inventoryContainer = 0) {
   return call("ffxi_character_state", {
-    inventory_container: 0,
+    inventory_container: inventoryContainer,
     include_recasts: false,
-    max_items: questItemId > 0 ? 80 : 1,
+    max_items: questItemId > 0 || nmRoute ? 80 : 1,
   });
 }
 
@@ -447,6 +515,65 @@ async function updateLevelGoalOverlay() {
   });
   lastLevelGoalProgressKey = progressKey;
   return { level, reached: level >= targetLevel };
+}
+
+function currentNmRouteProfile() {
+  return NM_ROUTE_PROFILES[nmRouteCampIndex] || null;
+}
+
+async function updateNmRouteOverlay({ complete = false } = {}) {
+  if (!nmRoute) return;
+  const profile = currentNmRouteProfile();
+  const state = await characterState();
+  const existing = state?.goal_overlay || {};
+  const gil = Number(existing.current_gil);
+  const targetGil = Number(existing.target_gil);
+  const progress = complete
+    ? `ROUND ${nmRouteRound}/${maximumRouteRounds} COMPLETE | FIVE CAMPS VISITED`
+    : (
+      `ROUND ${nmRouteRound}/${maximumRouteRounds} | `
+      + `CAMP ${nmRouteCampIndex + 1}/${NM_ROUTE_PROFILES.length} `
+      + `${profile?.name || "UNKNOWN"} | PH `
+      + `${nmRoutePlaceholderKills.size}/`
+      + `${profile?.maximum_placeholder_kills_per_visit || 0}`
+    );
+  await call("ffxi_set_goal_overlay", {
+    enabled: true,
+    current_gil: Number.isSafeInteger(gil) && gil >= 0 ? gil : 0,
+    target_gil: Number.isSafeInteger(targetGil) && targetGil > 0
+      ? targetGil
+      : 10_000,
+    title: complete ? "FIVE-CAMP NM LOOP COMPLETE" : "FIVE-CAMP NM LOOP",
+    progress_label: progress,
+  });
+  log("nm_route_overlay_updated", {
+    complete,
+    round: nmRouteRound,
+    camp_index: nmRouteCampIndex,
+    camp_name: profile?.name || null,
+    placeholder_kills: nmRoutePlaceholderKills.size,
+  });
+}
+
+async function collectNmRouteOwnedItems() {
+  const owned = new Set();
+  for (const container of [0, 6, 7, 8, 9]) {
+    const state = await characterState(container);
+    for (const item of state?.inventory?.items || []) {
+      if (Number(item.item_id) > 0 && Number(item.count) > 0) {
+        owned.add(Number(item.item_id));
+      }
+    }
+  }
+  nmRouteObservedRewards.clear();
+  for (const profile of NM_ROUTE_PROFILES) {
+    for (const item of profile.watched_items) {
+      if (owned.has(Number(item.item_id))) {
+        nmRouteObservedRewards.add(Number(item.item_id));
+      }
+    }
+  }
+  return owned;
 }
 
 function availablePartyNames(observation) {
@@ -1236,6 +1363,297 @@ async function transitionToLevelBand(profile, camp, observation) {
   return after;
 }
 
+async function transitionToNmRouteCamp(profile, observation) {
+  const destination = profile?.sweep_positions?.[0];
+  if (!profile || !destination || hasLiveCombat(observation)) {
+    return observation;
+  }
+  const fromZoneId = activeZoneId;
+  await transition("transitioning_nm_camp", {
+    from_zone_id: fromZoneId,
+    to_zone_id: profile.zone_id,
+    camp_name: profile.name,
+    destination,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("nm_route_transition_blocked", {
+      camp_name: profile.name,
+      reason: "live_combat",
+    });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    ...destination,
+    zone_id: profile.zone_id,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+
+  let after = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    after = await observe();
+    if (
+      after?.login_status === 2
+      && Number(playerPartyMember(after)?.zone_id) === Number(profile.zone_id)
+      && after?.player?.position
+    ) {
+      break;
+    }
+  }
+  if (
+    after?.login_status !== 2
+    || Number(playerPartyMember(after)?.zone_id) !== Number(profile.zone_id)
+  ) {
+    throw new Error(
+      `NM route transition to ${profile.name} (zone ${profile.zone_id}) did not settle.`,
+    );
+  }
+
+  activeZoneId = Number(profile.zone_id);
+  metadata = await loadZoneMetadata(activeZoneId);
+  leaseOriginPosition = { ...after.player.position };
+  cooldowns.clear();
+  relocationCooldowns.clear();
+  noTargetSince = null;
+  if (fromZoneId !== activeZoneId) counters.zone_transitions += 1;
+  ingestEvents(after);
+  observeThreats(after);
+  after = await ensureTrustParty(after);
+  log("nm_route_transition_complete", {
+    camp_name: profile.name,
+    zone_id: activeZoneId,
+    destination,
+    party_members: (after.party || []).map((member) => member.name),
+  });
+  await writeState(true);
+  return after;
+}
+
+async function exitNmRouteSafely(observation) {
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("nm_route_safe_exit_blocked", { reason: "live_combat" });
+    return { observation: before, applied: false };
+  }
+  await transition("exiting_nm_route", {
+    from_zone_id: activeZoneId,
+    to_zone_id: NM_ROUTE_SAFE_EXIT.zone_id,
+    destination_name: NM_ROUTE_SAFE_EXIT.name,
+  });
+  await armControl();
+  await call("ffxi_service_teleport", {
+    ...NM_ROUTE_SAFE_EXIT.position,
+    zone_id: NM_ROUTE_SAFE_EXIT.zone_id,
+    reason: "travel_node",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+  let after = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    after = await observe();
+    if (
+      after?.login_status === 2
+      && Number(playerPartyMember(after)?.zone_id)
+        === Number(NM_ROUTE_SAFE_EXIT.zone_id)
+      && after?.player?.position
+    ) {
+      break;
+    }
+  }
+  if (
+    after?.login_status !== 2
+    || Number(playerPartyMember(after)?.zone_id)
+      !== Number(NM_ROUTE_SAFE_EXIT.zone_id)
+  ) {
+    throw new Error(
+      `NM route safe exit to zone ${NM_ROUTE_SAFE_EXIT.zone_id} did not settle.`,
+    );
+  }
+  activeZoneId = NM_ROUTE_SAFE_EXIT.zone_id;
+  metadata = await loadZoneMetadata(activeZoneId);
+  leaseOriginPosition = { ...after.player.position };
+  cooldowns.clear();
+  relocationCooldowns.clear();
+  noTargetSince = null;
+  counters.zone_transitions += 1;
+  ingestEvents(after);
+  observeThreats(after);
+  log("nm_route_safe_exit_complete", {
+    zone_id: activeZoneId,
+    destination_name: NM_ROUTE_SAFE_EXIT.name,
+    destination: NM_ROUTE_SAFE_EXIT.position,
+  });
+  await writeState(true);
+  return { observation: after, applied: true };
+}
+
+async function prepareNmRouteCamp(observation) {
+  const profile = currentNmRouteProfile();
+  if (!profile) throw new Error("NM route camp index is invalid.");
+  const inventoryState = await characterState(0);
+  if (!inventoryHasFreeSlots(inventoryState, minimumFreeInventorySlots)) {
+    stopReason = "inventory_pressure";
+    stopping = true;
+    log("nm_route_inventory_guard", {
+      count: inventoryState?.inventory?.count,
+      capacity: inventoryState?.inventory?.capacity,
+      required_free_slots: minimumFreeInventorySlots,
+    });
+    return observation;
+  }
+
+  const ownedItems = await collectNmRouteOwnedItems();
+  if (watchedItemsOwned(profile, ownedItems)) {
+    log("nm_route_camp_skipped", {
+      camp_name: profile.name,
+      reason: "all_watched_rewards_owned",
+      watched_item_ids: profile.watched_items.map((item) => item.item_id),
+    });
+    return advanceNmRouteCamp(observation);
+  }
+
+  observation = await transitionToNmRouteCamp(profile, observation);
+  if (hasLiveCombat(observation) || stopping) return observation;
+  nmRouteCampPrepared = true;
+  nmRouteCampStartedAt = Date.now();
+  nmRouteSweepIndex = 1;
+  lastNmRouteSweepAt = Date.now();
+  nmRoutePostKillScanUntil = 0;
+  nmRouteNmKilled = false;
+  nmRoutePlaceholderKills.clear();
+  await updateNmRouteOverlay();
+  log("nm_route_camp_started", {
+    round: nmRouteRound,
+    camp_index: nmRouteCampIndex,
+    camp_name: profile.name,
+    zone_id: profile.zone_id,
+  });
+  return observation;
+}
+
+async function advanceNmRouteCamp(observation) {
+  const completedProfile = currentNmRouteProfile();
+  counters.nm_camps_completed += 1;
+  const next = nextRouteCamp({
+    campIndex: nmRouteCampIndex,
+    round: nmRouteRound,
+    profileCount: NM_ROUTE_PROFILES.length,
+    maximumRounds: maximumRouteRounds,
+  });
+  log("nm_route_camp_completed", {
+    round: nmRouteRound,
+    camp_index: nmRouteCampIndex,
+    camp_name: completedProfile?.name || null,
+    placeholder_kills: nmRoutePlaceholderKills.size,
+    notorious_monster_killed: nmRouteNmKilled,
+  });
+  if (next.complete) {
+    const safeExit = await exitNmRouteSafely(observation);
+    if (!safeExit.applied) {
+      counters.nm_camps_completed -= 1;
+      return safeExit.observation;
+    }
+    counters.nm_rounds_completed += 1;
+    stopReason = "nm_route_complete";
+    stopping = true;
+    await updateNmRouteOverlay({ complete: true }).catch(() => {});
+    return safeExit.observation;
+  }
+  if (next.round !== nmRouteRound) counters.nm_rounds_completed += 1;
+  nmRouteCampIndex = next.camp_index;
+  nmRouteRound = next.round;
+  nmRouteCampPrepared = false;
+  nmRouteCampStartedAt = 0;
+  nmRouteSweepIndex = 0;
+  lastNmRouteSweepAt = 0;
+  nmRoutePostKillScanUntil = 0;
+  nmRouteNmKilled = false;
+  nmRoutePlaceholderKills.clear();
+  noTargetSince = null;
+  await writeState(true);
+  return observation;
+}
+
+async function relocateNmRouteSweep(observation) {
+  const profile = currentNmRouteProfile();
+  const destination = nextRoutePosition({
+    profile,
+    sweepIndex: nmRouteSweepIndex,
+  });
+  if (!destination || hasLiveCombat(observation)) return observation;
+  const sweepIndex = nmRouteSweepIndex;
+  await transition("sweeping_nm_camp", {
+    camp_name: profile.name,
+    sweep_index: sweepIndex,
+    destination,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("nm_route_sweep_blocked", {
+      camp_name: profile.name,
+      reason: "live_combat",
+    });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    ...destination,
+    zone_id: profile.zone_id,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+  nmRouteSweepIndex += 1;
+  lastNmRouteSweepAt = Date.now();
+  counters.nm_sweeps += 1;
+  counters.camp_relocations += 1;
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+  const after = await sample();
+  log("nm_route_sweep", {
+    camp_name: profile.name,
+    sweep_index: sweepIndex,
+    destination,
+    live_combat_after: hasLiveCombat(after),
+  });
+  await writeState(true);
+  return after;
+}
+
+async function recordNmRouteDefeat(target) {
+  if (!nmRoute || !target) return;
+  const profile = currentNmRouteProfile();
+  const serverId = Number(target.server_id);
+  if (profile.notorious_monster_server_ids.includes(serverId)) {
+    counters.notorious_monsters_killed += 1;
+    nmRouteNmKilled = true;
+    nmRoutePostKillScanUntil = Date.now() + 3_000;
+    nmRouteSweepIndex = 0;
+    log("nm_route_notorious_monster_defeated", {
+      camp_name: profile.name,
+      name: target.name,
+      server_id: serverId,
+    });
+  } else if (profile.placeholder_server_ids.includes(serverId)) {
+    nmRoutePlaceholderKills.add(serverId);
+    counters.nm_placeholders_killed += 1;
+    nmRoutePostKillScanUntil = Date.now() + 8_000;
+    nmRouteSweepIndex = 0;
+    log("nm_route_placeholder_defeated", {
+      camp_name: profile.name,
+      name: target.name,
+      server_id: serverId,
+      placeholder_kills: nmRoutePlaceholderKills.size,
+    });
+  }
+  await updateNmRouteOverlay().catch((error) => {
+    log("nm_route_overlay_error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
 async function waitForIdleStance(observation) {
   for (let attempt = 0; attempt < 15; attempt += 1) {
     const threat = selectReactiveThreat(observation, {
@@ -1718,6 +2136,7 @@ async function handleFight(observation) {
   if (defeated) {
     const defeatedTarget = currentTarget;
     counters.fights_completed += 1;
+    await recordNmRouteDefeat(defeatedTarget);
     previousTargetId = defeatedTarget.server_id;
     currentTarget = null;
     currentMode = null;
@@ -1802,6 +2221,9 @@ try {
     combat_spell: combatSpell,
     maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
     minimum_cast_mp_percent: minimumCastMpPercent,
+    nm_route: nmRoute,
+    maximum_route_rounds: maximumRouteRounds,
+    minimum_free_inventory_slots: minimumFreeInventorySlots,
   });
 
   let observation = await observe();
@@ -2003,6 +2425,11 @@ try {
     }
 
     const partyPlayer = playerPartyMember(observation);
+    if (nmRoute && !nmRouteCampPrepared) {
+      observation = await prepareNmRouteCamp(observation);
+      if (stopping) break;
+      continue;
+    }
     const levelBandProfile = nextLevelBandTransition({
       autoTransition,
       activeZoneId,
@@ -2045,7 +2472,24 @@ try {
           maximumLevelOffset: 1,
         })
       : null;
-    const target = trustedCampSweep
+    const routeProfile = nmRoute ? currentNmRouteProfile() : null;
+    const target = nmRoute
+      ? selectExactLotteryTarget({
+          observation,
+          metadata,
+          placeholderServerIds: routePlaceholderIds(
+            routeProfile,
+            nmRoutePlaceholderKills,
+          ),
+          notoriousMonsterServerIds: routeProfile.notorious_monster_server_ids,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+          maximumElevationDifference:
+            routeProfile.maximum_elevation_difference,
+          maximumLevelOffset: 4,
+        })
+      : trustedCampSweep
       ? preferredDropTarget || selectTrustedCampSweepTarget({
           observation,
           metadata,
@@ -2084,6 +2528,56 @@ try {
         });
     if (!target) {
       noTargetSince ??= Date.now();
+      if (nmRoute) {
+        const profile = currentNmRouteProfile();
+        if (Date.now() < nmRoutePostKillScanUntil) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        const inventoryOkay = inventoryHasFreeSlots(
+          uiState,
+          minimumFreeInventorySlots,
+        );
+        if (!inventoryOkay) {
+          stopReason = "inventory_pressure";
+          stopping = true;
+          log("nm_route_inventory_guard", {
+            count: uiState?.inventory?.count,
+            capacity: uiState?.inventory?.capacity,
+            required_free_slots: minimumFreeInventorySlots,
+          });
+          break;
+        }
+        const campTimedOut = Date.now() - nmRouteCampStartedAt >= 180_000;
+        const sweepComplete = !nextRoutePosition({
+          profile,
+          sweepIndex: nmRouteSweepIndex,
+        });
+        if (nmRouteNmKilled || campTimedOut) {
+          observation = await advanceNmRouteCamp(observation);
+          continue;
+        }
+        if (
+          sweepComplete
+          || (
+            Date.now() - lastNmRouteSweepAt >= 4_000
+            && nextRoutePosition({
+              profile,
+              sweepIndex: nmRouteSweepIndex,
+            })
+          )
+        ) {
+          if (sweepComplete) {
+            observation = await advanceNmRouteCamp(observation);
+          } else {
+            observation = await relocateNmRouteSweep(observation);
+          }
+          noTargetSince = null;
+          continue;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
       if (
         autoRelocate
         && questProfile?.lottery
@@ -2157,7 +2651,7 @@ try {
         continue;
       }
 
-      const checked = trustedCampSweep
+      const checked = trustedCampSweep || nmRoute
         ? {
             observation: await selectExactTarget(target, scanRadius),
             threat: null,
@@ -2180,7 +2674,7 @@ try {
         playerName: observation.player?.name,
         zoneId: activeZoneId,
       });
-      if (trustedCampSweep && !trustSupport.ready) {
+      if ((trustedCampSweep || nmRoute) && !trustSupport.ready) {
         stopReason = "trusted_camp_support_unavailable";
         stopping = true;
         log("farm_supervisor_blocked", {
@@ -2189,7 +2683,7 @@ try {
         });
         break;
       }
-      if (!trustedCampSweep && !isFarmCheckApproved({
+      if (!trustedCampSweep && !nmRoute && !isFarmCheckApproved({
         checkVerdict: checked.verdict,
         allowCaution,
         trustedSupportReady: trustSupport.ready,
@@ -2205,7 +2699,11 @@ try {
         await transition("cooldown");
         continue;
       }
-      if (!trustedCampSweep && checked.verdict?.verdict === "caution") {
+      if (
+        !trustedCampSweep
+        && !nmRoute
+        && checked.verdict?.verdict === "caution"
+      ) {
         log("target_caution_approved", {
           name: target.name,
           server_id: target.server_id,

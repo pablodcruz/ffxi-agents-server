@@ -68,6 +68,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     combatSpell: "Fire",
     maximumCombatSpellsPerFight: 1,
     minimumCastMpPercent: 35,
+    nmRoute: true,
+    maximumRouteRounds: 2,
+    minimumFreeInventorySlots: 6,
   });
   assert.deepEqual(args, [
     "/private/test-project/scripts/mcp-farm-supervisor.mjs",
@@ -89,6 +92,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--combat-spell", "Fire",
     "--maximum-combat-spells-per-fight", "1",
     "--minimum-cast-mp-percent", "35",
+    "--nm-route", "true",
+    "--maximum-route-rounds", "2",
+    "--minimum-free-inventory-slots", "6",
     "--confirmation", FARM_CONFIRMATION,
   ]);
 });
