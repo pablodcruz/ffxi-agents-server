@@ -251,6 +251,22 @@ pnpm mcp:farm-status
 pnpm mcp:farm-stop -- --lease-id <active-lease-id>
 ```
 
+For a long-running goal, run the local watchdog in a separate supervised
+terminal:
+
+```sh
+pnpm mcp:farm-watch -- \
+  --interval-seconds 15 \
+  --confirmation "ARM PRIVATE SERVER FARM WATCHDOG"
+```
+
+The watchdog records its own ignored, owner-only heartbeat at
+`runtime/farm-monitor/primary.json`. It renews only leases that end normally
+with `time_limit` or `fight_limit`, preserving the prior guarded
+configuration. Logout, death, stale supervisor heartbeats, inventory blocks,
+manual stops, and unknown errors remain blocked for diagnosis instead of being
+blindly restarted.
+
 For a level-appropriate camp that admits `decent challenge` checks (including
 high defense only while at least two healthy in-zone companions are verified):
 

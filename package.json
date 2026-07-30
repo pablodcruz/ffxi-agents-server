@@ -36,6 +36,7 @@
     "mcp:farm-start": "./scripts/run-node.sh scripts/mcp-farm-control.mjs --action start",
     "mcp:farm-status": "./scripts/run-node.sh scripts/mcp-farm-control.mjs --action status",
     "mcp:farm-stop": "./scripts/run-node.sh scripts/mcp-farm-control.mjs --action stop",
+    "mcp:farm-watch": "./scripts/run-node.sh scripts/mcp-farm-watchdog.mjs",
     "mcp:farm-drop": "./scripts/run-node.sh scripts/mcp-farm-quest-drop.mjs",
     "mcp:combat": "./scripts/run-node.sh scripts/mcp-combat.mjs",
     "mcp:attack-nearby": "./scripts/run-node.sh scripts/mcp-attack-nearby.mjs",
