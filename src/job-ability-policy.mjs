@@ -57,9 +57,15 @@ const warriorAbilities = Object.freeze([
   }),
 ]);
 
+// THF 1-20 has no routine ability that is both useful and geometry-free:
+// Steal creates inventory pressure, Sneak Attack needs verified rear position,
+// and Perfect Dodge is reserved for explicit emergencies.
+const thiefAbilities = Object.freeze([]);
+
 const abilitiesByMainJob = new Map([
   [1, warriorAbilities],
   [2, monkAbilities],
+  [6, thiefAbilities],
 ]);
 
 export function selectReadyJobAbility({
@@ -104,4 +110,8 @@ export function supportedMonkAbilities() {
 
 export function supportedWarriorAbilities() {
   return warriorAbilities.map((ability) => ({ ...ability }));
+}
+
+export function supportedThiefAbilities() {
+  return thiefAbilities.map((ability) => ({ ...ability }));
 }

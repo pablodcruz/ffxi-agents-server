@@ -1,7 +1,7 @@
 # Addon and navigation tooling assessment
 
-Status: read-only scout selected; optional visual companions deferred
-Date: 2026-07-27
+Status: MCP-native controls selected; optional visual companions deferred
+Date: 2026-07-29
 
 ## Decision
 
@@ -18,6 +18,7 @@ they are not the machine-control boundary.
 
 | Tool | Useful for | Decision |
 |---|---|---|
+| [Windower JobChange](https://docs.windower.net/addons/jobchange/) | Command-line main/support job changes within six yalms of a job-change NPC | Port its narrow normal-packet mechanism into AgentBridge with MCP guards; do not depend on Windower |
 | [MobDB](https://github.com/ThornyFFXI/mobdb) | On-screen mob ID, level range, aggro/link flags, position, resistances, and drops; it can generate data for an exact LSB private server | Best visual pilot. Use as a read-only mirror after pinning and reviewing the source; do not make MCP depend on its UI |
 | [Ashita distance addon](https://github.com/AshitaXI/Ashita-v4beta/tree/main/addons/distance) | Target distance overlay | Optional stream/operator aid; AgentBridge already returns exact numeric distance |
 | Ashita minimap plugin | Human spatial context and nearby dots | Optional stream/operator aid; it does not provide route planning or a stable agent API |
@@ -26,6 +27,21 @@ they are not the machine-control boundary.
 | Find / FindAll | Inventory lookup | Useful later for inventory management, not for finding mobs or moving |
 | Allmaps / remastered map DATs | Better human map labels | Optional human aid; visual-only and unnecessary for the MCP route planner |
 | Farm/bot/nav addons | Closed-loop automation | Do not adopt. They duplicate policy, obscure failure modes, and commonly lack our exact `/check`, write-latch, audit, and emergency-stop boundaries |
+
+## Command-line job changes
+
+Windower's maintained JobChange addon established the useful primitive the
+operator requested: while within six yalms of a recognized job-change NPC, it
+sends FFXI's ordinary outgoing `0x100` packet with either the main-job byte
+(offset `0x04`) or support-job byte (offset `0x05`) set. AgentBridge now exposes
+that primitive as `ffxi_change_job`, one slot per request.
+
+The MCP-native version additionally requires the write latch and exact
+confirmation phrase, rejects zoning and open menus, validates job IDs, rejects
+an active-slot conflict, and independently confirms a recognized Moogle is
+within six yalms. `pnpm mcp:job-change -- --slot main --job thf` is the
+operator-facing wrapper. This replaces fragile Mog House cursor traversal
+without exposing arbitrary packets or addon commands.
 
 MobDB is unusually relevant because its documented custom-server import path
 accepts LandSandBoat SQL inputs. Its tokens include the numeric server ID,

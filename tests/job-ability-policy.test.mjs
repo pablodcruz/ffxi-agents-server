@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   selectReadyJobAbility,
   supportedMonkAbilities,
+  supportedThiefAbilities,
   supportedWarriorAbilities,
 } from "../src/job-ability-policy.mjs";
 
@@ -88,7 +89,7 @@ test("rotation requires live combat, a supported job, and the global action gap"
   assert.equal(selectReadyJobAbility({
     ...common,
     lastAnyAbilityAt: 0,
-    mainJobId: 3,
+    mainJobId: 6,
   }), null);
 });
 
@@ -163,4 +164,18 @@ test("warrior uses Defender only for low HP and suppresses offense there", () =>
     })?.name,
     "Aggressor",
   );
+});
+
+test("thief level 20 excludes inventory, geometry, and emergency abilities", () => {
+  assert.deepEqual(supportedThiefAbilities(), []);
+  assert.equal(selectReadyJobAbility({
+    mainJobId: 6,
+    mainJobLevel: 20,
+    playerHpPercent: 100,
+    inCombat: true,
+    targetHpPercent: 80,
+    lastUsedAt: new Map(),
+    lastAnyAbilityAt: 0,
+    now: 1_000_000,
+  }), null);
 });

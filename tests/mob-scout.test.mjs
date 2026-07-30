@@ -115,14 +115,15 @@ test("ranks approved linked mobs before excluded hornets and worms", () => {
   assert.deepEqual(ranked[2].reasons, ["excluded_mob_policy"]);
 });
 
-test("excludes Stone Eaters even when their entity remains observable", () => {
-  const [mob] = rankNearbyMobs({
+test("excludes named Eater worm variants even when observable", () => {
+  for (const name of ["Stone Eater", "Rock Eater"]) {
+    const [mob] = rankNearbyMobs({
     playerLevel: 9,
     observation: {
       player: { position: { z: 0 } },
       nearby_entities: [{
         server_id: 17215658,
-        name: "Stone Eater",
+        name,
         entity_type: 2,
         status: 0,
         hp_percent: 100,
@@ -139,10 +140,11 @@ test("excludes Stone Eaters even when their entity remains observable", () => {
       drops: [],
       conservative_vendor_value: 3,
     }],
-  });
+    });
 
-  assert.equal(mob.disposition, "avoid");
-  assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
+    assert.equal(mob.disposition, "avoid");
+    assert.deepEqual(mob.reasons, ["excluded_mob_policy"]);
+  }
 });
 
 test("excludes Vultures after target-follow still failed live registration", () => {

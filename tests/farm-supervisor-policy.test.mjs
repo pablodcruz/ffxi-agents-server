@@ -70,6 +70,12 @@ test("trusted camp sweep admits ordinary level-bounded mobs without per-pull che
       maximum_level: 20,
       mob_type: 2,
     },
+    {
+      server_id: 205,
+      name: "Rock Eater",
+      maximum_level: 20,
+      mob_type: 0,
+    },
   ];
   const observed = {
     player: { position: { x: 0, y: 0, z: 0 } },
@@ -109,6 +115,15 @@ test("trusted camp sweep admits ordinary level-bounded mobs without per-pull che
         hp_percent: 100,
         distance: 2,
         position: { x: 2, y: 0, z: 0 },
+      },
+      {
+        server_id: 205,
+        name: "Rock Eater",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 0.5,
+        position: { x: 0.5, y: 0, z: 0 },
       },
     ],
   };

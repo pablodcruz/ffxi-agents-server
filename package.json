@@ -16,6 +16,7 @@
     "mcp:gameplay-smoke": "./scripts/run-node.sh scripts/mcp-smoke.mjs --gameplay-cycle",
     "mcp:interact": "./scripts/run-node.sh scripts/mcp-interact.mjs",
     "mcp:menu": "./scripts/run-node.sh scripts/mcp-menu.mjs",
+    "mcp:job-change": "./scripts/run-node.sh scripts/mcp-job-change.mjs",
     "mcp:move-item": "./scripts/run-node.sh scripts/mcp-move-inventory-item.mjs",
     "mcp:prepare-trade": "./scripts/run-node.sh scripts/mcp-prepare-trade.mjs",
     "mcp:buy-sparks-item": "./scripts/run-node.sh scripts/mcp-buy-selected-sparks-item.mjs",

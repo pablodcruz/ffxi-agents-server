@@ -23,6 +23,7 @@ async function createMockBridge(token) {
       const authenticated = request.token === token;
       const writeOperation = [
         "clear_target",
+        "change_job",
         "input_action",
         "set_heading",
         "target_entity",
@@ -153,6 +154,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_gameplay_command",
       "ffxi_agent_profiles",
       "ffxi_character_state",
+      "ffxi_change_job",
       "ffxi_clear_target",
       "ffxi_control_status",
       "ffxi_directional_input",
@@ -303,6 +305,17 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(roeObjective.isError, undefined);
   assert.equal(roeObjective.structuredContent.operation, "start_roe_objective");
+
+  const jobChange = await client.callTool({
+    name: "ffxi_change_job",
+    arguments: {
+      slot: "main",
+      job_id: 3,
+      confirmation: "CHANGE PRIVATE SERVER JOB",
+    },
+  });
+  assert.equal(jobChange.isError, undefined);
+  assert.equal(jobChange.structuredContent.operation, "change_job");
 
   const movement = await client.callTool({
     name: "ffxi_move_to_entity",

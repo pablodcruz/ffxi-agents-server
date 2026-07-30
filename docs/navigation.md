@@ -1113,11 +1113,13 @@ as a failed confirmation.
 ## Deterministic Bastok Mog House entry
 
 The pinned `zonelines.sql` record for the south Bastok Markets residential
-entrance is centered at `(-146.168, -6.781, -30.329)` with a two-yalm trigger
-and destination `(-177, -9.4, -30.251)` in the same zone. A guarded placement
-at `(-145.4, -6.781, -30.329)` triggers the ordinary transition after the
-client finishes loading Bastok Markets. The resulting Mog House position is
-`(0, 0, -0.01)`, with Moogle server ID `17739873` 1.5 yalms away.
+entrance is centered at native database vector
+`(-146.168, -6.781, -30.329)` with a two-yalm trigger and destination
+`(-177, -9.4, -30.251)` in the same zone. AgentBridge exposes horizontal
+`x/y` plus vertical `z`, so the corresponding guarded command placement is
+`x=-145.4, y=-30.329, z=-6.781`. It triggers the ordinary transition after
+the client finishes loading Bastok Markets. The resulting Mog House position
+is `(0, 0, -0.01)`, with Moogle server ID `17739873` 1.5 yalms away.
 
 Because the destination differs from the requested exterior coordinate, the
 generic teleport verifier can report `applied: false` even though the game
@@ -1132,3 +1134,42 @@ The verified normal support-job sequence is:
 3. In `menu jobchang`, move down once and confirm Support Job.
 4. In `menu jobcselu`, Warrior is the initial selection for this character;
    confirm it, then verify `sub_job_id = 1` and `sub_job_level = 1`.
+
+## Bastok tutorial, Signet, and EXP band
+
+The normal Bastok tutorial is a prerequisite for a low-level EXP lease when
+the character does not yet carry a usable EXP ring. The verified route uses
+these exact entities in Bastok Markets:
+
+| Purpose | Entity | Server ID | AgentBridge position |
+|---|---|---:|---|
+| Tutorial | Gulldago | `17739939` | `x=-364.121, y=-167.456, z=-10.035` |
+| Signet and Conquest exchange | Rabid Wolf, I.M. | `17739828` | `x=-346.354, y=-184.252, z=-10.002` |
+| Auction House inspection | Auction Counter | `17739866` | `x=-331.874, y=-59.848, z=-15.301` |
+
+Do not run a generic confirm-until-closed dialogue loop through Gulldago's
+multi-choice tutorial question. Three visible rows repeat the explanation and
+the fourth row, `Sure am.`, may be below the initial viewport. Repeatedly
+confirming the first row creates an apparently stuck loop. Advance that screen
+one input at a time, move to the fourth row, and confirm it. The ordinary
+tutorial then awards the initial food and auction-house tasks, and ultimately
+the Conquest promotion voucher.
+
+The verified normal sequence was:
+
+1. Receive Signet from Rabid Wolf and verify status effect `253`.
+2. Complete Gulldago's food, weapon-skill, and Auction House tutorial steps.
+   The run received Meat Jerky, a Lizard Tail, a Pot of Honey, a Fire Crystal,
+   and 100 gil.
+3. Return to Gulldago for key item `1060`, the Conquest promotion voucher.
+4. At Rabid Wolf, choose Spend conquest points, Common items, and Empress
+   Band. The voucher makes this exchange cost zero conquest points.
+5. At the final `Proceed?` prompt, the default is Cancel. Move up to
+   `Yes, purchase item` before confirming.
+6. Equip Empress Band in a ring slot, wait for its activation delay, use it,
+   and verify Dedication status effect `249`. Food status effect `251` may
+   remain active alongside Signet and Dedication.
+
+After a same-zone guarded placement, first observe the nearby entities and
+allow them to load before interacting. An immediate interaction can otherwise
+report `Target out of range` even when the final coordinate is correct.

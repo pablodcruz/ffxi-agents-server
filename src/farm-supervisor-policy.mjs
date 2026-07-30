@@ -71,7 +71,7 @@ export function selectTrustedCampSweepTarget({
   maximumLevelOffset = 1,
   maximumElevationDifference = 4,
   excludedServerIds = new Set(),
-  excludedNamePatterns = [/\b(?:worm|stone eater)\b/i],
+  excludedNamePatterns = [/\b(?:worm|stone eater|rock eater)\b/i],
 }) {
   const byId = new Map(
     (metadata || []).map((mob) => [Number(mob.server_id), mob]),
@@ -180,7 +180,7 @@ export function selectRelocationCamp({
       || normalizedNames.has(String(mob?.name || "").toLowerCase())
     )
     && Number(mob?.mob_type || 0) === 0
-    && !/\b(?:worm|stone eater)\b/i.test(String(mob?.name || ""))
+    && !/\b(?:worm|stone eater|rock eater)\b/i.test(String(mob?.name || ""))
     && (allowAggressiveCandidates || !mob?.aggro)
     && finiteSpawn(mob)
     && Number(mob.maximum_level) <= Number(playerLevel)

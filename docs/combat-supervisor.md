@@ -12,6 +12,14 @@ proactive targeting, reactive defense, approach, battle, weapon skills,
 recovery, and stop conditions. It keeps one MCP connection open and acts
 without per-fight model calls or model tokens.
 
+For low-call operation, start one target-level lease and treat its ignored
+`runtime/farm-supervisor/primary.json` plus lease JSONL log as the routine
+telemetry. Do not poll live MCP state, inventory, Trusts, or EXP rate between
+fights. The supervisor refreshes the local in-game goal overlay, repairs
+defeated or zone-dismissed Trusts, applies configured level-band transitions,
+and stops at the target level. Use one authoritative live-state call after a
+hard safety event or after the target-level stop.
+
 ## Research basis
 
 [EasyFarm](https://github.com/EasyFarm/EasyFarm) used a finite-state design with
@@ -319,6 +327,30 @@ The level-17 transition and Valkurm rotation are live-validated:
   idle, with Joachim, Valaineral, and Mihli Aliapoh all healthy. The local goal
   overlay displayed `LEVEL 20 REACHED | AUTOMATED LEVELING COMPLETE`.
 
+The Thief 1–20 run added two operational findings:
+
+- Automatic level-band transition worked without model supervision. After
+  Konschtat had no eligible below-level camp at Thief 18, lease
+  `3d311328-e228-4536-8e8d-9be6255985c4` selected the validated Valkurm Sand
+  Hare cluster, zoned combat-free, rebuilt Valaineral, Joachim, and Mihli, and
+  resumed fighting.
+- Broad same-zone relocation is not automatically equivalent to the pinned
+  transition camp. At Thief 19 the lease eventually moved into a western
+  Hare/Lizard pocket, began a pull at 75% HP, and took reactive Goblin Leecher
+  aggro. Pablo was defeated after a long fight. Death recovery correctly
+  selected the Home Point return, verified 100% HP in Bastok Markets, and
+  stopped with `player_defeated_home_point`. The final 743-EXP recovery run
+  therefore uses the original vetted Hare cluster, disables auto-relocation,
+  and restores the 90% next-pull threshold. This is a bounded recovery profile,
+  not a global reversal of the 75% throughput setting for already proven
+  camps.
+- Recovery lease `e4216c92-00b5-48ee-a33c-5bb91de11cee` rebuilt all three
+  Trusts and defeated two Hares for 1,950 counted EXP in 108 seconds. It
+  stopped itself at Thief 20 with zero deaths, reactive engagements, rejected
+  attacks, target-cycle errors, combat teleports, or combat recoveries. One
+  final live state call independently verified THF 20 / WAR 10 at
+  1,207/4,600, with the goal overlay reporting automated leveling complete.
+
 ## Next iteration
 
 1. Buy and equip the next level-appropriate Sparks upgrades.
@@ -578,3 +610,46 @@ the camp and stop condition, the detached local supervisor continuously kills
 all admitted ordinary mobs, and Codex returns only for a hard stop or durable
 outcome. Per-fight inventory reads, strength checks, and model decisions are
 not part of trusted-camp mode.
+
+### Low-level EXP prerequisites
+
+Before starting a fresh low-level job lease, verify the character's available
+normal EXP accelerators once, outside the combat loop. For the Thief run,
+Pablo completed the normal Bastok tutorial, received Signet, exchanged its
+Conquest promotion voucher for an Empress Band, equipped it, waited through
+the activation delay, and used it. The lease began only after AgentBridge
+simultaneously reported Signet `253`, Dedication `249`, and Food `251`.
+
+Legacy multi-choice tutorial menus must be handled one screen at a time.
+Gulldago's decisive `Sure am.` choice is the fourth row and can be hidden below
+three repeat-explanation choices. A generic dialogue loop selects the first
+row repeatedly and makes no progress; it is not safe for that menu.
+
+The first Thief lease used the historical 90% next-pull HP threshold. With
+living level-3 Trusts intentionally retained under the death-only refresh
+policy, post-fight recovery from roughly 75–88% created repeated 20–35 second
+gaps. The lease was cooperatively stopped only after its reactive chain
+drained, then replaced with a 75% threshold. Valaineral had genuinely fallen
+during that final chain, so the replacement lease restored him once at Pablo's
+current level 10 (215 HP rather than 80 HP). It completed its first six fights
+in 116 seconds without a recovery wait. This preserves the operator's rule:
+do not inspect or refresh Trusts at every level; repair only an actually
+missing, defeated, or zone-dismissed member.
+
+The Thief run also validated that zone selection must remain level-aware even
+when an operator temporarily prefers the faster-looking earlier camp. A short
+current-level Konschtat comparison pushed Pablo to level 18 through normal
+combat and RoE rewards. The next detached lease then found no relocation camp
+inside its `player level - 3` floor: the high camp's level-13–14 sheep had
+aged out. Re-enabling `auto_transition` made the supervisor choose its pinned
+five-Sand-Hare Valkurm cluster, verify a 61-yalm aggressive-spawn buffer,
+perform the guarded cross-zone placement, rebuild all three zone-dismissed
+Trusts, and resume combat without MCP polling. This is the intended low-token
+operating model: use local deterministic level thresholds for camp changes and
+reserve MCP/Codex calls for hard events or completed goals.
+
+Konschtat also exposed `Rock Eater` as a second named Eater variant of the
+burrowing worm family. Combat admission, relocation selection, and the
+read-only scout now exclude `Rock Eater` alongside names containing `worm` or
+`Stone Eater`. The already-engaged discovery fight was allowed to finish
+before the corrected lease was started.

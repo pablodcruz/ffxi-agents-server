@@ -127,7 +127,7 @@ try {
       authoritative_combat_gate: "fresh exact-ID /check is still required",
       excluded_policy: [
         "mob names matching /hornet/i",
-        "worm-family mobs matching /\\b(?:worm|stone eater)\\b/i",
+        "worm-family mobs matching /\\b(?:worm|stone eater|rock eater)\\b/i",
       ],
       allowed_linked_policy: [
         "Walking Sapling",

@@ -1,6 +1,6 @@
 const defaultExcludedNamePatterns = Object.freeze([
   /hornet/i,
-  /\b(?:worm|stone eater)\b/i,
+  /\b(?:worm|stone eater|rock eater)\b/i,
   /^vulture$/i,
 ]);
 

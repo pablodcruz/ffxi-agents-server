@@ -742,6 +742,41 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_change_job",
+  {
+    title: "Change one FFXI job slot near a Moogle",
+    description:
+      "Change exactly one main or support job while within six yalms of a recognized Moogle using FFXI's normal outgoing 0x100 packet. AgentBridge rejects open menus, zoning, invalid job IDs, and active-slot conflicts.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      slot: z.enum(["main", "sub"]),
+      job_id: z.number().int().min(1).max(22),
+      confirmation: z.literal("CHANGE PRIVATE SERVER JOB"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, slot, job_id, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "change_job",
+          { slot, job_id, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_start_roe_objective",
   {
     title: "Start an exact Records of Eminence objective",

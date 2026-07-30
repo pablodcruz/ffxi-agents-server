@@ -11,7 +11,7 @@ transfers using their normal client packets.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.27.0';
+addon.version = '0.28.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -116,6 +116,14 @@ local allowed_teleport_reasons =
     vendor = true,
     travel_node = true,
     stuck_recovery = true,
+};
+
+local job_change_npc_names =
+{
+    ['Moogle'] = true,
+    ['Nomad Moogle'] = true,
+    ['Green Thumb Moogle'] = true,
+    ['Pilgrim Moogle'] = true,
 };
 
 local interface_hidden_signature = ashita.memory.find(
@@ -1483,6 +1491,96 @@ local function start_roe_objective(params)
     };
 end
 
+local function change_job(params)
+    require_control_enabled();
+    if (params.confirmation ~= 'CHANGE PRIVATE SERVER JOB') then
+        error('Job change requires the exact private-server confirmation phrase.');
+    end
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    local entities = memory:GetEntity();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Job change requires a logged-in private-server character.');
+    end
+    if (player:GetIsZoning() ~= 0) then
+        error('Job change is unavailable while zoning.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Job change requires all in-game menus and dialogue to be closed.');
+    end
+
+    local slot = type(params.slot) == 'string' and params.slot:lower() or '';
+    if (slot ~= 'main' and slot ~= 'sub') then
+        error('Job change slot must be main or sub.');
+    end
+    local job_id = tonumber(params.job_id);
+    if (
+        job_id == nil or job_id ~= math.floor(job_id) or
+        job_id < 1 or job_id > 22
+    ) then
+        error('Job change job_id must be an integer from 1 through 22.');
+    end
+    if (
+        (slot == 'main' and tonumber(player:GetSubJob()) == job_id) or
+        (slot == 'sub' and tonumber(player:GetMainJob()) == job_id)
+    ) then
+        error('The requested job conflicts with the other active job slot.');
+    end
+
+    local nearby_moogle = nil;
+    for index = 0, entities:GetEntityMapSize() - 1 do
+        local name = entities:GetName(index) or '';
+        local distance_squared = math.max(0, entities:GetDistance(index));
+        if (
+            entities:GetServerId(index) > 0 and
+            distance_squared <= 36 and
+            job_change_npc_names[name] == true
+        ) then
+            nearby_moogle = entity_snapshot(index, entities);
+            break;
+        end
+    end
+    if (nearby_moogle == nil) then
+        error('Job change requires a recognized Moogle within six yalms.');
+    end
+
+    stop_movement('job_change');
+    stop_input_pulse('job_change');
+    stop_heading_hold('job_change');
+    target:SetTarget(0, true);
+
+    -- Normal FFXI outgoing job-change packet 0x100. Offset 0x04 is the
+    -- requested main job and 0x05 is the requested support job; zero leaves
+    -- the other slot unchanged.
+    local packet =
+    {
+        0x00, 0x05, 0x00, 0x00,
+        slot == 'main' and job_id or 0x00,
+        slot == 'sub' and job_id or 0x00,
+        0x00, 0x00,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x100, packet);
+    add_event(
+        -1,
+        ('Agent requested %s job %u near %s.'):fmt(
+            slot,
+            job_id,
+            nearby_moogle.name
+        )
+    );
+    return
+    {
+        queued = true,
+        slot = slot,
+        job_id = job_id,
+        moogle = nearby_moogle,
+        packet_id = 0x100,
+        normal_client_packet = true,
+    };
+end
+
 local function move_inventory_item(params)
     require_control_enabled();
 
@@ -1761,6 +1859,8 @@ local function dispatch(request)
         return service_teleport(params);
     elseif (request.operation == 'start_roe_objective') then
         return start_roe_objective(params);
+    elseif (request.operation == 'change_job') then
+        return change_job(params);
     elseif (request.operation == 'move_inventory_item') then
         return move_inventory_item(params);
     elseif (request.operation == 'gameplay_command') then
