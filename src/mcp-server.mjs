@@ -1089,6 +1089,23 @@ server.registerTool(
         .max(64)
         .regex(/^[^"\r\n;|]+$/)
         .default("Combo"),
+      combat_spell: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
+      maximum_combat_spells_per_fight: z
+        .number()
+        .int()
+        .min(0)
+        .max(3)
+        .default(0),
+      minimum_cast_mp_percent: z
+        .number()
+        .int()
+        .min(10)
+        .max(100)
+        .default(35),
       confirmation: z.literal(FARM_CONFIRMATION),
     },
     annotations: {
@@ -1113,6 +1130,9 @@ server.registerTool(
     trusted_camp_sweep,
     auto_job_abilities,
     weapon_skill,
+    combat_spell,
+    maximum_combat_spells_per_fight,
+    minimum_cast_mp_percent,
     confirmation,
   }) => {
     try {
@@ -1132,6 +1152,9 @@ server.registerTool(
         trustedCampSweep: trusted_camp_sweep,
         autoJobAbilities: auto_job_abilities,
         weaponSkill: weapon_skill,
+        combatSpell: combat_spell,
+        maximumCombatSpellsPerFight: maximum_combat_spells_per_fight,
+        minimumCastMpPercent: minimum_cast_mp_percent,
         confirmation,
       }));
     } catch (error) {

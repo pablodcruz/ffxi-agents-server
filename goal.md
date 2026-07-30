@@ -11,10 +11,12 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 30 / Warrior 15, 1,917/5,800 EXP, Bastok Rank 3.
+- Pablo: Hume male, Monk 30 / Warrior 15 and Black Mage 20 / Warrior 10,
+  with Black Mage at 153/4,600 EXP and Bastok Rank 3.
   The final Emissary turn-in awarded the Adventurer's Certificate and
   Certified Adventurer title; a zone reload refreshed the client rank cache.
-- Currency: 27,171 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Currency: 23,221 gil; last documented balances are 4,934 Sparks and
+  1,100 Unity accolades.
 - Current Monk equipment verified through AgentBridge: Brass Baghnakhs, full
   Trader's armor, White Belt, and Bastokan Ring. The job change restored this
   owned set automatically from Inventory and Mog Wardrobe 1.
@@ -60,6 +62,12 @@ resolved failures belong in `docs/`.
   clusters after five seconds without an approved target. It requires the
   current level band, a 40-yalm aggressive-spawn buffer, and a combat-free
   state before each guarded relocation.
+- Optional combat-spell automation is live-validated. A lease may cast one
+  configured spell per registered fight only after the target has taken
+  damage, while Pablo and the exact selected target are engaged and MP is
+  above the configured floor. Fire carried Black Mage through level 18;
+  Blizzard was learned normally from its purchased scroll and carried the
+  final level-18-to-20 lease.
 - A level-aware lease treats Valaineral/Joachim/Mihli availability as a combat
   invariant and repairs only a missing, defeated, or zone-dismissed Trust.
   It deliberately does not refresh living Trusts merely because Pablo levels;
@@ -81,26 +89,46 @@ resolved failures belong in `docs/`.
   Treasure Caskets, mobs above the level envelope, and vertically separated
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
-- Inventory is 22/30 after the Rank 3 run. The Empress Band remains in
+- Inventory is 29/30 after Black Mage 20. The Empress Band remains in
   Inventory and Mog Safe 2 is unlocked at 0/50. Perform a reviewed
   storage/selling pass before the next long drop-dependent objective; do not
   add routine inventory polling to combat.
 
-## Current Goal 1 — Bastok Rank 3
+## Current Goal 1 — Black Mage 20
 
 Status: **complete**
 
-1. **Complete.** Finish Bastok missions 1-1 `The Zeruhn Report` and 1-2
-   `A Geological Survey` through their normal NPC interactions.
-2. **Complete.** Finish 1-3 `Fetichism` with an exact-drop Palborough Mines
-   sweep and one normal four-item trade to a mission guard.
-3. **Complete.** Finish `The Crystal Line` and `Wading Beasts` through their
-   normal crystal, key-item, and item-trade interactions.
-4. **Complete.** Finish `The Emissary` through the San d'Oria-first route,
-   Warchief Vatgit, Windurst, and the Balga's Dais Rank 2 dragon battlefield.
-5. **Complete.** Verify live Bastok Rank 3, rank points 0, 27,171 gil, and the
-   Certified Adventurer title after one zone reload. Record the reusable
-   mission/menu findings, run focused tests, and publish one checkpoint.
+1. **Complete.** Change to Black Mage through the guarded normal Mog House
+   job menu and retain Warrior as support job.
+2. **Complete.** Clean Inventory, purchase Stone, Water, Aero, Fire, and
+   Blizzard normally, then consume each scroll only at its usable level.
+3. **Complete.** Add a bounded per-fight combat-spell policy and live-validate
+   Fire and Blizzard without replacing Trust tanking or deterministic melee.
+4. **Complete.** Reach Black Mage 20 through detached level-aware leases with
+   exact target selection, guarded camp transitions, Trust repair, recovery,
+   and zero deaths in the final lease.
+5. **Complete.** Independently verify Black Mage 20 / Warrior 10 at
+   153/4,600 EXP and publish one tested checkpoint.
+
+## Next Goal — five-camp notorious-monster loop
+
+Status: **planned**
+
+1. Clean Inventory to preserve several open slots before any rare-drop route.
+2. Convert the live Leaping Lizzy experiment into a data-driven route over
+   Leaping Lizzy, Stinging Sophie, Jaggedy-Eared Jack, Spiny Spipi, and
+   Hoo Mjuu the Torrent.
+3. At each camp, target only exact local placeholder/NM server IDs, prioritize
+   an active NM, defend against actual aggro, and move on after one bounded
+   placeholder pass instead of waiting through its respawn.
+4. Skip completed camps when their watched unique item is already owned; stop
+   on inventory pressure, death, session faults, route limits, or a hard
+   safety condition.
+5. Show route/round/camp progress in the local overlay, live-validate one
+   complete five-camp round, document outcomes, and publish one checkpoint.
+
+See `docs/notorious-monster-loop.md` for the authoritative local IDs, drops,
+and implementation plan.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.
@@ -126,6 +154,9 @@ credentials ignored and local.
 - Automated Thief 1→20 progression completed with Signet, Dedication, guarded
   normal-packet job selection, local-only progress monitoring, deterministic
   level-band transition, death recovery, and a clean two-fight final lease.
+- Automated Black Mage 1→20 progression completed with normal spell
+  purchases, guarded scroll use, Fire/Blizzard combat casting, deterministic
+  level-band transitions, and zero deaths in the final lease.
 - `Elder Memories` completed through ordinary combat and exact-item trades.
   Spawn-slot-aware trusted sweeping acquired the final Magicked Skull, and the
   normal Mog House menu established Monk 25 / Warrior 1.

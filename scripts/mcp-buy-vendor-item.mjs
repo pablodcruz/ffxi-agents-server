@@ -112,13 +112,18 @@ try {
     if (enable.isError) throw new Error("Could not arm private-server control.");
 
     inputs.push(await menu("confirm"));
-    const quantity = await state();
-    requireSelected(quantity, "menu    itemctrl");
+    let decision = await state();
 
-    // General shops initialize their bounded quantity control at one.
-    // Do not send directional input here: confirm that exact default.
-    inputs.push(await menu("confirm"));
-    const decision = await state();
+    // Some clients expose the quantity control long enough to observe it,
+    // while others advance the default quantity of one before the next
+    // bridge observation lands. Accept only those two exact verified states.
+    if (menuName(decision) === "menu    itemctrl") {
+      requireSelected(decision, "menu    itemctrl");
+      // General shops initialize their bounded quantity control at one.
+      // Do not send directional input here: confirm that exact default.
+      inputs.push(await menu("confirm"));
+      decision = await state();
+    }
     requireSelected(decision, "menu    shopbuy");
 
     // The normal general-shop decision query defaults to Cancel.

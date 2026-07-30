@@ -20,6 +20,7 @@ const autoRelocateValue = argument("--auto-relocate", "false");
 const autoTransitionValue = argument("--auto-transition", "false");
 const trustedCampSweepValue = argument("--trusted-camp-sweep", "false");
 const autoJobAbilitiesValue = argument("--auto-job-abilities", "false");
+const combatSpell = argument("--combat-spell", "");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
 }
@@ -90,6 +91,13 @@ try {
       trusted_camp_sweep: trustedCampSweepValue === "true",
       auto_job_abilities: autoJobAbilitiesValue === "true",
       weapon_skill: argument("--weapon-skill", "Combo"),
+      combat_spell: combatSpell,
+      maximum_combat_spells_per_fight: Number(
+        argument("--maximum-combat-spells-per-fight", "0"),
+      ),
+      minimum_cast_mp_percent: Number(
+        argument("--minimum-cast-mp-percent", "35"),
+      ),
       confirmation: FARM_CONFIRMATION,
     });
   } else if (action === "stop") {

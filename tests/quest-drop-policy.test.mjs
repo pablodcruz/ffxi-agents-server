@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  selectExactLotteryTarget,
   selectQuestDropTarget,
   selectWatchedDropTarget,
 } from "../src/quest-drop-policy.mjs";
@@ -218,4 +219,65 @@ test("prefers a drop bearer, then admits its live spawn-slot placeholder", () =>
     })?.server_id,
     700,
   );
+});
+
+test("selects only exact lottery entities and prioritizes the notorious monster", () => {
+  const entity = (serverId, name, distance) => ({
+    server_id: serverId,
+    name,
+    entity_type: 2,
+    status: 0,
+    hp_percent: 100,
+    distance,
+    position: { z: 20 },
+  });
+  const selected = selectExactLotteryTarget({
+    observation: {
+      player: { position: { z: 20 } },
+      nearby_entities: [
+        entity(17215866, "Rock Lizard", 2),
+        entity(17215867, "Rock Lizard", 4),
+        entity(17215868, "Leaping Lizzy", 12),
+      ],
+    },
+    metadata: [
+      { server_id: 17215866, maximum_level: 8 },
+      { server_id: 17215867, maximum_level: 8 },
+      { server_id: 17215868, maximum_level: 11 },
+    ],
+    placeholderServerIds: [17215867],
+    notoriousMonsterServerIds: [17215868, 17215888],
+    playerLevel: 15,
+  });
+  assert.equal(selected?.server_id, 17215868);
+  assert.equal(selected?.lottery_role, "notorious_monster");
+});
+
+test("falls back to the exact placeholder and respects cooldowns", () => {
+  const options = {
+    observation: {
+      player: { position: { z: 20 } },
+      nearby_entities: [{
+        server_id: 17215867,
+        name: "Rock Lizard",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 4,
+        position: { z: 20 },
+      }],
+    },
+    metadata: [{ server_id: 17215867, maximum_level: 8 }],
+    placeholderServerIds: [17215867],
+    notoriousMonsterServerIds: [17215868, 17215888],
+    playerLevel: 15,
+  };
+  assert.equal(
+    selectExactLotteryTarget(options)?.lottery_role,
+    "placeholder",
+  );
+  assert.equal(selectExactLotteryTarget({
+    ...options,
+    excludedServerIds: new Set([17215867]),
+  }), null);
 });

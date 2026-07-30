@@ -622,6 +622,55 @@ zoned from South Gustaberg to the vetted Konschtat Mad Sheep camp, repaired the
 Trusts removed by zoning, and resumed combat without dismissing a living Trust
 for level parity.
 
+### Black Mage combat spells and level 20
+
+The durable supervisor now supports one optional configured combat spell:
+
+- `--combat-spell <name>` selects the allowlisted normal `/ma` command.
+- `--maximum-combat-spells-per-fight` is bounded from zero through three.
+- `--minimum-cast-mp-percent` prevents casting below the configured MP floor.
+- A cast requires a registered fight, the exact selected target, engaged
+  player and target stances, prior target damage, at least 20% target HP, and
+  available per-fight cast budget.
+- Job abilities, spells, and weapon skills are sequenced so the same sampling
+  iteration cannot queue competing actions.
+
+Pablo bought Stone, Water, Aero, Fire, and Blizzard through Zaira's normal
+general-shop menus. The client sometimes advanced the default quantity-one
+control before the next bridge observation; the purchase helper now accepts
+only either the observed `menu    itemctrl` state or the exact subsequent
+`menu    shopbuy` state, while retaining exact item-ID and final-decision
+checks. Stone, Water, Aero, and Fire were learned normally. Blizzard remained
+in Inventory until level 18, when `/item "Blizzard" <me>` produced the
+authoritative `Pablo uses a scroll of Blizzard` event.
+
+Fire was live-validated once per fight during the level-15-to-18 leases.
+The final Blizzard lease then completed 28 fights, issued 28 Blizzard casts,
+earned 8,433 counted EXP, performed eight normal recovery cycles, and recorded
+zero deaths or combat teleports/recoveries. It stopped itself with
+`target_level`. A separate live state call verified Black Mage 20 / Warrior 10
+at 153/4,600 EXP, idle and logged in, with the overlay displaying
+`LEVEL 20 REACHED | AUTOMATED LEVELING COMPLETE`.
+
+### Exact lottery prototype
+
+An exact lottery selector now admits configured placeholder and notorious-
+monster server IDs while continuing to reject unrelated normal mobs. It sorts
+an active NM ahead of its placeholder and respects the existing live, range,
+level, elevation, and cooldown gates.
+
+The first profile targeted Leaping Lizzy's exact Rock Lizard placeholder
+`17215867`, Lizzy IDs `17215868` and `17215888`, and Bounding Boots item
+`15351`. A bounded 20-minute run killed the placeholder four times without an
+NM spawn, handled three incidental threats reactively, and stopped on its time
+limit with zero deaths. The measured placeholder cycle was approximately
+five to five-and-a-half minutes.
+
+The prototype's two-second four-point sweep was intentionally diagnostic and
+produced 327 relocations. Do not generalize that cadence. The planned
+five-camp implementation moves on after one placeholder pass and lets the
+route itself absorb respawn time. See `docs/notorious-monster-loop.md`.
+
 ### Verified Elder Memories completion
 
 The normal quest finished without grants or quest-state writes:

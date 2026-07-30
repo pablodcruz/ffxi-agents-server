@@ -65,6 +65,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     trustedCampSweep: true,
     autoJobAbilities: true,
     weaponSkill: "Combo",
+    combatSpell: "Fire",
+    maximumCombatSpellsPerFight: 1,
+    minimumCastMpPercent: 35,
   });
   assert.deepEqual(args, [
     "/private/test-project/scripts/mcp-farm-supervisor.mjs",
@@ -83,6 +86,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--trusted-camp-sweep", "true",
     "--auto-job-abilities", "true",
     "--weapon-skill", "Combo",
+    "--combat-spell", "Fire",
+    "--maximum-combat-spells-per-fight", "1",
+    "--minimum-cast-mp-percent", "35",
     "--confirmation", FARM_CONFIRMATION,
   ]);
 });

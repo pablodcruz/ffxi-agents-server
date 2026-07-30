@@ -38,6 +38,7 @@ import {
   selectReactiveThreat,
 } from "../src/reactive-combat-policy.mjs";
 import {
+  selectExactLotteryTarget,
   selectQuestDropTarget,
   selectWatchedDropTarget,
 } from "../src/quest-drop-policy.mjs";
@@ -95,6 +96,25 @@ const questItemId = integerArgument("--quest-item-id", 0, 0, 65534);
 const trustedCampSweep = booleanArgument("--trusted-camp-sweep");
 const autoJobAbilities = booleanArgument("--auto-job-abilities");
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
+const combatSpellValue = String(argument("--combat-spell", ""));
+const combatSpell = combatSpellValue
+  ? safeLabel(combatSpellValue, "--combat-spell")
+  : "";
+const maximumCombatSpellsPerFight = integerArgument(
+  "--maximum-combat-spells-per-fight",
+  0,
+  0,
+  3,
+);
+const minimumCastMpPercent = integerArgument(
+  "--minimum-cast-mp-percent",
+  35,
+  10,
+  100,
+);
+if (!combatSpell && maximumCombatSpellsPerFight > 0) {
+  throw new Error("--combat-spell is required when combat spell casts are enabled.");
+}
 const quadavFetichNames = [
   "Amber Quadav",
   "Greater Quadav",
@@ -109,6 +129,19 @@ const quadavFetichProfile = (label) => ({
   label,
 });
 const questProfiles = new Map([
+  [15351, {
+    zone_id: 107,
+    lottery: true,
+    placeholder_server_ids: [17215867],
+    notorious_monster_server_ids: [17215868, 17215888],
+    sweep_positions: [
+      { x: -270, y: -410, z: 22 },
+      { x: -340, y: -420, z: 30 },
+      { x: -270, y: -340, z: 22 },
+      { x: -335, y: -345, z: 30 },
+    ],
+    label: "Bounding Boots",
+  }],
   [537, { zone_id: 103, names: ["Damselfly"], label: "Damselfly Worm" }],
   [538, { zone_id: 103, names: ["Ghoul"], label: "Magicked Skull" }],
   [539, { zone_id: 103, names: ["Snipper"], label: "Crab Apron" }],
@@ -192,6 +225,7 @@ const counters = {
   trust_summons: 0,
   trust_refreshes: 0,
   job_abilities: 0,
+  combat_spells: 0,
 };
 const metrics = {
   aggro_response_samples: 0,
@@ -224,6 +258,8 @@ let activeZoneId = zoneId;
 let metadata = [];
 let leaseOriginPosition = null;
 let noTargetSince = null;
+let lotterySweepIndex = 0;
+let lastLotterySweepAt = 0;
 let levelGoalOverlayDirty = targetLevel > 0;
 let lastLevelGoalProgressKey = null;
 let nextLevelGoalOverlayAttemptAt = 0;
@@ -275,6 +311,9 @@ async function writeState(force = false) {
       trusted_camp_sweep: trustedCampSweep,
       auto_job_abilities: autoJobAbilities,
       weapon_skill: weaponSkill,
+      combat_spell: combatSpell,
+      maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
+      minimum_cast_mp_percent: minimumCastMpPercent,
     },
     active_zone_id: activeZoneId,
     counters,
@@ -746,6 +785,8 @@ async function engage(target, mode, {
     los_recovery_attempts: 0,
     last_reengage_attempt_at_ms: 0,
     reengage_attempts: 0,
+    combat_spells_used: 0,
+    last_combat_spell_at_ms: 0,
   };
   currentMode = mode;
   missingTargetSamples = 0;
@@ -1261,7 +1302,7 @@ async function maybeWeaponSkill(observation) {
 }
 
 async function maybeJobAbility(observation) {
-  if (!autoJobAbilities || !currentTarget?.engagement_counted) return;
+  if (!autoJobAbilities || !currentTarget?.engagement_counted) return false;
   const player = playerPartyMember(observation);
   const entity = entityById(observation, currentTarget.server_id);
   const ability = selectReadyJobAbility({
@@ -1276,7 +1317,7 @@ async function maybeJobAbility(observation) {
     lastUsedAt: lastJobAbilityAt,
     lastAnyAbilityAt: lastAnyJobAbilityAt,
   });
-  if (!ability) return;
+  if (!ability) return false;
 
   await armControl();
   await command(`/ja "${ability.name}" <me>`);
@@ -1290,6 +1331,41 @@ async function maybeJobAbility(observation) {
     player_hp_percent: player?.hp_percent,
     server_id: currentTarget.server_id,
   });
+  return true;
+}
+
+async function maybeCombatSpell(observation) {
+  const player = playerPartyMember(observation);
+  const entity = entityById(observation, currentTarget?.server_id);
+  if (
+    !combatSpell
+    || maximumCombatSpellsPerFight <= 0
+    || !currentTarget?.engagement_counted
+    || Number(currentTarget.combat_spells_used) >= maximumCombatSpellsPerFight
+    || Date.now() - Number(currentTarget.last_combat_spell_at_ms) < 5000
+    || Number(observation?.player?.status) !== 1
+    || Number(entity?.status) !== 1
+    || Number(observation?.target?.server_id) !== Number(currentTarget.server_id)
+    || Number(entity?.hp_percent) < 20
+    || Number(entity?.hp_percent) >= Number(currentTarget.start_hp_percent)
+    || Number(player?.mp_percent) < minimumCastMpPercent
+  ) {
+    return false;
+  }
+
+  currentTarget.last_combat_spell_at_ms = Date.now();
+  currentTarget.combat_spells_used += 1;
+  await armControl();
+  await command(`/ma "${combatSpell}" <t>`);
+  counters.combat_spells += 1;
+  log("combat_spell", {
+    name: combatSpell,
+    cast: currentTarget.combat_spells_used,
+    maximum_casts: maximumCombatSpellsPerFight,
+    player_mp_percent: player?.mp_percent,
+    server_id: currentTarget.server_id,
+  });
+  return true;
 }
 
 async function nudgeThroughTarget(observation, target, {
@@ -1377,6 +1453,12 @@ function watchedDropNames() {
 
 function watchedSpawnServerIds() {
   if (questItemId <= 0) return new Set();
+  if (questProfile?.lottery) {
+    return new Set([
+      ...questProfile.placeholder_server_ids,
+      ...questProfile.notorious_monster_server_ids,
+    ]);
+  }
   const dropMobs = metadata.filter((mob) => (
     Number(mob.mob_type || 0) === 0
     && (mob.drops || []).some((drop) => (
@@ -1397,6 +1479,40 @@ function watchedSpawnServerIds() {
       ))
       .map((mob) => Number(mob.server_id)),
   );
+}
+
+async function relocateLotterySweep(observation) {
+  const positions = questProfile?.sweep_positions || [];
+  if (positions.length === 0 || hasLiveCombat(observation)) return observation;
+  const destination = positions[lotterySweepIndex % positions.length];
+  lotterySweepIndex += 1;
+  lastLotterySweepAt = Date.now();
+  await transition("sweeping_lottery", {
+    item_id: questItemId,
+    sweep_index: lotterySweepIndex,
+    destination,
+  });
+  const before = await sample();
+  if (hasLiveCombat(before)) {
+    log("lottery_sweep_blocked", { reason: "live_combat" });
+    return before;
+  }
+  await armControl();
+  await call("ffxi_service_teleport", {
+    ...destination,
+    zone_id: activeZoneId,
+    reason: "combat_position",
+    confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
+  });
+  counters.camp_relocations += 1;
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const after = await sample();
+  log("lottery_sweep", {
+    sweep_index: lotterySweepIndex,
+    destination,
+    live_combat_after: hasLiveCombat(after),
+  });
+  return after;
 }
 
 async function handleFight(observation) {
@@ -1648,8 +1764,11 @@ async function handleFight(observation) {
     }, "tracked_fight_handoff");
     return;
   }
-  await maybeJobAbility(observation);
-  await maybeWeaponSkill(observation);
+  const usedAbility = await maybeJobAbility(observation);
+  const castSpell = usedAbility
+    ? false
+    : await maybeCombatSpell(observation);
+  if (!usedAbility && !castSpell) await maybeWeaponSkill(observation);
   await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
 }
 
@@ -1680,6 +1799,9 @@ try {
     quest_item_id: questItemId,
     trusted_camp_sweep: trustedCampSweep,
     auto_job_abilities: autoJobAbilities,
+    combat_spell: combatSpell,
+    maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
+    minimum_cast_mp_percent: minimumCastMpPercent,
   });
 
   let observation = await observe();
@@ -1931,7 +2053,17 @@ try {
           radius: scanRadius,
           excludedServerIds: excludedServerIds(),
         })
-      : questProfile
+      : questProfile?.lottery
+        ? selectExactLotteryTarget({
+          observation,
+          metadata,
+          placeholderServerIds: questProfile.placeholder_server_ids,
+          notoriousMonsterServerIds: questProfile.notorious_monster_server_ids,
+          playerLevel: Number(partyPlayer?.main_job_level),
+          radius: scanRadius,
+          excludedServerIds: excludedServerIds(),
+        })
+        : questProfile
         ? selectQuestDropTarget({
           observation,
           metadata,
@@ -1952,6 +2084,16 @@ try {
         });
     if (!target) {
       noTargetSince ??= Date.now();
+      if (
+        autoRelocate
+        && questProfile?.lottery
+        && Date.now() - noTargetSince >= 2_000
+        && Date.now() - lastLotterySweepAt >= 2_000
+      ) {
+        observation = await relocateLotterySweep(observation);
+        noTargetSince = null;
+        continue;
+      }
       if (
         autoRelocate
         && Date.now() - noTargetSince >= relocationIdleMilliseconds

@@ -65,6 +65,9 @@ export function farmSupervisorArgs({
   trustedCampSweep,
   autoJobAbilities,
   weaponSkill,
+  combatSpell,
+  maximumCombatSpellsPerFight,
+  minimumCastMpPercent,
 }) {
   return [
     path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
@@ -83,6 +86,9 @@ export function farmSupervisorArgs({
     "--trusted-camp-sweep", String(Boolean(trustedCampSweep)),
     "--auto-job-abilities", String(Boolean(autoJobAbilities)),
     "--weapon-skill", weaponSkill,
+    "--combat-spell", combatSpell,
+    "--maximum-combat-spells-per-fight", String(maximumCombatSpellsPerFight),
+    "--minimum-cast-mp-percent", String(minimumCastMpPercent),
     "--confirmation", FARM_CONFIRMATION,
   ];
 }
@@ -103,6 +109,9 @@ export async function startFarm({
   trustedCampSweep = false,
   autoJobAbilities = false,
   weaponSkill = "Combo",
+  combatSpell = "",
+  maximumCombatSpellsPerFight = 0,
+  minimumCastMpPercent = 35,
   confirmation,
 }) {
   if (confirmation !== FARM_CONFIRMATION) {
@@ -144,6 +153,9 @@ export async function startFarm({
       trusted_camp_sweep: Boolean(trustedCampSweep),
       auto_job_abilities: Boolean(autoJobAbilities),
       weapon_skill: weaponSkill,
+      combat_spell: combatSpell,
+      maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
+      minimum_cast_mp_percent: minimumCastMpPercent,
     },
     counters: {
       fights_completed: 0,
@@ -166,6 +178,7 @@ export async function startFarm({
       trust_summons: 0,
       trust_refreshes: 0,
       job_abilities: 0,
+      combat_spells: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -189,6 +202,9 @@ export async function startFarm({
     trustedCampSweep,
     autoJobAbilities,
     weaponSkill,
+    combatSpell,
+    maximumCombatSpellsPerFight,
+    minimumCastMpPercent,
   });
   const child = spawn(process.execPath, args, {
     cwd: projectDir,
