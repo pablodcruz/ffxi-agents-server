@@ -1116,16 +1116,25 @@ The pinned `zonelines.sql` record for the south Bastok Markets residential
 entrance is centered at native database vector
 `(-146.168, -6.781, -30.329)` with a two-yalm trigger and destination
 `(-177, -9.4, -30.251)` in the same zone. AgentBridge exposes horizontal
-`x/y` plus vertical `z`, so the corresponding guarded command placement is
-`x=-145.4, y=-30.329, z=-6.781`. It triggers the ordinary transition after
-the client finishes loading Bastok Markets. The resulting Mog House position
-is `(0, 0, -0.01)`, with Moogle server ID `17739873` 1.5 yalms away.
+`x/y` plus vertical `z`.
 
-Because the destination differs from the requested exterior coordinate, the
-generic teleport verifier can report `applied: false` even though the game
-correctly emits `=== Area: Mog House 1F ===`. Treat that area event plus the
-Moogle observation as authoritative for this trigger. Do not retry while the
-second transition is settling.
+Do not teleport directly inside the trigger. A later live run showed that an
+instantaneous placement at `x=-145.4, y=-30.329, z=-6.781` can emit `You could
+not enter the next area`, while the outside point on the city side
+`x=-143.5` is embedded in collision and cannot move. The deterministic path
+is:
+
+1. Dismiss Trusts and finish any dialogue.
+2. Place at the valid corridor-side point
+   `x=-148.8, y=-30.329, z=-6.781`.
+3. Use one bounded ordinary movement toward the trigger center rather than
+   another teleport. The client transitions to Mog House 1F and reports
+   position `(0, 0, -0.01)`.
+4. Verify Moogle server ID `17739873` nearby before changing jobs.
+
+The generic movement call may observe the Mog House position before its own
+input pulse finishes. Treat the area event, `(0, 0)` position, and Moogle
+observation as authoritative and stop the movement lease immediately.
 
 The verified normal support-job sequence is:
 

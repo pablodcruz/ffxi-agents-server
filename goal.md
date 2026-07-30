@@ -11,12 +11,13 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Thief 20 / Warrior 10, 1,207/4,600 EXP, verified through
-  live AgentBridge state after the detached supervisor's target-level stop.
-- Currency: 20,676 gil; 4,934 Sparks; 1,100 Unity accolades.
-- Current Warrior equipment verified through AgentBridge: Hume Tunic, Hume M
-  Gloves, Hume Slacks, Hume M Boots, and Bastokan Ring. Brass Baghnakhs,
-  Trader's gear, and White Belt remain carried but are not Warrior-compatible.
+- Pablo: Hume male, Monk 30 / Warrior 15, 77/5,800 EXP. The live
+  authoritative state independently verified the target after the detached
+  Sauromugue run stopped itself.
+- Currency: 20,713 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Current Monk equipment verified through AgentBridge: Brass Baghnakhs, full
+  Trader's armor, White Belt, and Bastokan Ring. The job change restored this
+  owned set automatically from Inventory and Mog Wardrobe 1.
 - Gil milestone completed: 28,815/10,000 through normal Sparks conversion.
 - Trusts learned: Naji, Valaineral, Mihli Aliapoh, Tenzen, Adelheid, Joachim.
 - Adelheid and Joachim were each summoned successfully through MCP.
@@ -39,10 +40,12 @@ resolved failures belong in `docs/`.
   127, and Warrior 1 was selected normally through the Mog House job menu.
 - Durable trusted-camp sweep is validated in Valkurm. Combat and drop detection
   run independently of Codex/MCP analysis calls: it attacks every ordinary
-  nearby mob whose exported maximum level is at most Pablo's level + 1,
-  skips worms, prioritizes engaged adds, requires healthy Trust support, and
-  stops on the watched item or a hard safety/lease condition. Per-pull
-  `/check` is intentionally disabled in this already validated level band.
+  non-aggressive nearby mob whose exported maximum level is at most Pablo's
+  level + 1, skips worms, prioritizes engaged adds, requires healthy Trust
+  support, and stops on the watched item or a hard safety/lease condition.
+  Aggressive mobs are not proactive pulls but remain immediate reactive
+  targets if they engage Pablo or a Trust. Per-pull `/check` is intentionally
+  disabled in an already validated level band.
 - Level-aware job ability automation is active. Monk's Dodge, Boost, and Focus
   are live-validated; Chakra unlocks at 35 and remains HP-gated. Warrior uses
   Berserk from level 15, emergency-only Defender from 25, party-wide Warcry
@@ -79,62 +82,45 @@ resolved failures belong in `docs/`.
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
 - Inventory was reduced before the Thief run but is now 30/30 after unattended
-  leveling. This does not block the current level target, but loot collection
-  is saturated. Empress Band remains equipped; Signet and Dedication were
-  still active in the latest authoritative state. Mog Safe 2 is unlocked at
-  0/50. Perform a reviewed storage/selling pass before the next drop-dependent
-  objective; do not add routine inventory polling to combat.
+  leveling. This did not block the level target, but loot collection is
+  saturated. Signet remains active; Dedication is no longer present in the
+  final authoritative state, and the Empress Band remains in Inventory. Mog
+  Safe 2 is unlocked at 0/50. Perform a reviewed storage/selling pass before
+  the next drop-dependent objective; do not add routine inventory polling to
+  combat.
 
-## Current Goal 1 — Thief level 20
+## Current Goal 1 — Monk level 30
 
-Status: **completed 2026-07-29**
+Status: **complete**
 
-The run incorporates the relevant level-1–20 recommendations from Andy Plays
-Games' [fast endgame guide](https://youtu.be/LSaCcYg2Gis), without repeating
-prerequisites Pablo already completed or adding per-fight friction:
-
-1. **Complete.** Review active Records of Eminence slots and add only passive
-   objectives matching the farm loop: broad combat, damage, weapon skills, and
-   likely crystal spoils. The existing passive objectives already cover the
-   combat loop. Complete the normal Bastok tutorial path before EXP: Signet is
-   active, the Conquest promotion voucher was exchanged normally for an
-   Empress Band, and its Dedication effect was verified before this lease.
-2. **Complete.** Near the Mog House Moogle, select Thief as main job and
-   Warrior as support job using the guarded normal-client job-change
-   operation, and free inventory space. The live client verified THF 1 / WAR 1.
-   Per operator direction, retain hand-to-hand and skip gear purchasing during
-   this short Trust-supported run.
-3. **Complete.** Detached recovery lease
-   `e4216c92-00b5-48ee-a33c-5bb91de11cee` owns the final Thief 19→20 segment
-   at the original metadata-vetted Valkurm Sand Hare cluster. The prior lease
-   automatically transitioned from exhausted Konschtat targets at level 18
-   and reached Thief 19 at 3,657/4,400. A later broad camp relocation entered
-   a Goblin pocket; a reactive Goblin Leecher defeated Pablo, and the
-   supervisor returned him to Bastok Markets and stopped cleanly. Recovery
-   used one authoritative state check, one guarded combat-free teleport, and
-   this new fixed-camp lease. Auto-relocation is disabled for the short final
-   segment, the next-pull HP threshold is conservatively 90%, and reactive
-   defense, Trust repair, abilities, automatic level-band transitions, and the
-   target-level stop remained active. It rebuilt all three Trusts, defeated two
-   Hares for 1,950 counted EXP, reached Thief 20 at 1,207/4,600, and stopped
-   itself after 108 seconds with zero deaths, reactive engagements, rejected
-   attacks, target-cycle errors, or unsafe-action counters.
-   Routine progress, EXP-rate, inventory, and Trust polling were omitted.
-   Ignored local lease state/logs provided routine telemetry, with a single
-   live MCP call reserved for the supervisor's level-20 stop.
-   Living Trusts are not refreshed on every level. The first Konschtat lease
-   exposed `Rock Eater` as another worm-family name; both combat admission and
-   relocation now exclude it, with focused policy tests. Guarded
-   private-server teleports remain available for recovery; travel-node
-   registration is out of scope.
-4. **Complete.** Add only low-friction Thief automation. Do not automate Steal into a full
-   inventory, Perfect Dodge remains emergency-only, and Sneak Attack requires
-   trustworthy behind-target geometry before routine use. Therefore THF
-   levels 1–20 intentionally have no routine automated job ability.
-5. **Complete.** Live state independently verified Thief 20 / Warrior 10,
-   1,207/4,600 EXP, the completed goal overlay, closed menus, and a stable
-   logged-in client. The full suite passes 97/97; document, commit, and push
-   this completed checkpoint.
+1. **Complete.** Dismiss Trusts, enter the Bastok Mog House, and use the
+   guarded normal-client job operation to establish Monk main / Warrior
+   support. Live state verified MNK 25 / WAR 12. An instantaneous placement at
+   the zoneline was rejected; the reliable path is to place on the valid
+   corridor side at `(-148.8, -30.329)`, then make one bounded ordinary
+   movement through the trigger.
+2. **Complete.** Equip the best compatible owned set. Brass Baghnakhs, Trader's
+   Chapeau, Trader's Saio, Trader's Cuffs, Trader's Slops, Trader's Pigaches,
+   White Belt, and Bastokan Ring are equipped. No purchase is required before
+   level 30.
+3. **Complete.** Validate the level-25 Sauromugue camp. Metadata selected two
+   level-25–26 Hill Lizards around `(-88.428, -88.830)` with the nearest
+   aggressive spawn 53 yalms away. Calibration lease
+   `95b2efd6-a39a-434c-84a3-d1acbea0121a` defeated both for 690 EXP, used two
+   Combos and eight Monk abilities, and recorded zero deaths, rejected
+   attacks, target-cycle errors, combat teleports, or combat recoveries.
+4. **Complete.** Detached lease `9ce4385a-b897-49fc-bd02-b528e535d0db`
+   ran for its full one-hour safety bound, completed 59 fights, and stopped
+   cleanly at MNK 29 with zero deaths. It recorded 48 proactive engagements,
+   12 reactive engagements, 12 linked handoffs, 49 Combos, 178 Monk
+   abilities, and no combat teleports or recoveries. Automatic selection moved
+   from Bat/Lizard targets to Diving Beetles at level 27.
+5. **Complete.** Renewal lease `f095c095-2030-4a8d-be4a-357a1beaab15`
+   completed four fights and stopped itself on `target_level` at MNK 30. It
+   recorded 2,180 supervisor-counted EXP, five Combos, eleven Monk abilities,
+   one reactive handoff, and zero deaths. One final authoritative state call
+   verified MNK 30 / WAR 15 at 77/5,800 with the complete owned gear set still
+   equipped.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.

@@ -351,6 +351,37 @@ The Thief 1–20 run added two operational findings:
   final live state call independently verified THF 20 / WAR 10 at
   1,207/4,600, with the goal overlay reporting automated leveling complete.
 
+The Monk 25–30 profile extends the same model into Sauromugue Champaign:
+
+- Level-25 metadata selected two level-25–26 Hill Lizards around
+  `(-88.428, -88.830)` with a 53-yalm nearest aggressive-spawn buffer.
+- Two-fight lease `95b2efd6-a39a-434c-84a3-d1acbea0121a` earned 690 EXP,
+  used two Combos and eight Monk abilities, and stopped at its fight limit
+  with zero deaths, rejected attacks, target-cycle errors, combat teleports,
+  or combat recoveries.
+- Proactive trusted-camp selection now excludes metadata-marked aggressive
+  mobs. A mob that actually engages Pablo or a Trust remains an immediate
+  reactive target; this narrows planned pulls without weakening defense.
+- The level-25 automatic transition moves a continuous Valkurm run to
+  Sauromugue Hill Lizard/Moon Bat camps. Same-zone relocation can then select
+  the four-Diving-Beetle cluster near `(-258.104, 67.375)` from level 27; its
+  nearest similar-elevation aggressive spawn is about 120 yalms away.
+- Full lease `9ce4385a-b897-49fc-bd02-b528e535d0db` reached its one-hour
+  safety limit after 59 fights. It reported 22,670 counted EXP, 48 proactive
+  engagements, 12 reactive engagements and handoffs, 49 Combos, 178 Monk
+  abilities, 55 safe camp relocations, zero deaths, and zero combat
+  teleports/recoveries. Its clean time-limit stop left Pablo at MNK 29 with
+  3,597/5,700 EXP.
+- Renewal lease `f095c095-2030-4a8d-be4a-357a1beaab15` preserved the one-hour
+  hard limit rather than widening the guardrail. It needed four fights,
+  reported 2,180 counted EXP, and stopped itself on `target_level` with zero
+  deaths. One final independent live state call verified MNK 30 / WAR 15 at
+  77/5,800 EXP, 638 maximum HP, 130 attack, and 178 defense.
+- Registration timeouts can occur during linked pulls. The reactive path kept
+  the exact aggressor selected, retried once, and resumed combat; these
+  recoverable rejections did not require model intervention. Proactive
+  aggressive-mob exclusion remained intact throughout the run.
+
 ## Next iteration
 
 1. Buy and equip the next level-appropriate Sparks upgrades.

@@ -42,7 +42,7 @@ test("treats only a stale movement start distance as a recoverable race", () => 
   );
 });
 
-test("trusted camp sweep admits ordinary level-bounded mobs without per-pull checks", () => {
+test("trusted camp sweep admits non-aggressive level-bounded mobs without per-pull checks", () => {
   const sweepMetadata = [
     {
       server_id: 201,
@@ -75,6 +75,13 @@ test("trusted camp sweep admits ordinary level-bounded mobs without per-pull che
       name: "Rock Eater",
       maximum_level: 20,
       mob_type: 0,
+    },
+    {
+      server_id: 206,
+      name: "Goblin Leecher",
+      maximum_level: 20,
+      mob_type: 0,
+      aggro: true,
     },
   ];
   const observed = {
@@ -125,6 +132,15 @@ test("trusted camp sweep admits ordinary level-bounded mobs without per-pull che
         distance: 0.5,
         position: { x: 0.5, y: 0, z: 0 },
       },
+      {
+        server_id: 206,
+        name: "Goblin Leecher",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 0.25,
+        position: { x: 0.25, y: 0, z: 0 },
+      },
     ],
   };
 
@@ -134,7 +150,7 @@ test("trusted camp sweep admits ordinary level-bounded mobs without per-pull che
       metadata: sweepMetadata,
       playerLevel: 21,
     })?.server_id,
-    202,
+    201,
   );
   assert.equal(
     selectTrustedCampSweepTarget({
@@ -431,6 +447,20 @@ test("selects the validated level-20 zone progression bands", () => {
     playerLevel: 14,
     targetLevel: 19,
   }), null);
+});
+
+test("selects the validated level-25 Sauromugue progression band", () => {
+  assert.deepEqual(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 103,
+    playerLevel: 25,
+    targetLevel: 30,
+  }), {
+    zone_id: 120,
+    allowed_names: ["Hill Lizard", "Moon Bat"],
+    maximum_level_offset: 1,
+    reason: "level_25_sauromugue_lizard_bat_band",
+  });
 });
 
 test("holds proactive scouting while a defeated target's rewards settle", () => {

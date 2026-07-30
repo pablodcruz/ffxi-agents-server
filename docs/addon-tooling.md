@@ -40,8 +40,16 @@ The MCP-native version additionally requires the write latch and exact
 confirmation phrase, rejects zoning and open menus, validates job IDs, rejects
 an active-slot conflict, and independently confirms a recognized Moogle is
 within six yalms. `pnpm mcp:job-change -- --slot main --job thf` is the
-operator-facing wrapper. This replaces fragile Mog House cursor traversal
-without exposing arbitrary packets or addon commands.
+operator-facing wrapper. It verifies the resulting live job instead of
+treating a queued packet as success.
+
+On the pinned server, proximity to the Ru'Lude Gardens Nomad Moogle was not
+sufficient: the packet was ignored and the wrapper correctly failed
+verification. The same packet succeeded beside Pablo's own Mog House Moogle.
+Use the Mog House as the validated control point; other recognized Moogle
+types remain guarded candidates, not proven job-change locations. This still
+replaces fragile job-list cursor traversal without exposing arbitrary packets
+or addon commands.
 
 MobDB is unusually relevant because its documented custom-server import path
 accepts LandSandBoat SQL inputs. Its tokens include the numeric server ID,

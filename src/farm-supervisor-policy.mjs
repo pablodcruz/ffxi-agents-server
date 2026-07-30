@@ -88,6 +88,7 @@ export function selectTrustedCampSweepTarget({
         && !excludedNamePatterns.some((pattern) => pattern.test(entity.name || ""))
         && mob
         && Number(mob.mob_type || 0) === 0
+        && !mob.aggro
         && Number(mob.maximum_level) <= Number(playerLevel)
           + Number(maximumLevelOffset)
         && Math.abs(Number(entity.position?.z) - playerZ)
@@ -115,6 +116,18 @@ export function nextLevelBandTransition({
   targetLevel = 20,
 }) {
   if (!autoTransition || Number(targetLevel) < 20) return null;
+  if (
+    Number(targetLevel) >= 30
+    && Number(activeZoneId) === 103
+    && Number(playerLevel) >= 25
+  ) {
+    return {
+      zone_id: 120,
+      allowed_names: ["Hill Lizard", "Moon Bat"],
+      maximum_level_offset: 1,
+      reason: "level_25_sauromugue_lizard_bat_band",
+    };
+  }
   if (Number(activeZoneId) === 107 && Number(playerLevel) >= 14) {
     return {
       zone_id: 108,

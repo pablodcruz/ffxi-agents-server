@@ -1879,7 +1879,9 @@ try {
         allowedNames: levelBandProfile.allowed_names,
         excludedServerIds: new Set(),
         clusterRadius: scanRadius,
-        maximumLevelOffset: 0,
+        maximumLevelOffset: Number(
+          levelBandProfile.maximum_level_offset ?? 0,
+        ),
       });
       if (camp) {
         observation = await transitionToLevelBand(
