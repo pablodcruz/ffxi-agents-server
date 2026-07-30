@@ -11,14 +11,21 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 30 / Warrior 15 and Black Mage 20 / Warrior 10,
-  with Black Mage at 1,293/4,600 EXP and Bastok Rank 3.
+- Pablo: Hume male, Monk 30 / Warrior 15, White Mage 19, and
+  Black Mage 20 / White Mage 10, with Black Mage at 1,832/4,600 EXP and
+  Bastok Rank 3.
   The final Emissary turn-in awarded the Adventurer's Certificate and
   Certified Adventurer title; a zone reload refreshed the client rank cache.
-- Currency: 23,317 gil; last documented balances are 4,934 Sparks and
+- Currency: 19,110 gil; current balances are 20,274 Sparks and
   1,100 Unity accolades.
-- Current location: the validated Bastok Markets safe endpoint in zone 235.
-  Pablo is idle and agent control is disarmed after the NM route.
+- Current location: the validated Valkurm Sand Hare camp in zone 103. The
+  detached Black Mage 40 lease is active as Black Mage 20 / White Mage 10
+  with three Trusts, one Blizzard cast per registered fight, and automatic
+  transition to Sauromugue at level 25.
+- Current Black Mage equipment: Yew Wand, full Trader's armor, and Empress
+  Band. The five armor pieces were reused from Mog Wardrobe 1; the exact Yew
+  Wand cost 60 Sparks, was transferred to the wardrobe, and provides INT+3
+  and MND+3. Inventory returned to 29/30 after the transfer.
 - Current Monk equipment verified through AgentBridge: Brass Baghnakhs, full
   Trader's armor, White Belt, and Bastokan Ring. The job change restored this
   owned set automatically from Inventory and Mog Wardrobe 1.
@@ -91,11 +98,31 @@ resolved failures belong in `docs/`.
   Treasure Caskets, mobs above the level envelope, and vertically separated
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
-- Inventory is 21/30 after the five-camp NM route, with nine open slots. The
-  Empress Band remains in Inventory and Mog Safe 2 is unlocked at 0/50.
-  Route inventory checks happen at camp boundaries, not after every fight.
+- Inventory is 29/30 after the White Mage spell pass. The Empress Band
+  remains in Inventory and Mog Safe 2 is unlocked at 0/50. Route inventory
+  checks happen at camp boundaries, not after every fight.
 
-## Current Goal 1 — Black Mage 20
+## Current Goal 1 — Black Mage 40 / White Mage
+
+Status: **active**
+
+1. **Complete.** End the White Mage leveling lease at White Mage 19 and
+   change to Black Mage 20 / White Mage 10 through the guarded normal job
+   packets beside the verified Mog House Moogle.
+2. **Complete for this leveling pass.** Build the useful White Mage spell
+   set. Cure, Dia, Poisona, Protect, Paralyna, Blindna, and Curaga were
+   purchased and learned normally from Sororo. Remaining low-level spells
+   absent from Sororo's current conquest-dependent stock can be acquired at a
+   later city checkpoint without blocking this level lease.
+3. **In progress.** Start a detached level-aware Black Mage lease with White
+   Mage support, one bounded combat spell per fight, Trust repair, death
+   recovery, and level-appropriate camp transitions.
+4. **Pending.** Upgrade the configured combat spell as stronger learned
+   elemental tiers become usable without interrupting the melee/Trust loop.
+5. **Pending.** Reach and independently verify Black Mage 40 with White Mage
+   support, then stop the supervisor cleanly.
+
+## Prior Goal — Black Mage 20
 
 Status: **complete**
 

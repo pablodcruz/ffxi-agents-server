@@ -8,6 +8,11 @@ The important distinction is that **FFXI is not open source**. LandSandBoat is
 an open-source GPLv3 server emulator. The Windows client, game assets, and
 Square Enix services remain proprietary and are not included here.
 
+## Watch the project
+
+Watch the agent live or browse previous broadcasts on the
+[FFXI AI Agent YouTube streams page](https://www.youtube.com/@ffxi-ai-agent/streams).
+
 ## What exists now
 
 - A Docker Compose deployment based on LandSandBoat's official container layout.
