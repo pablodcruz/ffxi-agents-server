@@ -34,8 +34,8 @@ One round should:
 2. Skip a camp if every configured unique watched reward is already present
    in a searched player container.
 3. Perform a guarded combat-free zone transition to the camp's first vetted
-   observation point, wait two seconds for the zone transition to settle, and
-   rebuild zone-dismissed Trusts.
+   observation point, wait twelve seconds for the zone transition to settle,
+   and rebuild zone-dismissed Trusts.
 4. Sweep a small set of profile-owned observation points. Select only a live
    exact NM or placeholder ID; an NM always outranks its placeholder.
 5. Kill each eligible placeholder at most once in that camp visit, then move
@@ -120,11 +120,20 @@ The 2026-07-30 simplified one-round lease completed normally in 4 minutes
   plus three distinct Sophie placeholders.
 - Every camp advanced immediately after its configured placeholder quota; no
   post-placeholder NM scan or repeated sweep occurred.
-- The two-second post-zone delay preceded Trust reconstruction. All three
-  Trusts were available before combat in each new zone.
+- The initial two-second post-zone delay still produced a failed first Trust
+  cast in every new zone. A subsequent five-second trial failed the same way.
+  The durable route now waits twelve seconds before the first cast and two
+  seconds after each successful summon before trying the next Trust.
 - There were zero deaths, reactive engagements, combat recoveries, teleports
   while engaged, or recovery commands while engaged.
 - No NM spawned and no watched rare item dropped in this round.
+
+A subsequent full round killed Leaping Lizzy, completed safely in 3 minutes
+53 seconds, and displayed `NMS KILLED 1` on both the active and completion
+overlays. Its five-second delay still failed the first Trust cast in every
+zone. A final stopped validation used the twelve-second delay across the
+Lizzy and Sophie transitions: all six Trust summons succeeded on pass one
+with no unavailable-cast events.
 
 ## Controls
 

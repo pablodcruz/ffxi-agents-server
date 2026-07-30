@@ -222,6 +222,8 @@ const cooldownMilliseconds = 30_000;
 const relocationIdleMilliseconds = 5_000;
 const relocationCooldownMilliseconds = 300_000;
 const rewardSettlementMilliseconds = 2_000;
+const postZoneTrustDelayMilliseconds = 12_000;
+const interTrustSummonDelayMilliseconds = 2_000;
 const desiredTrusts = Object.freeze([
   Object.freeze({ observed_name: "Valaineral", spell_name: "Valaineral" }),
   Object.freeze({ observed_name: "Joachim", spell_name: "Joachim" }),
@@ -529,13 +531,18 @@ async function updateNmRouteOverlay({ complete = false } = {}) {
   const gil = Number(existing.current_gil);
   const targetGil = Number(existing.target_gil);
   const progress = complete
-    ? `ROUND ${nmRouteRound}/${maximumRouteRounds} COMPLETE | FIVE CAMPS VISITED`
+    ? (
+      `ROUND ${nmRouteRound}/${maximumRouteRounds} COMPLETE | `
+      + `${NM_ROUTE_PROFILES.length} CAMPS VISITED | `
+      + `NMS KILLED ${counters.notorious_monsters_killed}`
+    )
     : (
       `ROUND ${nmRouteRound}/${maximumRouteRounds} | `
       + `CAMP ${nmRouteCampIndex + 1}/${NM_ROUTE_PROFILES.length} `
       + `${profile?.name || "UNKNOWN"} | PH `
       + `${nmRoutePlaceholderKills.size}/`
       + `${profile?.maximum_placeholder_kills_per_visit || 0}`
+      + ` | NMS KILLED ${counters.notorious_monsters_killed}`
     );
   await call("ffxi_set_goal_overlay", {
     enabled: true,
@@ -634,6 +641,12 @@ async function ensureTrustParty(observation) {
           zone_id: activeZoneId,
           pass,
         });
+      } else if (missingDesiredTrusts(current).length > 0) {
+        await new Promise((resolve) => setTimeout(
+          resolve,
+          interTrustSummonDelayMilliseconds,
+        ));
+        current = await sample();
       }
     }
     if (missingDesiredTrusts(current).length === 0) break;
@@ -1427,9 +1440,12 @@ async function transitionToNmRouteCamp(profile, observation) {
   if (fromZoneId !== activeZoneId) {
     log("nm_route_post_zone_trust_delay", {
       camp_name: profile.name,
-      delay_ms: 2_000,
+      delay_ms: postZoneTrustDelayMilliseconds,
     });
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await new Promise((resolve) => setTimeout(
+      resolve,
+      postZoneTrustDelayMilliseconds,
+    ));
     after = await sample();
   }
   after = await ensureTrustParty(after);
