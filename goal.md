@@ -1,6 +1,6 @@
 # Active goal
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-30
 
 Build an agent-controlled FFXI character that can progress reliably on the
 isolated LandSandBoat server. Deterministic local supervisors own fast combat
@@ -11,10 +11,10 @@ resolved failures belong in `docs/`.
 
 ## Current state
 
-- Pablo: Hume male, Monk 30 / Warrior 15, 77/5,800 EXP. The live
-  authoritative state independently verified the target after the detached
-  Sauromugue run stopped itself.
-- Currency: 20,713 gil; 4,934 Sparks; 1,100 Unity accolades.
+- Pablo: Hume male, Monk 30 / Warrior 15, 1,917/5,800 EXP, Bastok Rank 3.
+  The final Emissary turn-in awarded the Adventurer's Certificate and
+  Certified Adventurer title; a zone reload refreshed the client rank cache.
+- Currency: 27,171 gil; 4,934 Sparks; 1,100 Unity accolades.
 - Current Monk equipment verified through AgentBridge: Brass Baghnakhs, full
   Trader's armor, White Belt, and Bastokan Ring. The job change restored this
   owned set automatically from Inventory and Mog Wardrobe 1.
@@ -81,46 +81,26 @@ resolved failures belong in `docs/`.
   Treasure Caskets, mobs above the level envelope, and vertically separated
   targets. The western South Gustaberg Quadav pocket remains globally
   excluded.
-- Inventory was reduced before the Thief run but is now 30/30 after unattended
-  leveling. This did not block the level target, but loot collection is
-  saturated. Signet remains active; Dedication is no longer present in the
-  final authoritative state, and the Empress Band remains in Inventory. Mog
-  Safe 2 is unlocked at 0/50. Perform a reviewed storage/selling pass before
-  the next drop-dependent objective; do not add routine inventory polling to
-  combat.
+- Inventory is 22/30 after the Rank 3 run. The Empress Band remains in
+  Inventory and Mog Safe 2 is unlocked at 0/50. Perform a reviewed
+  storage/selling pass before the next long drop-dependent objective; do not
+  add routine inventory polling to combat.
 
-## Current Goal 1 — Monk level 30
+## Current Goal 1 — Bastok Rank 3
 
 Status: **complete**
 
-1. **Complete.** Dismiss Trusts, enter the Bastok Mog House, and use the
-   guarded normal-client job operation to establish Monk main / Warrior
-   support. Live state verified MNK 25 / WAR 12. An instantaneous placement at
-   the zoneline was rejected; the reliable path is to place on the valid
-   corridor side at `(-148.8, -30.329)`, then make one bounded ordinary
-   movement through the trigger.
-2. **Complete.** Equip the best compatible owned set. Brass Baghnakhs, Trader's
-   Chapeau, Trader's Saio, Trader's Cuffs, Trader's Slops, Trader's Pigaches,
-   White Belt, and Bastokan Ring are equipped. No purchase is required before
-   level 30.
-3. **Complete.** Validate the level-25 Sauromugue camp. Metadata selected two
-   level-25–26 Hill Lizards around `(-88.428, -88.830)` with the nearest
-   aggressive spawn 53 yalms away. Calibration lease
-   `95b2efd6-a39a-434c-84a3-d1acbea0121a` defeated both for 690 EXP, used two
-   Combos and eight Monk abilities, and recorded zero deaths, rejected
-   attacks, target-cycle errors, combat teleports, or combat recoveries.
-4. **Complete.** Detached lease `9ce4385a-b897-49fc-bd02-b528e535d0db`
-   ran for its full one-hour safety bound, completed 59 fights, and stopped
-   cleanly at MNK 29 with zero deaths. It recorded 48 proactive engagements,
-   12 reactive engagements, 12 linked handoffs, 49 Combos, 178 Monk
-   abilities, and no combat teleports or recoveries. Automatic selection moved
-   from Bat/Lizard targets to Diving Beetles at level 27.
-5. **Complete.** Renewal lease `f095c095-2030-4a8d-be4a-357a1beaab15`
-   completed four fights and stopped itself on `target_level` at MNK 30. It
-   recorded 2,180 supervisor-counted EXP, five Combos, eleven Monk abilities,
-   one reactive handoff, and zero deaths. One final authoritative state call
-   verified MNK 30 / WAR 15 at 77/5,800 with the complete owned gear set still
-   equipped.
+1. **Complete.** Finish Bastok missions 1-1 `The Zeruhn Report` and 1-2
+   `A Geological Survey` through their normal NPC interactions.
+2. **Complete.** Finish 1-3 `Fetichism` with an exact-drop Palborough Mines
+   sweep and one normal four-item trade to a mission guard.
+3. **Complete.** Finish `The Crystal Line` and `Wading Beasts` through their
+   normal crystal, key-item, and item-trade interactions.
+4. **Complete.** Finish `The Emissary` through the San d'Oria-first route,
+   Warchief Vatgit, Windurst, and the Balga's Dais Rank 2 dragon battlefield.
+5. **Complete.** Verify live Bastok Rank 3, rank points 0, 27,171 gil, and the
+   Certified Adventurer title after one zone reload. Record the reusable
+   mission/menu findings, run focused tests, and publish one checkpoint.
 
 Do not sell food, seals, equipment, quest items, or unreviewed drops. Keep all
 credentials ignored and local.
@@ -153,6 +133,8 @@ credentials ignored and local.
   exact-ID combat helpers validated.
 - Unified farm supervisor implemented with proactive selection, reactive aggro
   defense, automatic Combo, recovery, and emergency disarm.
+- Bastok Rank 1 through Rank 3 completed through normal mission and NPC
+  progression, with guarded private-server travel and bounded exact-ID combat.
 
 Update this file only when current state, priorities, blockers, or exit
 criteria change.

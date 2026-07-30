@@ -95,10 +95,28 @@ const questItemId = integerArgument("--quest-item-id", 0, 0, 65534);
 const trustedCampSweep = booleanArgument("--trusted-camp-sweep");
 const autoJobAbilities = booleanArgument("--auto-job-abilities");
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
+const quadavFetichNames = [
+  "Amber Quadav",
+  "Greater Quadav",
+  "Old Quadav",
+  "Veteran Quadav",
+  "Brass Quadav",
+];
+const quadavFetichProfile = (label) => ({
+  zone_id: 143,
+  names: quadavFetichNames,
+  preferred_names: ["Brass Quadav"],
+  label,
+});
 const questProfiles = new Map([
   [537, { zone_id: 103, names: ["Damselfly"], label: "Damselfly Worm" }],
   [538, { zone_id: 103, names: ["Ghoul"], label: "Magicked Skull" }],
   [539, { zone_id: 103, names: ["Snipper"], label: "Crab Apron" }],
+  [606, quadavFetichProfile("Quadav Fetich Head")],
+  [607, quadavFetichProfile("Quadav Fetich Torso")],
+  [608, quadavFetichProfile("Quadav Fetich Arms")],
+  [609, quadavFetichProfile("Quadav Fetich Legs")],
+  [4362, { zone_id: 120, names: ["Hill Lizard"], label: "Lizard Egg" }],
 ]);
 const questProfile = questProfiles.get(questItemId) || null;
 
@@ -1919,6 +1937,7 @@ try {
           metadata,
           itemId: questItemId,
           allowedNames: questProfile.names,
+          preferredNames: questProfile.preferred_names,
           playerLevel: Number(partyPlayer?.main_job_level),
           radius: scanRadius,
           excludedServerIds: excludedServerIds(),
@@ -1953,6 +1972,7 @@ try {
           clusterRadius: scanRadius,
           minimumAggroDistance: questItemId > 0 ? 0 : 40,
           allowAggressiveCandidates: questItemId > 0,
+          minimumLevelOffset: questItemId > 0 ? 99 : 3,
           maximumLevelOffset: trustedCampSweep
             ? 1
             : relocationMaximumLevelOffset({

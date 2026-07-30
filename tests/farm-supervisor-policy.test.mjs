@@ -324,6 +324,39 @@ test("relocation camps respect cooldowns and the level band", () => {
   assert.equal(camp, null);
 });
 
+test("quest relocation can explicitly admit trivial exact-drop camps", () => {
+  const metadata = [
+    {
+      server_id: 60601,
+      zone_id: 143,
+      name: "Amber Quadav",
+      minimum_level: 4,
+      maximum_level: 5,
+      aggro: false,
+      spawn: { x: 100, y: 100, z: 0 },
+    },
+  ];
+  assert.equal(selectRelocationCamp({
+    metadata,
+    playerLevel: 30,
+    zoneId: 143,
+    currentPosition: { x: 0, y: 0, z: 0 },
+    allowedServerIds: new Set([60601]),
+    allowedNames: null,
+    maximumLevelOffset: 4,
+  }), null);
+  assert.equal(selectRelocationCamp({
+    metadata,
+    playerLevel: 30,
+    zoneId: 143,
+    currentPosition: { x: 0, y: 0, z: 0 },
+    allowedServerIds: new Set([60601]),
+    allowedNames: null,
+    minimumLevelOffset: 99,
+    maximumLevelOffset: 4,
+  })?.server_id, 60601);
+});
+
 test("selects a cross-zone camp without comparing unrelated coordinates", () => {
   const camp = selectRelocationCamp({
     metadata: [

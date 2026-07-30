@@ -1,5 +1,10 @@
 const difficultyPatterns = Object.freeze([
   {
+    pattern: /strength is impossible to gauge/i,
+    difficulty: "impossible_to_gauge",
+    verdict: "caution",
+  },
+  {
     pattern: /seems incredibly tough/i,
     difficulty: "incredibly_tough",
     verdict: "unsafe",

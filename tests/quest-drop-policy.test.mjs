@@ -69,6 +69,53 @@ test("selects only a live exact-name mob with the required pinned drop", () => {
   assert.equal(selected.server_id, 10);
 });
 
+test("prefers a configured higher-rate drop family before level and distance", () => {
+  const selected = selectQuestDropTarget({
+    observation: {
+      player: { position: { z: 0 } },
+      nearby_entities: [
+        {
+          server_id: 606,
+          name: "Amber Quadav",
+          entity_type: 2,
+          status: 0,
+          hp_percent: 100,
+          distance: 3,
+          position: { z: 0 },
+        },
+        {
+          server_id: 607,
+          name: "Brass Quadav",
+          entity_type: 2,
+          status: 0,
+          hp_percent: 100,
+          distance: 12,
+          position: { z: 0 },
+        },
+      ],
+    },
+    metadata: [
+      {
+        server_id: 606,
+        mob_type: 0,
+        maximum_level: 5,
+        drops: [{ item_id: 607, item_rate: 250 }],
+      },
+      {
+        server_id: 607,
+        mob_type: 0,
+        maximum_level: 23,
+        drops: [{ item_id: 607, item_rate: 250 }],
+      },
+    ],
+    itemId: 607,
+    allowedNames: ["Amber Quadav", "Brass Quadav"],
+    preferredNames: ["Brass Quadav"],
+    playerLevel: 30,
+  });
+  assert.equal(selected.server_id, 607);
+});
+
 test("respects cooldown, elevation, level, and required-item evidence", () => {
   assert.equal(selectQuestDropTarget({
     observation,

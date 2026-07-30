@@ -25,6 +25,10 @@ test("recognizes visibility and action-cooldown attack registration failures", (
     isAttackRegistrationFailure("You must wait longer to perform that action.\u007f1"),
     true,
   );
+  assert.equal(
+    isAttackRegistrationFailure("Warchief Vatgit is out of range.\u007f1"),
+    true,
+  );
   assert.equal(isAttackRegistrationFailure("The Snipper hits Pablo."), false);
 });
 

@@ -3,6 +3,7 @@ export function selectQuestDropTarget({
   metadata,
   itemId,
   allowedNames,
+  preferredNames = [],
   playerLevel,
   radius = 30,
   excludedServerIds = new Set(),
@@ -13,6 +14,9 @@ export function selectQuestDropTarget({
     (metadata || []).map((mob) => [Number(mob.server_id), mob]),
   );
   const names = new Set((allowedNames || []).map((name) => String(name)));
+  const preferred = new Set(
+    (preferredNames || []).map((name) => String(name)),
+  );
   const playerZ = Number(observation?.player?.position?.z);
   return (observation?.nearby_entities || [])
     .filter((entity) => {
@@ -41,7 +45,9 @@ export function selectQuestDropTarget({
       metadata: byId.get(Number(entity.server_id)),
     }))
     .sort((left, right) => (
-      Number(left.metadata.maximum_level) - Number(right.metadata.maximum_level)
+      Number(!preferred.has(String(left.name)))
+      - Number(!preferred.has(String(right.name)))
+      || Number(left.metadata.maximum_level) - Number(right.metadata.maximum_level)
       || Number(left.distance) - Number(right.distance)
       || Number(left.server_id) - Number(right.server_id)
     ))[0] || null;

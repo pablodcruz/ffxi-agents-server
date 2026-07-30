@@ -37,6 +37,22 @@ test("parses safe, caution, and unsafe check messages", () => {
   });
 });
 
+test("treats impossible-to-gauge targets as caution", () => {
+  assert.deepEqual(parseCheckVerdict([
+    {
+      id: 44,
+      message: "Warchief Vatgit's strength is impossible to gauge!",
+    },
+  ]), {
+    event_id: 44,
+    message: "Warchief Vatgit's strength is impossible to gauge!",
+    difficulty: "impossible_to_gauge",
+    verdict: "caution",
+    high_defense: false,
+    high_evasion: false,
+  });
+});
+
 test("ignores stale and unrelated events", () => {
   assert.deepEqual(parseCheckVerdict([
     { id: 4, message: "The Huge Hornet seems like easy prey." },

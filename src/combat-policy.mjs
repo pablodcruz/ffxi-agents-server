@@ -4,7 +4,7 @@ function finiteNumber(value) {
 }
 
 export function isAttackRegistrationFailure(message) {
-  return /^(?:Unable to (?:see|attack)\b|You must wait longer to perform that action\b)/i
+  return /^(?:Unable to (?:see|attack)\b|You must wait longer to perform that action\b)|\bis out of range\b/i
     .test(String(message || ""));
 }
 

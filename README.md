@@ -137,6 +137,8 @@ The addon comparison and MCP-native read-only mob scout are in
 [docs/addon-tooling.md](docs/addon-tooling.md).
 The researched bot architecture, bounded aggro guard, and shared-server
 limitations are in [docs/combat-supervisor.md](docs/combat-supervisor.md).
+Bastok Rank 1-3 mission/menu findings are tracked in
+[docs/bastok-rank-missions.md](docs/bastok-rank-missions.md).
 The current ordered gameplay objectives and acceptance criteria are in
 [goal.md](goal.md).
 

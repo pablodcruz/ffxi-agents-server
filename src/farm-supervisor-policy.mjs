@@ -165,6 +165,7 @@ export function selectRelocationCamp({
   minimumAggroDistance = 40,
   minimumTravelDistance = 20,
   maximumElevationDifference = 4,
+  minimumLevelOffset = 3,
   maximumLevelOffset = -1,
   allowAggressiveCandidates = false,
 }) {
@@ -198,7 +199,8 @@ export function selectRelocationCamp({
     && finiteSpawn(mob)
     && Number(mob.maximum_level) <= Number(playerLevel)
       + Number(maximumLevelOffset)
-    && Number(mob.maximum_level) >= Number(playerLevel) - 3
+    && Number(mob.maximum_level) >= Number(playerLevel)
+      - Number(minimumLevelOffset)
     && !excludedServerIds.has(Number(mob.server_id))
     && !excludedCombatPocket({
       zoneId,

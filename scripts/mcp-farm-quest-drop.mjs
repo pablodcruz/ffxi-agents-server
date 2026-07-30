@@ -11,10 +11,28 @@ import { selectQuestDropTarget } from "../src/quest-drop-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
 const confirmation = "FARM EXACT PRIVATE SERVER QUEST DROP";
+const quadavFetichNames = [
+  "Amber Quadav",
+  "Greater Quadav",
+  "Old Quadav",
+  "Veteran Quadav",
+  "Brass Quadav",
+];
+const quadavFetichProfile = (label) => ({
+  zone_id: 143,
+  names: quadavFetichNames,
+  preferred_names: ["Brass Quadav"],
+  label,
+});
 const profiles = new Map([
   [537, { zone_id: 103, names: ["Damselfly"], label: "Damselfly Worm" }],
   [538, { zone_id: 103, names: ["Ghoul"], label: "Magicked Skull" }],
   [539, { zone_id: 103, names: ["Snipper"], label: "Crab Apron" }],
+  [606, quadavFetichProfile("Quadav Fetich Head")],
+  [607, quadavFetichProfile("Quadav Fetich Torso")],
+  [608, quadavFetichProfile("Quadav Fetich Arms")],
+  [609, quadavFetichProfile("Quadav Fetich Legs")],
+  [4362, { zone_id: 120, names: ["Hill Lizard"], label: "Lizard Egg" }],
 ]);
 
 function argument(name, fallback) {
@@ -37,7 +55,9 @@ const maximumSeconds = integerArgument("--maximum-seconds", "900", 30, 1800);
 const scanRadius = integerArgument("--scan-radius", "30", 5, 40);
 const minimumStartHp = integerArgument("--minimum-start-hp-percent", "75", 50, 100);
 if (!profile) {
-  throw new Error("--item-id must be 537, 538, or 539 for the pinned Selbina route.");
+  throw new Error(
+    "--item-id must be a pinned quest drop: 537-539, 606-609, or 4362.",
+  );
 }
 if (argument("--confirmation") !== confirmation) {
   throw new Error(`Quest-drop farming requires --confirmation "${confirmation}".`);
@@ -167,6 +187,7 @@ try {
         metadata,
         itemId,
         allowedNames: profile.names,
+        preferredNames: profile.preferred_names,
         playerLevel: Number(player.main_job_level),
         radius: scanRadius,
         excludedServerIds: activeCooldowns(),
