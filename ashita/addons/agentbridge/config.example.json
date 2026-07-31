@@ -2,5 +2,8 @@
   "bind_host": "127.0.0.1",
   "bind_port": 19769,
   "token": "replace-with-a-long-random-token",
-  "activity_feed_enabled": false
+  "activity_feed_enabled": false,
+  "overlay_position_x": 1400,
+  "goal_overlay_position_y": 1160,
+  "activity_overlay_position_y": 1230
 }

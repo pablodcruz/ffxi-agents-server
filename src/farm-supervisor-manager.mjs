@@ -63,7 +63,9 @@ export function farmSupervisorArgs({
   targetLevel,
   questItemId,
   trustedCampSweep,
+  maximumTargetLevelOffset,
   autoJobAbilities,
+  summonTrusts,
   weaponSkill,
   combatSpell,
   maximumCombatSpellsPerFight,
@@ -71,6 +73,8 @@ export function farmSupervisorArgs({
   nmRoute,
   maximumRouteRounds,
   minimumFreeInventorySlots,
+  objectiveTargetName = "",
+  objectiveKillCount = 0,
 }) {
   return [
     path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
@@ -87,7 +91,9 @@ export function farmSupervisorArgs({
     "--target-level", String(targetLevel),
     "--quest-item-id", String(questItemId),
     "--trusted-camp-sweep", String(Boolean(trustedCampSweep)),
+    "--maximum-target-level-offset", String(maximumTargetLevelOffset),
     "--auto-job-abilities", String(Boolean(autoJobAbilities)),
+    "--summon-trusts", String(Boolean(summonTrusts)),
     "--weapon-skill", weaponSkill,
     "--combat-spell", combatSpell,
     "--maximum-combat-spells-per-fight", String(maximumCombatSpellsPerFight),
@@ -95,6 +101,8 @@ export function farmSupervisorArgs({
     "--nm-route", String(Boolean(nmRoute)),
     "--maximum-route-rounds", String(maximumRouteRounds),
     "--minimum-free-inventory-slots", String(minimumFreeInventorySlots),
+    "--objective-target-name", objectiveTargetName,
+    "--objective-kill-count", String(objectiveKillCount),
     "--confirmation", FARM_CONFIRMATION,
   ];
 }
@@ -113,7 +121,9 @@ export async function startFarm({
   targetLevel = 0,
   questItemId = 0,
   trustedCampSweep = false,
+  maximumTargetLevelOffset = 1,
   autoJobAbilities = false,
+  summonTrusts = true,
   weaponSkill = "Combo",
   combatSpell = "",
   maximumCombatSpellsPerFight = 0,
@@ -121,6 +131,8 @@ export async function startFarm({
   nmRoute = false,
   maximumRouteRounds = 1,
   minimumFreeInventorySlots = 5,
+  objectiveTargetName = "",
+  objectiveKillCount = 0,
   confirmation,
 }) {
   if (confirmation !== FARM_CONFIRMATION) {
@@ -160,7 +172,9 @@ export async function startFarm({
       target_level: targetLevel,
       quest_item_id: questItemId,
       trusted_camp_sweep: Boolean(trustedCampSweep),
+      maximum_target_level_offset: maximumTargetLevelOffset,
       auto_job_abilities: Boolean(autoJobAbilities),
+      summon_trusts: Boolean(summonTrusts),
       weapon_skill: weaponSkill,
       combat_spell: combatSpell,
       maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
@@ -168,9 +182,12 @@ export async function startFarm({
       nm_route: Boolean(nmRoute),
       maximum_route_rounds: maximumRouteRounds,
       minimum_free_inventory_slots: minimumFreeInventorySlots,
+      objective_target_name: objectiveTargetName,
+      objective_kill_count: objectiveKillCount,
     },
     counters: {
       fights_completed: 0,
+      objective_kills: 0,
       proactive_engagements: 0,
       reactive_engagements: 0,
       multi_target_handoffs: 0,
@@ -196,6 +213,7 @@ export async function startFarm({
       nm_placeholders_killed: 0,
       notorious_monsters_killed: 0,
       nm_sweeps: 0,
+      objective_kills: 0,
     },
   };
   await fs.writeFile(paths.state, `${JSON.stringify(initial, null, 2)}\n`, {
@@ -217,7 +235,9 @@ export async function startFarm({
     targetLevel,
     questItemId,
     trustedCampSweep,
+    maximumTargetLevelOffset,
     autoJobAbilities,
+    summonTrusts,
     weaponSkill,
     combatSpell,
     maximumCombatSpellsPerFight,
@@ -225,6 +245,8 @@ export async function startFarm({
     nmRoute,
     maximumRouteRounds,
     minimumFreeInventorySlots,
+    objectiveTargetName,
+    objectiveKillCount,
   });
   const child = spawn(process.execPath, args, {
     cwd: projectDir,

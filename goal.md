@@ -203,6 +203,9 @@ credentials ignored and local.
   defense, automatic Combo, recovery, and emergency disarm.
 - Bastok Rank 1 through Rank 3 completed through normal mission and NPC
   progression, with guarded private-server travel and bounded exact-ID combat.
+- Bastok Rank 4 completed through guarded gate-enforcing mission acceptance,
+  normal mission handlers, exact-name combat objectives, command-driven item
+  handoff, and verified final server state (`rank=4`, no current mission).
 
 Update this file only when current state, priorities, blockers, or exit
 criteria change.

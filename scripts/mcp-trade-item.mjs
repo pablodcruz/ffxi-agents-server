@@ -163,16 +163,33 @@ try {
       throw new Error("The allowlisted item handoff command was rejected.");
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    [afterState, afterObserve] = await Promise.all([
-      characterState(),
-      client.callTool({
-        name: "ffxi_observe",
-        arguments: { radius: maximumDistance, max_entities: 12, event_limit: 24 },
-      }),
-    ]);
-    if (afterObserve.isError) {
-      throw new Error("Could not observe the handoff result.");
+    // Some mission trades open a cinematic immediately but do not emit their
+    // first dialogue event or consume the item until the scene has loaded.
+    // Poll the normal client/server result rather than retrying the command.
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      [afterState, afterObserve] = await Promise.all([
+        characterState(),
+        client.callTool({
+          name: "ffxi_observe",
+          arguments: { radius: maximumDistance, max_entities: 12, event_limit: 24 },
+        }),
+      ]);
+      if (afterObserve.isError) {
+        throw new Error("Could not observe the handoff result.");
+      }
+      const remaining = afterState.inventory?.items
+        ?.filter((entry) => entry.item_id === itemId)
+        .reduce((sum, entry) => sum + entry.count, 0) || 0;
+      const gameplayEvents = (valueOf(afterObserve).recent_events || []).filter(
+        (event) => event.id > beforeEventId && event.mode !== -1,
+      );
+      if (
+        remaining < initialCount
+        || (afterState.menu_open && gameplayEvents.length > 0)
+      ) {
+        break;
+      }
     }
   } finally {
     await client.callTool({

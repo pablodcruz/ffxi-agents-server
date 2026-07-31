@@ -89,6 +89,35 @@ pnpm mcp:goal -- \
 Omitting both labels preserves the legacy gil-goal rendering.
 Normal combat, EXP, and `/check` results remain the game's own chat events.
 
+Level-goal leases append the active AI model and a rounded daily token-rate
+estimate to the progress line. The estimate is intentionally sampled only at
+occasional agent checkpoints; combat never depends on it. Record the cumulative
+thread token counter when convenient:
+
+```sh
+pnpm overlay:usage -- \
+  --cumulative-tokens 2543331 \
+  --model "ChatGPT 5.6 Sol"
+```
+
+Samples stay in ignored `runtime/agent-usage.json`. The overlay reports
+`TOKENS/H COLLECTING` until two same-day samples span at least five minutes,
+then computes the day's average from the first valid sample to the latest.
+
+AgentBridge 0.30.1 stacks the goal banner above the optional activity feed at
+the lower-right edge of the standard 2560×1440 game canvas. The stack is
+positioned close to the bottom chat edge while ending just left of the party
+names. The defaults can be adjusted in the private client
+`config.json` without changing the bridge or exposing its token:
+
+```json
+{
+  "overlay_position_x": 1400,
+  "goal_overlay_position_y": 1160,
+  "activity_overlay_position_y": 1230
+}
+```
+
 The separate goal banner above the activity feed displays only numeric gil
 progress with a fixed label:
 

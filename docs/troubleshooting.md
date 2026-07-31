@@ -45,7 +45,8 @@ colima status
 ./scripts/server.sh status
 ./scripts/server.sh check
 pnpm test
-pnpm forwarder
+pnpm forwarder:service-start
+pnpm forwarder:service-status
 ```
 
 `server.sh check` must end with:
@@ -68,7 +69,13 @@ node    ... UDP <MAC_PARALLELS_IP>:54230
 ```
 
 If the `limactl` line is absent, do not launch FFXI. Fix Colima UDP forwarding
-first. If the `node` line is absent, start `pnpm forwarder` and keep it running.
+first. If the `node` line is absent, start the detached forwarder supervisor
+with `pnpm forwarder:service-start`. Unlike an attached `pnpm forwarder`
+terminal, the managed process survives terminal and agent-session closure and
+restarts the forwarding child if it exits. Use `pnpm forwarder:service-status`
+to prove all four TCP listeners and the UDP listener remain bound before
+launching FFXI. Its PID state and private logs stay under
+`runtime/forwarder-service/`.
 
 After FFXI is in the world:
 
@@ -143,7 +150,7 @@ This came from two different stale-connection cases:
 1. The original private forwarder closed idle TCP connections after two
    minutes while a person was still at an account or password prompt. The
    timeout is now 15 minutes.
-2. Restarting `pnpm forwarder` while xiloader is open invalidates xiloader's
+2. Restarting the forwarder while xiloader is open invalidates xiloader's
    existing TLS session. Exit xiloader completely and launch a new Ashita
    session after the forwarder is stable.
 
@@ -154,7 +161,7 @@ forwarder was restarted.
 
 This is expected if the private forwarder or Colima is restarted while the
 lobby is open. Close the game client, wait for `server.sh check` and
-`pnpm forwarder`, then relaunch from a clean xiloader process.
+`pnpm forwarder:service-start`, then relaunch from a clean xiloader process.
 
 The reference VM keeps private-server login values in an ACL-restricted,
 ignored JSON file and points its VM-local Ashita boot profile at that file.
@@ -392,6 +399,19 @@ Inspect the map logs before blaming the forwarder:
 docker logs --since 10m ffxi-agent-lab-map-1
 ./scripts/server.sh check
 ```
+
+There are two locally observed signatures:
+
+1. If the map container restarted or its logs show the inactivity watchdog
+   terminating `xi_map`, follow the QEMU/watchdog recovery below.
+2. If every container remained healthy but the map log says `Clearing map
+   server session` roughly one watchdog interval before the client reports
+   4001, verify the private forwarder with
+   `pnpm forwarder:service-status`. A missing private-interface UDP listener
+   stops client map packets while loopback container health remains green.
+   Close the stale xiloader process, start the detached service, prove all five
+   sockets are healthy, and then relaunch from a clean Ashita profile. Do not
+   restart the forwarder underneath a live lobby or map session.
 
 On the reference Apple Silicon setup, `xi_map` repeatedly exceeded its
 upstream two-second inactivity watchdog while running under x86 QEMU

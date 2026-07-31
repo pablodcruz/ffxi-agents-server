@@ -221,6 +221,34 @@ test("prefers a drop bearer, then admits its live spawn-slot placeholder", () =>
   );
 });
 
+test("admits a notorious monster carrying the watched drop", () => {
+  const selected = selectWatchedDropTarget({
+    observation: {
+      player: { position: { z: 20 } },
+      nearby_entities: [{
+        server_id: 17588674,
+        name: "Argus",
+        entity_type: 2,
+        status: 0,
+        hp_percent: 100,
+        distance: 12,
+        position: { z: 20 },
+      }],
+    },
+    metadata: [{
+      server_id: 17588674,
+      spawn_slot_id: 0,
+      mob_type: 2,
+      maximum_level: 37,
+      drops: [{ item_id: 15515, item_rate: 240 }],
+    }],
+    itemId: 15515,
+    playerLevel: 40,
+  });
+  assert.equal(selected?.server_id, 17588674);
+  assert.equal(selected?.watched_drop_role, "drop_bearer");
+});
+
 test("selects only exact lottery entities and prioritizes the notorious monster", () => {
   const entity = (serverId, name, distance) => ({
     server_id: serverId,

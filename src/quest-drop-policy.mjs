@@ -67,7 +67,7 @@ export function selectWatchedDropTarget({
     (metadata || []).map((mob) => [Number(mob.server_id), mob]),
   );
   const dropMobs = (metadata || []).filter((mob) => (
-    Number(mob.mob_type || 0) === 0
+    [0, 2].includes(Number(mob.mob_type || 0))
     && (mob.drops || []).some((drop) => (
       Number(drop.item_id) === Number(itemId)
       && Number(drop.item_rate) > 0
@@ -90,7 +90,7 @@ export function selectWatchedDropTarget({
         && Number(entity.distance) <= Number(radius)
         && !excludedServerIds.has(Number(entity.server_id))
         && mob
-        && Number(mob.mob_type || 0) === 0
+        && [0, 2].includes(Number(mob.mob_type || 0))
         && (
           dropMobIds.has(Number(entity.server_id))
           || dropSlots.has(Number(mob.spawn_slot_id))

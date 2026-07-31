@@ -96,6 +96,19 @@ current client rendered both character creation and Bastok Markets.
   Capture source. Its tested output is 1920x1080 at 30 FPS and 6000 kbps. A
   decoded local recording confirmed non-silent audio before streaming.
 
+### Image-quality checkpoint — 2026-07-30
+
+- The stable 2560x1440 window was still rendering its 3D background at only
+  1024x576, explaining the visibly pixelated world geometry.
+- Keep the stable 2560x1440 borderless window and 2304x1296 menu resolution.
+- Use a 2048x1152 background render as an intermediate quality setting rather
+  than repeating the unstable 2560x1440 background override.
+- Set mipmapping to Ashita's best-quality value (`0000=6`), textures to
+  uncompressed (`0018=2`, `0019=1`), and fonts to high quality (`0036=2`).
+- These settings improve the stock client first. Optional replacement DAT
+  textures or post-processing should be evaluated separately because they add
+  asset provenance, compatibility, performance, and stream-readability risks.
+
 ## 3. Compatibility checkpoint
 
 Stop and reassess the VM choice unless all of these pass:
@@ -196,6 +209,14 @@ After a loader-only connection passes:
 6. Establish the loopback tunnel described in
    [client-runbook.md](client-runbook.md).
 7. Run `pnpm doctor`, then follow the closed-loop validation list.
+
+The tested startup profile also loads Ashita's stock `minimap` plugin as a
+visual-only stream/operator aid. Keep it in the top-right below FFXI's clock;
+do not load `minimapmon`, which fades the map while stationary. AgentBridge and
+the server-backed navigation stack remain authoritative for automation. The
+tested 2560x1440 placement is `x=2285.0`, `y=70.0` in
+`C:\Ashita\config\minimap\minimap.ini`; preserve a backup and scale those
+coordinates for other window sizes.
 
 The tested profile and startup script are versioned at
 `ashita/config/boot/agentlab.ini` and `ashita/scripts/agentlab.txt`. They contain

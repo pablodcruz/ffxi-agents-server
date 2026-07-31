@@ -999,6 +999,54 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_private_server_bastok_mission",
+  {
+    title: "Inspect or begin an allowlisted Bastok mission",
+    description:
+      "Queue the private server's self-only !agentmission command. Status is read-only. Begin is limited to Bastok Rank 3 missions 10-12 and the server rechecks nation, rank, rank points, active mission, prerequisite completion, and repeatability. This bypasses only the mission-selection menu; it cannot complete missions, change mission status, grant items, or set rank.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      action: z.enum(["status", "begin", "donate"]),
+      mission_id: z.number().int().min(0).max(4103).default(0),
+      quantity: z.number().int().min(0).max(99).default(0),
+      confirmation: z.literal("ADVANCE PRIVATE SERVER BASTOK MISSION"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, action, mission_id, quantity, confirmation }) => {
+    try {
+      if (action === "status" && mission_id !== 0) {
+        throw new Error("Mission status requires mission_id 0.");
+      }
+      if (action === "begin" && ![10, 11, 12].includes(mission_id)) {
+        throw new Error("Mission begin is limited to Bastok mission IDs 10-12.");
+      }
+      if (
+        action === "donate" &&
+        (!(mission_id >= 4096 && mission_id <= 4103) || quantity < 1)
+      ) {
+        throw new Error("Donation requires elemental crystal ID 4096-4103 and quantity 1-99.");
+      }
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_bastok_mission",
+          { action, mission_id, quantity, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_move_inventory_item",
   {
     title: "Move one exact FFXI inventory item",
@@ -1064,6 +1112,123 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_sell_inventory_item",
+  {
+    title: "Sell one exact allowlisted FFXI inventory stack",
+    description:
+      "Sell one exact main-inventory item and quantity through FFXI's normal 0x084/0x085 vendor-sale packets on the isolated private server. AgentBridge requires a repository-controlled item-ID allowlist, an unequipped exact source slot and quantity, a logged-in non-zoning character, and the private-server confirmation phrase; the caller must verify the inventory and gil result.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      source_slot: z.number().int().min(1).max(80),
+      item_id: z.number().int().refine(
+        (value) => [
+          505, 573, 575, 768, 847, 852, 856, 881, 882, 924, 925, 926,
+          936, 953, 4570, 12385,
+          508, 511, 642, 750, 846, 912, 922, 1984, 4358, 4362, 4366,
+          4368, 4370, 4372, 4387, 4400, 4468, 5187, 12464, 12592,
+          12631, 12720, 12754, 12848, 12864, 12883, 12976, 13005,
+          17051, 17296, 17868,
+        ].includes(value),
+        "item_id is outside the repository-controlled NPC-sale allowlist",
+      ),
+      quantity: z.number().int().min(1).max(99),
+      confirmation: z.literal("SELL PRIVATE SERVER INVENTORY ITEM"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    source_slot,
+    item_id,
+    quantity,
+    confirmation,
+  }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "sell_inventory_item",
+          {
+            source_slot,
+            item_id,
+            quantity,
+            confirmation,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_buy_vendor_item",
+  {
+    title: "Buy one exact allowlisted FFXI vendor item",
+    description:
+      "Buy one exact item through FFXI's normal 0x083 general-shop packet without traversing the client shop list. AgentBridge requires an active merchant context, the exact targeted allowlisted NPC, a pinned NPC/item/index/price tuple, one free main-inventory slot, sufficient gil, and the private-server confirmation phrase; the caller must verify both inventory and gil.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      npc_server_id: z.union([
+        z.literal(17739806),
+        z.literal(17793068),
+      ]),
+      item_id: z.number().int().refine(
+        (value) => [
+          4762, 4767, 4772, 4777, 4828, 4838, 4843, 4844, 4845, 4846,
+          4847, 4848, 4861, 4862,
+          4768, 4778, 4797, 4807,
+        ].includes(value),
+        "item_id is outside the repository-controlled vendor-purchase allowlist",
+      ),
+      maximum_price: z.number().int().positive(),
+      quantity: z.literal(1),
+      confirmation: z.literal("BUY PRIVATE SERVER VENDOR ITEM"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    npc_server_id,
+    item_id,
+    maximum_price,
+    quantity,
+    confirmation,
+  }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "buy_vendor_item",
+          {
+            npc_server_id,
+            item_id,
+            maximum_price,
+            quantity,
+            confirmation,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_farm_start",
   {
     title: "Start a bounded private-server farm supervisor",
@@ -1082,7 +1247,9 @@ server.registerTool(
       target_level: z.number().int().min(0).max(99).default(0),
       quest_item_id: z.number().int().min(0).max(65534).default(0),
       trusted_camp_sweep: z.boolean().default(false),
+      maximum_target_level_offset: z.number().int().min(1).max(5).default(1),
       auto_job_abilities: z.boolean().default(false),
+      summon_trusts: z.boolean().default(true),
       weapon_skill: z
         .string()
         .min(1)
@@ -1098,7 +1265,7 @@ server.registerTool(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(6)
         .default(0),
       minimum_cast_mp_percent: z
         .number()
@@ -1109,6 +1276,12 @@ server.registerTool(
       nm_route: z.boolean().default(false),
       maximum_route_rounds: z.number().int().min(1).max(20).default(1),
       minimum_free_inventory_slots: z.number().int().min(1).max(20).default(5),
+      objective_target_name: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
+      objective_kill_count: z.number().int().min(0).max(200).default(0),
       confirmation: z.literal(FARM_CONFIRMATION),
     },
     annotations: {
@@ -1131,7 +1304,9 @@ server.registerTool(
     target_level,
     quest_item_id,
     trusted_camp_sweep,
+    maximum_target_level_offset,
     auto_job_abilities,
+    summon_trusts,
     weapon_skill,
     combat_spell,
     maximum_combat_spells_per_fight,
@@ -1139,6 +1314,8 @@ server.registerTool(
     nm_route,
     maximum_route_rounds,
     minimum_free_inventory_slots,
+    objective_target_name,
+    objective_kill_count,
     confirmation,
   }) => {
     try {
@@ -1156,7 +1333,9 @@ server.registerTool(
         targetLevel: target_level,
         questItemId: quest_item_id,
         trustedCampSweep: trusted_camp_sweep,
+        maximumTargetLevelOffset: maximum_target_level_offset,
         autoJobAbilities: auto_job_abilities,
+        summonTrusts: summon_trusts,
         weaponSkill: weapon_skill,
         combatSpell: combat_spell,
         maximumCombatSpellsPerFight: maximum_combat_spells_per_fight,
@@ -1164,6 +1343,8 @@ server.registerTool(
         nmRoute: nm_route,
         maximumRouteRounds: maximum_route_rounds,
         minimumFreeInventorySlots: minimum_free_inventory_slots,
+        objectiveTargetName: objective_target_name,
+        objectiveKillCount: objective_kill_count,
         confirmation,
       }));
     } catch (error) {

@@ -251,6 +251,22 @@ pnpm mcp:farm-status
 pnpm mcp:farm-stop -- --lease-id <active-lease-id>
 ```
 
+For a long-running goal, run the local watchdog in a separate supervised
+terminal:
+
+```sh
+pnpm mcp:farm-watch -- \
+  --interval-seconds 15 \
+  --confirmation "ARM PRIVATE SERVER FARM WATCHDOG"
+```
+
+The watchdog records its own ignored, owner-only heartbeat at
+`runtime/farm-monitor/primary.json`. It renews only leases that end normally
+with `time_limit` or `fight_limit`, preserving the prior guarded
+configuration. Logout, death, stale supervisor heartbeats, inventory blocks,
+manual stops, and unknown errors remain blocked for diagnosis instead of being
+blindly restarted.
+
 For a level-appropriate camp that admits `decent challenge` checks (including
 high defense only while at least two healthy in-zone companions are verified):
 
@@ -498,6 +514,13 @@ item. Relocation chooses another ordinary, level-bounded camp rather than a
 camp for one drop-bearing family. This separates the reusable combat policy
 from the optional farming outcome and makes unattended combat independent of
 MCP analysis calls. `mcp:farm-drop` remains a short diagnostic lease.
+
+The default trusted-sweep admission ceiling is one level above the player.
+For an explicitly tested private-server camp whose database levels differ
+from the historical guide, `--maximum-target-level-offset` may raise that
+ceiling from 1 through 5 for that lease only. The configured value applies to
+both nearby selection and relocation, is persisted for watchdog renewal, and
+does not relax Trust, HP, inventory, session, combat, or death safeguards.
 
 ### Level-aware Monk abilities
 
