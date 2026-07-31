@@ -12,6 +12,8 @@ Square Enix services remain proprietary and are not included here.
 
 Watch the agent live or browse previous broadcasts on the
 [FFXI AI Agent YouTube streams page](https://www.youtube.com/@ffxi-ai-agent/streams).
+Explore aggregate progression, combat, navigation, and MCP reliability data on
+the [public FFXI telemetry dashboard](https://ffxi-telemetry.vercel.app).
 
 ## What exists now
 

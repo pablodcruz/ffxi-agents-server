@@ -3,15 +3,14 @@ AgentBridge exposes a narrow, localhost-only JSON-lines interface for an AI
 agent operating on a private LandSandBoat server.
 
 It intentionally does not support arbitrary GM commands, chat, arbitrary
-console commands, scripts, packet injection, or remote network binding. Three
-narrow private-server operations are exposed: validated LandSandBoat !pos
-service travel, exact Records of Eminence activation, and exact inventory
-transfers using their normal client packets.
+console commands, scripts, packet injection, or remote network binding.
+Dedicated private-server operations expose only validated LandSandBoat !pos
+service travel and a few exact, guarded normal-client packet flows.
 --]]
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.28.0';
+addon.version = '0.31.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -45,6 +44,8 @@ local bridge =
     goal_target_gil = 10000,
     goal_title = nil,
     goal_progress_label = nil,
+    merchant_context_server_id = nil,
+    merchant_catalog = {},
 };
 
 local allowed_commands =
@@ -126,6 +127,92 @@ local job_change_npc_names =
     ['Pilgrim Moogle'] = true,
 };
 
+-- Repository-controlled NPC-sale allowlist. Keep this duplicated in the host
+-- wrapper so neither side can expand the destructive scope independently.
+local allowed_npc_sale_items =
+{
+    [505] = true,   -- Sheepskin
+    [573] = true,   -- Vegetable Seeds
+    [575] = true,   -- Grain Seeds
+    [768] = true,   -- Flint Stone
+    [847] = true,   -- Bird Feather
+    [852] = true,   -- Lizard Skin
+    [856] = true,   -- Rabbit Hide
+    [881] = true,   -- Crab Shell
+    [882] = true,   -- Sheep Tooth
+    [924] = true,   -- Fiend Blood
+    [925] = true,   -- Giant Stinger
+    [926] = true,   -- Lizard Tail
+    [936] = true,   -- Rock Salt
+    [953] = true,   -- Treant Bulb
+    [4570] = true,  -- Bird Egg
+    [12385] = true, -- Acheron Shield
+    [508] = true,   -- Goblin Helm
+    [511] = true,   -- Goblin Mask
+    [642] = true,   -- Zinc Ore
+    [750] = true,   -- Silver Beastcoin
+    [846] = true,   -- Insect Wing
+    [912] = true,   -- Beehive Chip
+    [922] = true,   -- Bat Wing
+    [1984] = true,  -- Snapping Mole
+    [4358] = true,  -- Hare Meat
+    [4362] = true,  -- Lizard Egg
+    [4366] = true,  -- La Theine Cabbage
+    [4368] = true,  -- Two-Leaf Mandragora Bud
+    [4370] = true,  -- Honey
+    [4372] = true,  -- Giant Sheep Meat
+    [4387] = true,  -- Wild Onion
+    [4400] = true,  -- Land Crab Meat
+    [4468] = true,  -- Pamamas
+    [5187] = true,  -- Elshimo Coconut
+    [12464] = true, -- Headgear
+    [12592] = true, -- Doublet
+    [12631] = true, -- Hume Tunic
+    [12720] = true, -- Gloves
+    [12754] = true, -- Hume M Gloves
+    [12848] = true, -- Brais
+    [12864] = true, -- Slacks
+    [12883] = true, -- Hume Slacks
+    [12976] = true, -- Gaiters
+    [13005] = true, -- Hume M Boots
+    [17051] = true, -- Yew Wand
+    [17296] = true, -- Pebble
+    [17868] = true, -- Humus
+};
+
+-- Exact general-shop purchases that may bypass client menu traversal. The
+-- server still owns the live merchant container, price check, gil deduction,
+-- inventory-capacity check, and item grant. Pinning NPC, item, shop index, and
+-- price on both sides prevents this narrow operation from becoming an
+-- arbitrary vendor packet primitive.
+local allowed_vendor_purchases =
+{
+    [17739806] = -- Zaira, Bastok Markets
+    {
+        [4762] = true, -- Aero
+        [4767] = true, -- Stone
+        [4772] = true, -- Thunder
+        [4777] = true, -- Water
+        [4828] = true, -- Poison
+        [4838] = true, -- Bio
+        [4843] = true, -- Burn
+        [4844] = true, -- Frost
+        [4845] = true, -- Choke
+        [4846] = true, -- Rasp
+        [4847] = true, -- Shock
+        [4848] = true, -- Drown
+        [4861] = true, -- Sleep
+        [4862] = true, -- Blind
+    },
+    [17793068] = -- Chutarmire, Selbina
+    {
+        [4768] = true, -- Stone II
+        [4778] = true, -- Water II
+        [4797] = true, -- Stonega
+        [4807] = true, -- Waterga
+    },
+};
+
 local interface_hidden_signature = ashita.memory.find(
     'FFXiMain.dll',
     0,
@@ -200,6 +287,22 @@ local function read_config()
     if (config.activity_feed_enabled ~= nil and type(config.activity_feed_enabled) ~= 'boolean') then
         print('[AgentBridge] activity_feed_enabled must be true or false.');
         return nil;
+    end
+    local overlay_coordinates =
+    {
+        'overlay_position_x',
+        'goal_overlay_position_y',
+        'activity_overlay_position_y',
+    };
+    for _, key in ipairs(overlay_coordinates) do
+        local value = config[key];
+        if (
+            value ~= nil and
+            (type(value) ~= 'number' or value < 0 or value > 4096 or value ~= math.floor(value))
+        ) then
+            print(('[AgentBridge] %s must be an integer from 0 through 4096.'):fmt(key));
+            return nil;
+        end
     end
     return config;
 end
@@ -964,6 +1067,8 @@ local function start_confirm_pulse(params)
         if (entity.entity_type ~= 1 and entity.entity_type ~= 2 and entity.entity_type ~= 3) then
             error('The requested interaction target is not an NPC or world object.');
         end
+        bridge.merchant_context_server_id = entity.server_id;
+        bridge.merchant_catalog = {};
     elseif (mode == 'confirm') then
         error('Confirm mode requires the host MCP input adapter.');
     else
@@ -1363,6 +1468,82 @@ local function service_teleport(params)
     };
 end
 
+local function private_server_bastok_mission(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Bastok mission command requires a logged-in private-server character.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Bastok mission command requires all menus and dialogue to be closed.');
+    end
+    if (params.confirmation ~= 'ADVANCE PRIVATE SERVER BASTOK MISSION') then
+        error('Bastok mission command requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    ) then
+        error('Bastok mission command requires the character to be idle.');
+    end
+
+    local action = type(params.action) == 'string' and params.action:lower() or '';
+    local command;
+    local mission_id = tonumber(params.mission_id) or 0;
+    if (action == 'status') then
+        command = '!agentmission status';
+        mission_id = 0;
+    elseif (
+        action == 'begin' and
+        (mission_id == 10 or mission_id == 11 or mission_id == 12) and
+        mission_id == math.floor(mission_id)
+    ) then
+        command = ('!agentmission begin %u'):fmt(mission_id);
+    elseif (action == 'donate') then
+        local quantity = tonumber(params.quantity) or 0;
+        if (
+            mission_id < 4096 or mission_id > 4103 or
+            mission_id ~= math.floor(mission_id) or
+            quantity < 1 or quantity > 99 or quantity ~= math.floor(quantity)
+        ) then
+            error('Bastok crystal donation is outside the allowlist.');
+        end
+        command = ('!agentmission donate %u %u'):fmt(mission_id, quantity);
+    else
+        error('Bastok mission command action or mission ID is not allowlisted.');
+    end
+
+    stop_movement('private_server_bastok_mission');
+    stop_input_pulse('private_server_bastok_mission');
+    stop_heading_hold('private_server_bastok_mission');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, command);
+    add_event(
+        -1,
+        ('Agent private-server Bastok mission command queued: %s%s.'):fmt(
+            action,
+            mission_id > 0 and (' ' .. tostring(mission_id)) or ''
+        )
+    );
+    return
+    {
+        queued = true,
+        action = action,
+        mission_id = mission_id,
+        quantity = action == 'donate' and tonumber(params.quantity) or 0,
+        private_server_only = true,
+        control = control_snapshot(),
+    };
+end
+
 local function monitor_movement()
     if (bridge.movement == nil) then
         return;
@@ -1710,6 +1891,202 @@ local function move_inventory_item(params)
     };
 end
 
+local function sell_inventory_item(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local inventory = memory:GetInventory();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Inventory sale requires a logged-in private-server character.');
+    end
+    if (player:GetIsZoning() ~= 0) then
+        error('Inventory sale is unavailable while zoning.');
+    end
+    if (params.confirmation ~= 'SELL PRIVATE SERVER INVENTORY ITEM') then
+        error('Inventory sale requires the exact private-server confirmation phrase.');
+    end
+
+    local source_slot = tonumber(params.source_slot);
+    local item_id = tonumber(params.item_id);
+    local quantity = tonumber(params.quantity);
+    if (
+        source_slot == nil or source_slot ~= math.floor(source_slot) or
+        source_slot < 1 or source_slot > 80
+    ) then
+        error('Inventory sale source_slot must be an integer from 1 through 80.');
+    end
+    if (
+        item_id == nil or item_id ~= math.floor(item_id) or
+        item_id < 1 or item_id > 65534 or
+        allowed_npc_sale_items[item_id] ~= true
+    ) then
+        error('Inventory sale item_id is outside the repository-controlled allowlist.');
+    end
+    if (
+        quantity == nil or quantity ~= math.floor(quantity) or
+        quantity < 1 or quantity > 99
+    ) then
+        error('Inventory sale quantity must be an integer from 1 through 99.');
+    end
+
+    local source_item = inventory:GetContainerItem(0, source_slot);
+    if (
+        source_item == nil or
+        tonumber(source_item.Id) ~= item_id or
+        (tonumber(source_item.Count) or 0) < quantity
+    ) then
+        error('The exact inventory slot, item ID, and quantity are no longer available.');
+    end
+    for equipment_slot = 0, 15 do
+        local equipment_entry = inventory:GetEquippedItem(equipment_slot);
+        local packed_index = equipment_entry ~= nil and tonumber(equipment_entry.Index) or 0;
+        if (
+            packed_index > 0 and
+            bit.band(packed_index, 0xFF00) / 0x0100 == 0 and
+            packed_index % 0x0100 == source_slot
+        ) then
+            error('Equipped items cannot be sold.');
+        end
+    end
+
+    stop_movement('inventory_sale');
+    stop_input_pulse('inventory_sale');
+    stop_heading_hold('inventory_sale');
+
+    -- Normal FFXI NPC-sale request (0x084) followed by its affirmative
+    -- confirmation (0x085). LandSandBoat rechecks the slot, item ID, quantity,
+    -- NoSale/locked/reserved state, packet ordering, and stack bounds.
+    local request_packet =
+    {
+        0x84, 0x06, 0x00, 0x00,
+        quantity, 0x00, 0x00, 0x00,
+        item_id % 0x0100,
+        math.floor(item_id / 0x0100),
+        source_slot,
+        0x00,
+    };
+    local confirm_packet =
+    {
+        0x85, 0x04, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x084, request_packet);
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x085, confirm_packet);
+    add_event(
+        -1,
+        ('Agent sold allowlisted inventory item %u x%u.'):fmt(
+            item_id,
+            quantity
+        )
+    );
+    return
+    {
+        queued = true,
+        source_container = 0,
+        source_slot = source_slot,
+        item_id = item_id,
+        quantity = quantity,
+        request_packet_id = 0x084,
+        confirmation_packet_id = 0x085,
+        normal_client_packets = true,
+    };
+end
+
+local function buy_vendor_item(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    local inventory = memory:GetInventory();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Vendor purchase requires a logged-in private-server character.');
+    end
+    if (player:GetIsZoning() ~= 0) then
+        error('Vendor purchase is unavailable while zoning.');
+    end
+    if (params.confirmation ~= 'BUY PRIVATE SERVER VENDOR ITEM') then
+        error('Vendor purchase requires the exact private-server confirmation phrase.');
+    end
+    if (target:GetIsMenuOpen() == 0 or current_menu_name() ~= 'menu    shopmain') then
+        error('Vendor purchase requires an active general-shop merchant context.');
+    end
+
+    local npc_server_id = tonumber(params.npc_server_id);
+    local item_id = tonumber(params.item_id);
+    local maximum_price = tonumber(params.maximum_price);
+    local quantity = tonumber(params.quantity);
+    local npc_catalog = allowed_vendor_purchases[npc_server_id];
+    local purchase_allowed = npc_catalog ~= nil and npc_catalog[item_id] == true;
+    local purchase = bridge.merchant_catalog[item_id];
+    if (
+        npc_server_id == nil or npc_server_id ~= math.floor(npc_server_id) or
+        not purchase_allowed or purchase == nil
+    ) then
+        error('Vendor purchase is not present in both the allowlist and live merchant catalog.');
+    end
+    if (
+        maximum_price == nil or maximum_price ~= math.floor(maximum_price) or
+        maximum_price < purchase.unit_price or
+        quantity == nil or quantity ~= 1
+    ) then
+        error('Vendor purchase exceeds the caller price cap or has an invalid quantity.');
+    end
+
+    if (tonumber(bridge.merchant_context_server_id) ~= npc_server_id) then
+        error('The exact allowlisted merchant did not establish this shop context.');
+    end
+    local gil = inventory:GetContainerItem(0, 0);
+    if (gil == nil or (tonumber(gil.Count) or 0) < purchase.unit_price) then
+        error('The exact vendor purchase is unaffordable.');
+    end
+    local inventory_capacity = tonumber(inventory:GetContainerCountMax(0)) or 0;
+    local inventory_count = tonumber(inventory:GetContainerCount(0)) or 0;
+    if (inventory_capacity <= 0 or inventory_count >= inventory_capacity) then
+        error('The main inventory has no free slot for the vendor purchase.');
+    end
+
+    stop_movement('vendor_purchase');
+    stop_input_pulse('vendor_purchase');
+    stop_heading_hold('vendor_purchase');
+
+    -- LandSandBoat GP_CLI_COMMAND_SHOP_BUY (0x083):
+    -- uint32 quantity, uint16 shop number, uint16 merchant-container index,
+    -- uint8 property-item index, then three padding bytes. The live server
+    -- resolves the item and authoritative price from its merchant container.
+    local shop_index = purchase.shop_index;
+    local packet =
+    {
+        0x83, 0x04, 0x00, 0x00,
+        quantity, 0x00, 0x00, 0x00,
+        0x00, 0x00,
+        shop_index % 0x0100,
+        math.floor(shop_index / 0x0100) % 0x0100,
+        0x00, 0x00, 0x00, 0x00,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x083, packet);
+    add_event(
+        -1,
+        ('Agent requested exact vendor item %u x1 from NPC %u.'):fmt(
+            item_id,
+            npc_server_id
+        )
+    );
+    return
+    {
+        queued = true,
+        item_id = item_id,
+        quantity = quantity,
+        npc_server_id = npc_server_id,
+        shop_item_index = shop_index,
+        unit_price = purchase.unit_price,
+        maximum_price = maximum_price,
+        packet_id = 0x083,
+        normal_client_packet = true,
+    };
+end
+
 local function dispatch(request)
     if (type(request) ~= 'table') then
         error('Request must be a JSON object.');
@@ -1857,12 +2234,18 @@ local function dispatch(request)
         return start_position_movement(params);
     elseif (request.operation == 'service_teleport') then
         return service_teleport(params);
+    elseif (request.operation == 'private_server_bastok_mission') then
+        return private_server_bastok_mission(params);
     elseif (request.operation == 'start_roe_objective') then
         return start_roe_objective(params);
     elseif (request.operation == 'change_job') then
         return change_job(params);
     elseif (request.operation == 'move_inventory_item') then
         return move_inventory_item(params);
+    elseif (request.operation == 'sell_inventory_item') then
+        return sell_inventory_item(params);
+    elseif (request.operation == 'buy_vendor_item') then
+        return buy_vendor_item(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);
@@ -1954,8 +2337,8 @@ ashita.events.register('load', 'load_cb', function ()
         font_family = 'Arial',
         font_height = 16,
         color = 0xFFFFFFFF,
-        position_x = 16,
-        position_y = 520,
+        position_x = bridge.config.overlay_position_x or 1400,
+        position_y = bridge.config.activity_overlay_position_y or 1230,
         background =
         {
             visible = true,
@@ -1968,8 +2351,8 @@ ashita.events.register('load', 'load_cb', function ()
         font_family = 'Arial',
         font_height = 18,
         color = 0xFFFFD966,
-        position_x = 16,
-        position_y = 465,
+        position_x = bridge.config.overlay_position_x or 1400,
+        position_y = bridge.config.goal_overlay_position_y or 1160,
         background =
         {
             visible = true,
@@ -2007,6 +2390,32 @@ end);
 
 ashita.events.register('text_in', 'text_in_cb', function (event)
     add_event(event.mode, event.message_modified);
+end);
+
+ashita.events.register('packet_in', 'merchant_catalog_packet_in_cb', function (event)
+    if (event.id ~= 0x03C or type(event.data) ~= 'string' or event.size < 8) then
+        return;
+    end
+
+    local item_offset = struct.unpack('H', event.data, 0x04 + 1);
+    if (item_offset == 0) then
+        bridge.merchant_catalog = {};
+    end
+    local entry_count = math.floor((event.size - 8) / 12);
+    entry_count = math.clamp(entry_count, 0, 19);
+    for entry = 0, entry_count - 1 do
+        local base = 0x08 + (entry * 12);
+        local unit_price = struct.unpack('L', event.data, base + 1);
+        local item_id = struct.unpack('H', event.data, base + 0x04 + 1);
+        local shop_index = struct.unpack('B', event.data, base + 0x06 + 1);
+        if (item_id > 0 and unit_price > 0) then
+            bridge.merchant_catalog[item_id] =
+            {
+                shop_index = shop_index,
+                unit_price = unit_price,
+            };
+        end
+    end
 end);
 
 ashita.events.register('key_state', 'key_state_cb', function (event)

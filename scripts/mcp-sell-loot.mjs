@@ -8,8 +8,14 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectDir = path.resolve(import.meta.dirname, "..");
 const sellableItems = new Map([
   [505, "Sheepskin"],
+  [768, "Flint Stone"],
+  [852, "Lizard Skin"],
+  [881, "Crab Shell"],
   [856, "Rabbit Hide"],
   [882, "Sheep Tooth"],
+  [924, "Fiend Blood"],
+  [925, "Giant Stinger"],
+  [936, "Rock Salt"],
   [847, "Bird Feather"],
   [926, "Lizard Tail"],
   [953, "Treant Bulb"],

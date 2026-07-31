@@ -21,12 +21,37 @@ they are not the machine-control boundary.
 | [Windower JobChange](https://docs.windower.net/addons/jobchange/) | Command-line main/support job changes within six yalms of a job-change NPC | Port its narrow normal-packet mechanism into AgentBridge with MCP guards; do not depend on Windower |
 | [MobDB](https://github.com/ThornyFFXI/mobdb) | On-screen mob ID, level range, aggro/link flags, position, resistances, and drops; it can generate data for an exact LSB private server | Best visual pilot. Use as a read-only mirror after pinning and reviewing the source; do not make MCP depend on its UI |
 | [Ashita distance addon](https://github.com/AshitaXI/Ashita-v4beta/tree/main/addons/distance) | Target distance overlay | Optional stream/operator aid; AgentBridge already returns exact numeric distance |
-| Ashita minimap plugin | Human spatial context and nearby dots | Optional stream/operator aid; it does not provide route planning or a stable agent API |
+| [Ashita minimap plugin](https://docs.ashitaxi.com/features/) | Persistent local map, player heading, and nearby entity dots | Selected as a stream/operator aid; load the stock `minimap.dll` from `agentlab.txt`, keep it in the top-right, and do not use it as the route-planning or control API |
 | [xathei/Pathfinder](https://github.com/xathei/Pathfinder) | Build and test FFXI Recast navmeshes; inspect line of sight and distance to a mesh edge | Useful historical design reference, not an integration candidate; retain the maintained LandSandBoat meshes and MCP-native mover |
 | [Shorthand](https://github.com/ThornyFFXI/Shorthand) | Convenient partial-name commands | Do not use for autonomous targeting because “best matching” names weaken exact-ID disambiguation |
 | Find / FindAll | Inventory lookup | Useful later for inventory management, not for finding mobs or moving |
 | Allmaps / remastered map DATs | Better human map labels | Optional human aid; visual-only and unnecessary for the MCP route planner |
 | Farm/bot/nav addons | Closed-loop automation | Do not adopt. They duplicate policy, obscure failure modes, and commonly lack our exact `/check`, write-latch, audit, and emergency-stop boundaries |
+
+## Minimap
+
+FFXI's own map is a modal menu rather than a persistent HUD element. The
+tested Ashita 4.3.1.2 distribution already includes the official
+`plugins/minimap.dll`, so the Agent Lab profile loads that stock plugin
+directly:
+
+```text
+/load minimap
+```
+
+Use the minimap as an always-visible operator and stream aid in the top-right,
+below the game's clock and zone text. It is useful for heading, nearby entity
+dots, and recognizing when movement is obstructed. It is not an MCP control
+surface and is not authoritative for target identity or routing; AgentBridge,
+server IDs, mob metadata, and the LandSandBoat navmesh remain authoritative.
+On the tested 2560x1440 profile, set `x=2285.0` and `y=70.0` in
+`C:\Ashita\config\minimap\minimap.ini`. Back up the existing file before
+changing it; these coordinates should be scaled for other window sizes.
+
+Do not load the bundled `minimapmon` addon for the streaming profile. Its
+purpose is to fade the minimap while the character is standing still, which
+hides useful context while the agent is supervising a fight or explaining its
+next action.
 
 ## Command-line job changes
 

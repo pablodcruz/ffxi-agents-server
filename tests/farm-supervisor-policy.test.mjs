@@ -20,13 +20,17 @@ import {
   selectProactiveTarget,
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
+  shouldAbandonStaleEngagement,
   shouldAutoCancelMenu,
   shouldRecoverDroppedEngagement,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   shouldSkipEngagementForCooperativeStop,
+  shouldContinueSupervisorLoop,
+  shouldCorrectEngagedRange,
   shouldWaitForLevelProgress,
   targetDefeated,
+  trustRepairDisposition,
 } from "../src/farm-supervisor-policy.mjs";
 
 test("treats only a stale movement start distance as a recoverable race", () => {
@@ -357,6 +361,31 @@ test("quest relocation can explicitly admit trivial exact-drop camps", () => {
   })?.server_id, 60601);
 });
 
+test("exact watched-server relocation can admit a notorious monster", () => {
+  const camp = selectRelocationCamp({
+    metadata: [{
+      server_id: 17588674,
+      zone_id: 198,
+      name: "Argus",
+      mob_type: 2,
+      minimum_level: 36,
+      maximum_level: 37,
+      aggro: true,
+      spawn: { x: 261, y: -87, z: 20 },
+    }],
+    playerLevel: 40,
+    zoneId: 198,
+    currentPosition: { x: 210, y: -40, z: 20 },
+    allowedServerIds: new Set([17588674]),
+    allowedNames: null,
+    allowAggressiveCandidates: true,
+    minimumAggroDistance: 0,
+    minimumLevelOffset: 99,
+    maximumLevelOffset: 4,
+  });
+  assert.equal(camp?.server_id, 17588674);
+});
+
 test("selects a cross-zone camp without comparing unrelated coordinates", () => {
   const camp = selectRelocationCamp({
     metadata: [
@@ -494,6 +523,50 @@ test("selects the validated level-25 Sauromugue progression band", () => {
     maximum_level_offset: 1,
     reason: "level_25_sauromugue_lizard_bat_band",
   });
+});
+
+test("selects the validated level-32 Yhoator Mandragora progression band", () => {
+  const profile = nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 123,
+    playerLevel: 32,
+    targetLevel: 40,
+  });
+  assert.deepEqual(profile, {
+    zone_id: 124,
+    allowed_names: ["Yhoator Mandragora"],
+    maximum_level_offset: 5,
+    reason: "level_32_yhoator_mandragora_band",
+  });
+  assert.equal(selectRelocationCamp({
+    metadata: [{
+      server_id: 17285126,
+      zone_id: 124,
+      name: "Yhoator Mandragora",
+      minimum_level: 35,
+      maximum_level: 37,
+      mob_type: 0,
+      aggro: false,
+      spawn: { x: -265.635, y: 186.091, z: 2.611 },
+    }],
+    playerLevel: 32,
+    zoneId: profile.zone_id,
+    currentPosition: null,
+    allowedNames: profile.allowed_names,
+    maximumLevelOffset: profile.maximum_level_offset,
+  })?.server_id, 17285126);
+  assert.equal(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 123,
+    playerLevel: 31,
+    targetLevel: 40,
+  }), null);
+  assert.equal(nextLevelBandTransition({
+    autoTransition: true,
+    activeZoneId: 123,
+    playerLevel: 32,
+    targetLevel: 39,
+  }), null);
 });
 
 test("holds proactive scouting while a defeated target's rewards settle", () => {
@@ -698,6 +771,30 @@ test("nudges through only a nearby live engaged target", () => {
   }), null);
 });
 
+test("abandons only an out-of-range idle target after tracked combat stalls", () => {
+  assert.equal(shouldAbandonStaleEngagement({
+    observation: observation({ player: { status: 1 } }),
+    target: { status: 0, hp_percent: 100, distance: 8 },
+    outOfRangeFailure: true,
+    lastProgressAt: 1_000,
+    now: 20_000,
+  }), true);
+  assert.equal(shouldAbandonStaleEngagement({
+    observation: observation({ player: { status: 1 } }),
+    target: { status: 1, hp_percent: 100, distance: 8 },
+    outOfRangeFailure: true,
+    lastProgressAt: 1_000,
+    now: 20_000,
+  }), false);
+  assert.equal(shouldAbandonStaleEngagement({
+    observation: observation({ player: { status: 1 } }),
+    target: { status: 0, hp_percent: 100, distance: 8 },
+    outOfRangeFailure: true,
+    lastProgressAt: 10_000,
+    now: 20_000,
+  }), false);
+});
+
 test("retries a missed recovery command only while idle and still below threshold", () => {
   assert.equal(shouldRetryRecoveryCommand({
     observation: observation({ player: { status: 0, hp_percent: 80 } }),
@@ -840,6 +937,24 @@ test("cooperative stops require a stable idle window after combat drains", () =>
   }), false);
 });
 
+test("keeps the supervisor loop alive while a cooperative stop drains combat", () => {
+  assert.equal(shouldContinueSupervisorLoop({
+    stopping: false,
+    stopReason: "stop_requested",
+    cooperativeStopRequestedAt: 100,
+  }), true);
+  assert.equal(shouldContinueSupervisorLoop({
+    stopping: false,
+    stopReason: "stop_requested",
+    cooperativeStopRequestedAt: null,
+  }), false);
+  assert.equal(shouldContinueSupervisorLoop({
+    stopping: true,
+    stopReason: "stop_requested",
+    cooperativeStopRequestedAt: 100,
+  }), false);
+});
+
 test("cooperative stop blocks new pulls but never skips reactive defense", () => {
   assert.equal(shouldSkipEngagementForCooperativeStop({
     mode: "proactive",
@@ -949,6 +1064,76 @@ test("recognizes multiple healthy in-zone Trust companions as combat support", (
     ready: false,
     members: ["Valaineral"],
   });
+});
+
+test("routes late Trust-loss observations through bounded repair", () => {
+  assert.equal(trustRepairDisposition({
+    liveCombat: false,
+    missingCount: 2,
+    supportReady: false,
+    startedAt: 1_000,
+    now: 10_000,
+  }), "retry");
+  assert.equal(trustRepairDisposition({
+    liveCombat: true,
+    missingCount: 2,
+    supportReady: false,
+    startedAt: 1_000,
+    now: 70_000,
+  }), "combat");
+  assert.equal(trustRepairDisposition({
+    liveCombat: false,
+    missingCount: 0,
+    supportReady: true,
+    startedAt: 1_000,
+    now: 10_000,
+  }), "ready");
+  assert.equal(trustRepairDisposition({
+    liveCombat: false,
+    missingCount: 2,
+    supportReady: false,
+    startedAt: 1_000,
+    now: 61_000,
+  }), "timeout");
+});
+
+test("corrects range only for a live engaged target outside melee distance", () => {
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 1 } },
+    target: { status: 1, distance: 3.9 },
+    lastAttemptAt: 1_000,
+    now: 5_000,
+  }), true);
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 1 } },
+    target: { status: 1, distance: 15.1 },
+    lastAttemptAt: 1_000,
+    now: 5_000,
+  }), true);
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 1 } },
+    target: { status: 1, distance: 20.1 },
+    lastAttemptAt: 1_000,
+    now: 5_000,
+  }), false);
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 1 } },
+    target: { status: 1, distance: 1.2 },
+    lastAttemptAt: 1_000,
+    now: 5_000,
+  }), false);
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 0 } },
+    target: { status: 1, distance: 3.9 },
+    lastAttemptAt: 1_000,
+    now: 5_000,
+  }), false);
+  assert.equal(shouldCorrectEngagedRange({
+    observation: { player: { status: 1 } },
+    target: { status: 1, distance: 3.9 },
+    lastAttemptAt: 4_000,
+    now: 5_000,
+  }), false);
 });
 
 test("excludes the unvalidated South Gustaberg multi-aggro pocket", () => {

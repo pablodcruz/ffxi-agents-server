@@ -121,6 +121,109 @@ The battlefield is level-capped at 25, allows Trusts, and lasts 15 minutes.
 Summoning Valaineral, Joachim, and Mihli Aliapoh before approaching the enemies
 was sufficient for the live clear.
 
+## Rank 3 and the low-friction mission interface
+
+The local private server now exposes `!agentmission` through the guarded
+`ffxi_private_server_bastok_mission` MCP operation and the
+`pnpm mcp:bastok-mission` wrapper. This is deliberately narrower than arbitrary
+GM commands:
+
+- it is self-only, Bastok-only, Rank-3-only, and requires the exact
+  `ADVANCE PRIVATE SERVER BASTOK MISSION` confirmation at the bridge;
+- `status` reports the current mission and status without changing progress;
+- `begin` accepts only mission IDs `10`, `11`, and `12`, enforces the pinned
+  mission rank-point gates and prerequisites, and performs the same
+  `player:addMission` operation as normal acceptance;
+- `donate` accepts only owned elemental crystals (item IDs `4096` through
+  `4103`), consumes them, and applies the pinned conquest donation formula;
+- it cannot complete missions, set mission status, grant items, set rank, or
+  target another character.
+
+Use it to remove repetitive mission-list navigation, not to skip mission
+objectives. NPC dialogue, trades, battlefield clears, kills, and zone
+transitions still advance through their normal pinned handlers.
+
+### 3-1 The Four Musketeers
+
+1. Begin mission `10` through the guarded interface after meeting its normal
+   rank-point gate.
+2. Interact with Iron Eater in the Metalworks and select `Right away`. The
+   briefing changes mission status from `0` to `1`.
+3. Enter Beadeaux and finish the rendezvous cutscene. This changes status to
+   `2`.
+4. Defeat twenty exact-name `Copper Quadav`. Each normal death event increments
+   mission status once, ending at `22`.
+5. Zone normally from Beadeaux into Pashhow Marshlands. The zone-in handler
+   completes the mission and awards `350` rank points.
+
+The detached farm supervisor supports bounded exact-name objectives with
+`--objective-target-name` and `--objective-kill-count`. Proactive selection is
+restricted to that exact name, reactive defense remains enabled for linked or
+aggressive mobs, all confirmed defeats of the exact name count, and the lease
+drains to a safe stop at the requested total. The first live solo BLM pull
+linked a second Copper Quadav and fell to 25% HP despite both kills; subsequent
+mission farming therefore uses normal Trust support.
+
+### 3-2 To the Forsaken Mines
+
+Mission `11` is repeatable and optional for reaching Rank 4. Its normal handler
+uses Hare Meat at `qm2` to spawn Blind Moby, awards a Glocolite, and completes
+when the Glocolite is traded to a mission guard. Completion awards `400` rank
+points.
+
+### 3-3 Jeuno
+
+Mission `12` is the required Rank-4 mission. Its pinned handler advances only
+through the normal Lucius briefing, Goggehn briefing, Delkfutt door/key step,
+and final Ru'Lude Gardens report. Completion awards Bastok Rank 4 and 5,000
+gil. Direct mission acceptance can remove the guard menu, but the guarded
+interface intentionally cannot bypass these objectives.
+
+Verified local route coordinates use AgentBridge axis order (`x`, horizontal
+`y`, elevation `z`):
+
+- Lucius, Metalworks zone `237`: `59.959, -42.321, -16.390`;
+- Goggehn, Ru'Lude Gardens zone `243`: `2.968, -79.610, 8.999`;
+- Porphyrion, Upper Delkfutt's Tower zone `158`:
+  `-298.160, 12.439, -144.165`;
+- Cermet Door `_542`, Lower Delkfutt's Tower zone `184`:
+  `600.484, -20.038, 13.333`;
+- Bastokan embassy door `_6r2`, Ru'Lude Gardens zone `243`:
+  `19.046, -75.110, 7.500`.
+
+The pinned database gives level-36 Porphyrion a guaranteed Delkfutt Key item
+`549`. Trading that key to `_542` converts it into the Delkfutt Key key item
+and changes mission status from `2` to `3`; the `_6r2` report then completes
+the mission.
+
+### Live Rank 3 to Rank 4 result
+
+- Six owned Fire Crystals supplied `996` rank points to unlock 3-1.
+- The Four Musketeers completed through its normal briefing, twenty credited
+  Copper Quadav deaths, Beadeaux-to-Pashhow transition, and completion
+  cutscene. It awarded `350` points.
+- Thirteen more owned Fire Crystals supplied `2,158` points, bringing the
+  total to `3,504` and unlocking mission 3-3 directly through its guarded
+  normal-gate acceptance operation.
+- One broad Beadeaux relocation entered an Elder/Zircon Quadav pocket and
+  caused a death. The successful continuation teleported to the verified
+  level-22/23 entrance cluster, enabled Trusts, disabled relocation, and used
+  a bounded exact-name objective. Exact-objective mode now waits instead of
+  falling back to unrelated proactive targets when its named mob is absent.
+- Porphyrion was defeated once with Trusts from an empty staging point at
+  `-340, 12, -144`; the guaranteed Delkfutt Key appeared in inventory.
+- The observed client name for `_542` is `Cermet Door`. The normal
+  `/item "Delkfutt Key" <t>` command started the mission cutscene after a long
+  delay, consumed the inventory key at event completion, granted the key item,
+  and advanced status to `3`. Trade verification now polls for up to 30
+  seconds instead of reporting a false failure after 2.5 seconds.
+- The final embassy report completed mission `12`, awarded 5,000 gil, and was
+  verified as `rank=4`, no current mission, and status `0`.
+- Cinematic `menu rem...` frames can remain blank for several seconds. The
+  dialogue helper now carries cinematic grace from its initial menu state and
+  across all later transition frames, while still stopping on unrecognized
+  selection menus.
+
 ## Reusable mission and battlefield findings
 
 - President Karst's initial `Any questions?` prompt loops on the first choice.

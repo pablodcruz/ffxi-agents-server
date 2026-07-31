@@ -22,6 +22,9 @@ x-lsb-common: &lsb-common
     # xi_map builds and persists any navmesh missing from the mesh image.
     - navmeshes:/server/navmeshes
     - ximeshes:/server/ximeshes:ro
+    # Narrow, self-only private-server command used to bypass only the Bastok
+    # mission-selection menu. Mission stages and completion remain normal.
+    - ./server-extensions/commands/agentmission.lua:/server/scripts/commands/agentmission.lua:ro
 
 services:
   mesh-seed:

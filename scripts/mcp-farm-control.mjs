@@ -20,6 +20,7 @@ const autoRelocateValue = argument("--auto-relocate", "false");
 const autoTransitionValue = argument("--auto-transition", "false");
 const trustedCampSweepValue = argument("--trusted-camp-sweep", "false");
 const autoJobAbilitiesValue = argument("--auto-job-abilities", "false");
+const summonTrustsValue = argument("--summon-trusts", "true");
 const nmRouteValue = argument("--nm-route", "false");
 const combatSpell = argument("--combat-spell", "");
 if (!["start", "status", "stop"].includes(action)) {
@@ -39,6 +40,9 @@ if (!["true", "false"].includes(trustedCampSweepValue)) {
 }
 if (!["true", "false"].includes(autoJobAbilitiesValue)) {
   throw new Error("--auto-job-abilities must be true or false.");
+}
+if (!["true", "false"].includes(summonTrustsValue)) {
+  throw new Error("--summon-trusts must be true or false.");
 }
 if (!["true", "false"].includes(nmRouteValue)) {
   throw new Error("--nm-route must be true or false.");
@@ -93,7 +97,11 @@ try {
       target_level: Number(argument("--target-level", "0")),
       quest_item_id: Number(argument("--quest-item-id", "0")),
       trusted_camp_sweep: trustedCampSweepValue === "true",
+      maximum_target_level_offset: Number(
+        argument("--maximum-target-level-offset", "1"),
+      ),
       auto_job_abilities: autoJobAbilitiesValue === "true",
+      summon_trusts: summonTrustsValue === "true",
       weapon_skill: argument("--weapon-skill", "Combo"),
       combat_spell: combatSpell,
       maximum_combat_spells_per_fight: Number(
@@ -107,6 +115,8 @@ try {
       minimum_free_inventory_slots: Number(
         argument("--minimum-free-inventory-slots", "5"),
       ),
+      objective_target_name: argument("--objective-target-name", ""),
+      objective_kill_count: Number(argument("--objective-kill-count", "0")),
       confirmation: FARM_CONFIRMATION,
     });
   } else if (action === "stop") {

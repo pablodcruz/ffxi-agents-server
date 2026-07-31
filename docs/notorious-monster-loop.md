@@ -1,8 +1,8 @@
-# Four-camp notorious-monster loop
+# Notorious-monster loop
 
 ## Goal
 
-Build one detached, low-call route that cycles through four useful low-level
+Build one detached, low-call route that cycles through useful low-level
 notorious monsters on the isolated LandSandBoat server. The route owns exact
 placeholder selection, NM priority, guarded zone changes, Trust repair,
 reactive defense, inventory stop conditions, and its own bounded lease.
@@ -12,19 +12,24 @@ This is a private-server workflow. Exact server IDs and guarded service
 teleports are local implementation details and must not be reused against
 retail or a shared server.
 
-## First route
+## Active route
 
 The route comes from the pinned server's exported mob/drop metadata and NM Lua
 `phList` definitions, not from retail guide coordinates.
 
 | Camp | Zone | Exact placeholder IDs | Exact NM IDs | Watched reward |
 | --- | ---: | --- | --- | --- |
-| Leaping Lizzy | South Gustaberg (107) | `17215867` | `17215868`, `17215888` | Bounding Boots `15351`, 15% |
-| Stinging Sophie | North Gustaberg (106) | `17211531`–`17211536`, `17211556`–`17211560` | `17211537`, `17211561` | Beestinger `16486`, 15% |
+| Leaping Lizzy | South Gustaberg (107) | `17215867` | `17215868`, `17215888` | Bounding Boots `15351`, 5% |
 | Jaggedy-Eared Jack | West Ronfaure (100) | `17187110` | `17187111` | Rabbit Charm `13112`, 1% |
 | Spiny Spipi | East Sarutabaruta (116) | `17252656` | `17252657` | Mist Silk Cape `13607`, 15% |
-All four NMs are level 9–11, so the route is deliberately conservative for
-Pablo at level 20 with Valaineral, Joachim, and Mihli Aliapoh.
+| Valkurm Emperor | Valkurm Dunes (103) | `17199434` | `17199438` | Empress Hairpin `15224`, 15% |
+
+The first three NMs are low level. Valkurm Emperor is level 29–30 and is
+included for Pablo near level 40. With `--summon-trusts true`, NM route mode
+uses profile-driven support: the first three camps skip the post-zone summon
+delay entirely, while Valkurm Emperor alone waits for the zone to settle and
+rebuilds Valaineral, Joachim, and Mihli Aliapoh before scouting. Reactive
+defense and the private-server-only travel guards remain active everywhere.
 
 ## Operating policy
 
@@ -41,6 +46,9 @@ One round should:
 5. Kill each eligible placeholder at most once in that camp visit, then move
    immediately to the next camp. Do not rescan after the configured
    placeholder quota is dead and do not wait through a five-minute respawn.
+   Valkurm Emperor is the exception: its lottery can place the NM at any of
+   fifty documented points, so that profile performs one bounded
+   post-placeholder NM-only sweep before leaving.
 6. Defend against a real engaged threat through the existing reactive path,
    but never broaden proactive admission to unrelated mobs.
 7. Update the local overlay with route round, camp number/name, placeholder
@@ -48,10 +56,25 @@ One round should:
 8. After the final round drains every reactive fight, return to the validated
    Bastok Markets safe endpoint before disarming.
 
-Cycling is the timer strategy. The live Lizzy calibration measured about
-five to five-and-a-half minutes between placeholder kills. A four-camp round
-can be shorter, so a repeated round may simply sweep past a placeholder that
-has not respawned yet instead of waiting in place.
+Cycling is the timer strategy. A repeated round may simply sweep past a
+placeholder that has not respawned yet instead of waiting in place.
+
+Leaping Lizzy and Stinging Sophie were restored on 2026-07-31 at the user's
+request. Stinging Sophie was later defeated and temporarily retired under the
+first-NM-removal policy, then restored when the user explicitly returned to
+the five-NM loop. Only Valkurm Emperor requires Trust support.
+
+Jaggedy-Eared Jack uses one exact Forest Hare lottery slot. The hare normally
+reappears about 5 minutes 30 seconds after despawn; if it does not, Jack may be
+occupying that slot. The route does not idle at the camp: the other four camps
+serve as the timer, and the next round checks the same exact slot with Jack
+prioritized over the hare.
+
+The restored route confirmed that behavior live on 2026-07-31: after its
+Forest Hare cycle, Jaggedy-Eared Jack `17187111` occupied the exact slot and
+was defeated. The watchdog cooperatively stopped the lease, and Jack was then
+retired from the active route under the completed-NM removal policy. The
+active route continues with Lizzy, Sophie, Spipi, and Emperor.
 
 ## Live Lizzy calibration
 
@@ -135,6 +158,43 @@ zone. A final stopped validation used the twelve-second delay across the
 Lizzy and Sophie transitions: all six Trust summons succeeded on pass one
 with no unavailable-cast events.
 
+## Restored five-camp live validation
+
+The 2026-07-31 restored route over Leaping Lizzy, Stinging Sophie,
+Jaggedy-Eared Jack, Spiny Spipi, and Valkurm Emperor completed one round in
+3 minutes 50 seconds with `nm_route_complete`:
+
+- All five camps completed and the guarded safe exit returned Pablo to Bastok
+  Markets.
+- Five exact placeholders were defeated, one at each configured camp; no NM
+  spawned and no watched reward dropped.
+- Lizzy, Sophie, Jack, and Spipi used no Trusts. The Emperor transition waited
+  for the zone to settle and then summoned Valaineral, Joachim, and Mihli
+  Aliapoh successfully before combat.
+- The run completed six fights, including one reactive handoff, with zero
+  deaths, recoveries, target-cycle errors, combat teleports, or combat
+  recovery actions.
+- The bounded Emperor post-placeholder sweep covered all eight configured
+  observation points before completing the round.
+- The watchdog briefly reported a stale heartbeat during a blocking zone
+  transition, then returned to healthy without intervention.
+
+## Stinging Sophie retirement and reduced route
+
+The repeated five-camp lease `5ec3c9f4-0022-4ed2-9c38-37e4da293089` defeated
+Stinging Sophie `17211561` on 2026-07-31 at 13:17:00 local time during round
+six. A persistent watchdog detected the first recorded NM kill and requested
+a cooperative stop before the route could advance:
+
+- The stopped lease recorded 25 fights, 21 exact placeholder kills, one NM
+  kill, five completed rounds, and zero deaths or recoveries.
+- Stinging Sophie's entire profile—including its placeholders, NM IDs,
+  Beestinger watch, and sweep points—was removed from the active route.
+- The active order is now Leaping Lizzy, Jaggedy-Eared Jack, Spiny Spipi, and
+  Valkurm Emperor. Emperor remains the only Trust-enabled camp.
+- Repeated runs can use the watchdog option `--stop-after-nm-kills 1` to stop
+  cooperatively as soon as a newly started lease records its first NM.
+
 ## Controls
 
 The route reuses the detached farm lease and its existing start/status/stop
@@ -156,6 +216,7 @@ pnpm mcp:farm-start -- \
   --quest-item-id 0 \
   --trusted-camp-sweep false \
   --auto-job-abilities true \
+  --summon-trusts true \
   --weapon-skill Combo \
   --combat-spell Blizzard \
   --maximum-combat-spells-per-fight 1 \

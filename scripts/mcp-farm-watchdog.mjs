@@ -7,6 +7,7 @@ import {
   FARM_CONFIRMATION,
   farmStatus,
   startFarm,
+  stopFarm,
 } from "../src/farm-supervisor-manager.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
@@ -31,6 +32,11 @@ const intervalSeconds = positiveInteger(
   argument("--interval-seconds", "15"),
   "--interval-seconds",
   { minimum: 5, maximum: 300 },
+);
+const stopAfterNmKills = positiveInteger(
+  argument("--stop-after-nm-kills", "0"),
+  "--stop-after-nm-kills",
+  { minimum: 0, maximum: 1000 },
 );
 if (argument("--confirmation") !== WATCHDOG_CONFIRMATION) {
   throw new Error(
@@ -67,6 +73,7 @@ async function writeState({
       disposition,
       heartbeat_at_ms: Date.now(),
       interval_seconds: intervalSeconds,
+      stop_after_nm_kills: stopAfterNmKills,
       renewals,
       observed_lease_id: farm?.lease_id || null,
       observed_farm_status: farm?.status || "idle",
@@ -78,11 +85,14 @@ async function writeState({
   );
 }
 
-function configForRenewal(config) {
+function configForRenewal(farm) {
+  const config = farm.config;
   return {
     projectDir,
     agentId,
-    zoneId: config.zone_id,
+    zoneId: config.nm_route
+      ? Number(farm.active_zone_id ?? config.zone_id)
+      : config.zone_id,
     maximumSeconds: config.maximum_seconds,
     maximumFights: config.maximum_fights,
     scanRadius: config.scan_radius,
@@ -93,7 +103,9 @@ function configForRenewal(config) {
     targetLevel: config.target_level,
     questItemId: config.quest_item_id,
     trustedCampSweep: config.trusted_camp_sweep,
+    maximumTargetLevelOffset: config.maximum_target_level_offset ?? 1,
     autoJobAbilities: config.auto_job_abilities,
+    summonTrusts: config.summon_trusts ?? true,
     weaponSkill: config.weapon_skill,
     combatSpell: config.combat_spell,
     maximumCombatSpellsPerFight: config.maximum_combat_spells_per_fight,
@@ -101,6 +113,8 @@ function configForRenewal(config) {
     nmRoute: config.nm_route,
     maximumRouteRounds: config.maximum_route_rounds,
     minimumFreeInventorySlots: config.minimum_free_inventory_slots,
+    objectiveTargetName: config.objective_target_name ?? "",
+    objectiveKillCount: config.objective_kill_count ?? 0,
     confirmation: FARM_CONFIRMATION,
   };
 }
@@ -122,6 +136,27 @@ function logTransition(farm, disposition) {
 async function monitorOnce() {
   const farm = await farmStatus({ projectDir, agentId });
   if (farm.active) {
+    const nmKills = Number(farm.counters?.notorious_monsters_killed || 0);
+    if (stopAfterNmKills > 0 && nmKills >= stopAfterNmKills) {
+      logTransition(farm, "stopping_nm_kill_threshold");
+      await writeState({
+        status: "running",
+        disposition: "stopping_nm_kill_threshold",
+        farm,
+      });
+      const stopped = await stopFarm({
+        projectDir,
+        agentId,
+        leaseId: farm.lease_id,
+      });
+      logTransition(stopped, "stopped_nm_kill_threshold");
+      await writeState({
+        status: "blocked",
+        disposition: "stopped_nm_kill_threshold",
+        farm: stopped,
+      });
+      return;
+    }
     logTransition(farm, "healthy");
     await writeState({ status: "running", disposition: "healthy", farm });
     return;
@@ -134,7 +169,7 @@ async function monitorOnce() {
   ) {
     logTransition(farm, "renewing");
     await writeState({ status: "running", disposition: "renewing", farm });
-    const renewed = await startFarm(configForRenewal(farm.config));
+    const renewed = await startFarm(configForRenewal(farm));
     renewals += 1;
     logTransition(renewed, "renewed");
     await writeState({

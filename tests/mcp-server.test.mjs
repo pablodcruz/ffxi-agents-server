@@ -32,7 +32,10 @@ async function createMockBridge(token) {
         "move_to_entity",
         "move_to_position",
         "move_inventory_item",
+        "sell_inventory_item",
+        "buy_vendor_item",
         "service_teleport",
+        "private_server_bastok_mission",
         "start_roe_objective",
         "set_activity_feed",
         "set_goal_overlay",
@@ -153,6 +156,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
     [
       "ffxi_gameplay_command",
       "ffxi_agent_profiles",
+      "ffxi_buy_vendor_item",
       "ffxi_character_state",
       "ffxi_change_job",
       "ffxi_clear_target",
@@ -170,11 +174,13 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_move_inventory_item",
       "ffxi_move_to_position",
       "ffxi_observe",
+      "ffxi_private_server_bastok_mission",
       "ffxi_recent_events",
       "ffxi_server_status",
       "ffxi_service_teleport",
       "ffxi_set_activity_feed",
       "ffxi_set_goal_overlay",
+      "ffxi_sell_inventory_item",
       "ffxi_start_roe_objective",
       "ffxi_stop_movement",
       "ffxi_target_entity",
@@ -367,6 +373,21 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   assert.equal(serviceTeleport.isError, undefined);
   assert.equal(serviceTeleport.structuredContent.operation, "service_teleport");
 
+  const bastokMission = await client.callTool({
+    name: "ffxi_private_server_bastok_mission",
+    arguments: {
+      action: "begin",
+      mission_id: 10,
+      quantity: 0,
+      confirmation: "ADVANCE PRIVATE SERVER BASTOK MISSION",
+    },
+  });
+  assert.equal(bastokMission.isError, undefined);
+  assert.equal(
+    bastokMission.structuredContent.operation,
+    "private_server_bastok_mission",
+  );
+
   const itemMove = await client.callTool({
     name: "ffxi_move_inventory_item",
     arguments: {
@@ -380,6 +401,47 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(itemMove.isError, undefined);
   assert.equal(itemMove.structuredContent.operation, "move_inventory_item");
+
+  const inventorySale = await client.callTool({
+    name: "ffxi_sell_inventory_item",
+    arguments: {
+      source_slot: 7,
+      item_id: 12385,
+      quantity: 1,
+      confirmation: "SELL PRIVATE SERVER INVENTORY ITEM",
+    },
+  });
+  assert.equal(inventorySale.isError, undefined);
+  assert.equal(inventorySale.structuredContent.operation, "sell_inventory_item");
+
+  const vendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17739806,
+      item_id: 4772,
+      maximum_price: 4600,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(vendorPurchase.isError, undefined);
+  assert.equal(vendorPurchase.structuredContent.operation, "buy_vendor_item");
+
+  const spellVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17793068,
+      item_id: 4768,
+      maximum_price: 6645,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(spellVendorPurchase.isError, undefined);
+  assert.equal(
+    spellVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
 
   const interaction = await client.callTool({
     name: "ffxi_interact",

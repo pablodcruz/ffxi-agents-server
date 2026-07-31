@@ -879,6 +879,29 @@ list. It then verifies that the shield count reaches zero and that gil rises
 by exactly 27,550 before updating the stream overlay. The shield is not part of
 `mcp:sell-loot`'s farming allowlist.
 
+### One-command inventory cleanup
+
+Use the repository-owned inventory policy instead of supplying raw container
+slots for routine cleanup:
+
+```sh
+pnpm mcp:inventory-cleanup
+```
+
+The command keeps one AgentBridge connection open, resolves each item by its
+current item ID and live location, and uses exact slots only as an internal
+FFXI packet detail. It sells only the reviewed common-loot and obsolete-gear
+allowlist, moves crystals to the Mog Case, archives non-vendor and quest items
+in the always-available Mog Case while outside the Mog House, moves retained
+equipment to the Wardrobe, and groups seals and Copper Vouchers in the Mog
+Sack. Every server-side change is still verified, but callers do not need to
+read or manage slots. A rejected sale or storage move is reported and left in
+place without retrying the destructive operation.
+
+Mog Safe 2 is not a suitable low-friction destination while adventuring: the
+server rejects writes to it outside the Mog House. Use the Mog Case for the
+field cleanup policy and reserve Safe 2 reorganization for a Mog House visit.
+
 A Parallels trial reminder appeared over the VM during the first live attempt
 and intercepted the confirm pulse. The helper observed no menu transition and
 stopped before selling; inventory and gil remained unchanged. After dismissing
@@ -921,6 +944,13 @@ LandSandBoat database query verified 4,934 Sparks, 1,100 Unity accolades, and
 27 stored Beastmen's Seals. The bridge initially retained an aggregate
 `defense` observation of 93, but a later zone transition refreshed it to 105,
 matching the expected +12 armor-defense increase.
+
+Later Black Mage leveling filled the 30-slot inventory with additional
+ordinary monster drops that had no progression role. The exact-item vendor
+allowlist was extended to Flint Stone, Lizard Skin, Crab Shell, Fiend Blood,
+Giant Stinger, and Rock Salt. Equipment, food, seals, vouchers, ciphers,
+Yagudo Caulk, Beitetsu materials, crystals, and Silk Thread remain outside the
+allowlist.
 
 ### Inventory expansion and exact container transfers
 

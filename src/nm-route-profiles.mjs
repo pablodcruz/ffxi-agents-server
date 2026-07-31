@@ -22,6 +22,7 @@ export const NM_ROUTE_PROFILES = Object.freeze([
     placeholder_server_ids: [17215867],
     notorious_monster_server_ids: [17215868, 17215888],
     watched_items: [{ item_id: 15351, name: "Bounding Boots" }],
+    requires_trusts: false,
     maximum_placeholder_kills_per_visit: 1,
     maximum_elevation_difference: 10,
     sweep_positions: [
@@ -50,6 +51,7 @@ export const NM_ROUTE_PROFILES = Object.freeze([
     ],
     notorious_monster_server_ids: [17211537, 17211561],
     watched_items: [{ item_id: 16486, name: "Beestinger" }],
+    requires_trusts: false,
     maximum_placeholder_kills_per_visit: 3,
     maximum_elevation_difference: 25,
     sweep_positions: [
@@ -61,28 +63,13 @@ export const NM_ROUTE_PROFILES = Object.freeze([
     ],
   }),
   profile({
-    id: "jaggedy_eared_jack",
-    name: "Jaggedy-Eared Jack",
-    zone_id: 100,
-    placeholder_server_ids: [17187110],
-    notorious_monster_server_ids: [17187111],
-    watched_items: [{ item_id: 13112, name: "Rabbit Charm" }],
-    maximum_placeholder_kills_per_visit: 1,
-    maximum_elevation_difference: 15,
-    sweep_positions: [
-      { x: -260, y: -220, z: -20 },
-      { x: -350, y: -230, z: -15 },
-      { x: -260, y: -315, z: -15 },
-      { x: -355, y: -310, z: -15 },
-    ],
-  }),
-  profile({
     id: "spiny_spipi",
     name: "Spiny Spipi",
     zone_id: 116,
     placeholder_server_ids: [17252656],
     notorious_monster_server_ids: [17252657],
     watched_items: [{ item_id: 13607, name: "Mist Silk Cape" }],
+    requires_trusts: false,
     maximum_placeholder_kills_per_visit: 1,
     maximum_elevation_difference: 12,
     sweep_positions: [
@@ -91,6 +78,32 @@ export const NM_ROUTE_PROFILES = Object.freeze([
       { x: 285, y: 235, z: -8 },
       { x: 360, y: 240, z: -5 },
       { x: 410, y: 270, z: -5 },
+    ],
+  }),
+  profile({
+    id: "valkurm_emperor",
+    name: "Valkurm Emperor",
+    zone_id: 103,
+    placeholder_server_ids: [17199434],
+    notorious_monster_server_ids: [17199438],
+    watched_items: [{ item_id: 15224, name: "Empress Hairpin" }],
+    requires_trusts: true,
+    maximum_placeholder_kills_per_visit: 1,
+    maximum_elevation_difference: 8,
+    post_placeholder_nm_sweep: true,
+    // Emperor can appear at any of fifty local spawn points after the
+    // Damselfly lottery succeeds. These eight points cover that documented
+    // area at the route's guarded 50-unit scan radius, with the placeholder
+    // position first so an ordinary visit remains quick.
+    sweep_positions: [
+      { x: -228.957, y: -101.226, z: 2.776 },
+      { x: -291.648, y: -42.898, z: 0.381 },
+      { x: -168.851, y: -54.953, z: -1.917 },
+      { x: -270.823, y: -16.349, z: -2.168 },
+      { x: -95.25, y: -49.386, z: -0.268 },
+      { x: -327, y: -21, z: -1 },
+      { x: -144.284, y: 4.202, z: -1.103 },
+      { x: -228.267, y: -36.761, z: -0.028 },
     ],
   }),
 ]);

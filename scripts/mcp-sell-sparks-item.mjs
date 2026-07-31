@@ -146,6 +146,25 @@ try {
     throw new Error(`Could not select exact item ID ${targetItem.id}.`);
   }
 
+  // DirectInput can expose the newly selected row while the retail client is
+  // still consuming the scrolling lease. Stage the confirmation on a fresh
+  // lease, matching the proven Sparks-purchase flow.
+  await client.callTool({ name: "ffxi_emergency_stop", arguments: {} });
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const reenable = await client.callTool({
+    name: "ffxi_enable_control",
+    arguments: { confirmation: "ENABLE PRIVATE SERVER CONTROL" },
+  });
+  if (reenable.isError) throw new Error("Could not re-arm exact-item sale confirmation.");
+  current = await state();
+  if (
+    menuName(current) !== "menu    shop"
+    || current.selected_item?.item_id !== targetItem.id
+    || itemUnits(current) !== 1
+  ) {
+    throw new Error("Exact shield selection changed before sale confirmation.");
+  }
+
   const initialGil = gil(current);
   await input("confirm");
   current = await waitFor((value) => menuName(value) === "menu    shopsell");

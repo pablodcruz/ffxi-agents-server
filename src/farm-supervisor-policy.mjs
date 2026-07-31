@@ -128,6 +128,18 @@ export function nextLevelBandTransition({
       reason: "level_25_sauromugue_lizard_bat_band",
     };
   }
+  if (
+    Number(targetLevel) >= 40
+    && Number(activeZoneId) === 123
+    && Number(playerLevel) >= 32
+  ) {
+    return {
+      zone_id: 124,
+      allowed_names: ["Yhoator Mandragora"],
+      maximum_level_offset: 5,
+      reason: "level_32_yhoator_mandragora_band",
+    };
+  }
   if (Number(activeZoneId) === 107 && Number(playerLevel) >= 14) {
     return {
       zone_id: 108,
@@ -151,6 +163,17 @@ export function shouldWaitForLevelProgress({
   nextAttemptAt,
 }) {
   return Boolean(dirty) && Number(now) < Number(nextAttemptAt);
+}
+
+export function shouldContinueSupervisorLoop({
+  stopping,
+  stopReason,
+  cooperativeStopRequestedAt,
+}) {
+  return !stopping && (
+    !stopReason
+    || cooperativeStopRequestedAt !== null
+  );
 }
 
 export function selectRelocationCamp({
@@ -193,7 +216,13 @@ export function selectRelocationCamp({
       !normalizedNames
       || normalizedNames.has(String(mob?.name || "").toLowerCase())
     )
-    && Number(mob?.mob_type || 0) === 0
+    && (
+      Number(mob?.mob_type || 0) === 0
+      || (
+        normalizedServerIds
+        && Number(mob?.mob_type || 0) === 2
+      )
+    )
     && !/\b(?:worm|stone eater|rock eater)\b/i.test(String(mob?.name || ""))
     && (allowAggressiveCandidates || !mob?.aggro)
     && finiteSpawn(mob)
@@ -316,6 +345,22 @@ export function shouldRecoverDroppedEngagement({
     && Number(target?.hp_percent) > 0
     && Number(target?.distance) <= 6
     && Number(now) - Number(lastAttemptAt) >= Number(retryDelayMilliseconds);
+}
+
+export function shouldAbandonStaleEngagement({
+  observation,
+  target,
+  outOfRangeFailure,
+  lastProgressAt = 0,
+  now = Date.now(),
+  staleMilliseconds = 15_000,
+}) {
+  return Boolean(outOfRangeFailure)
+    && Number(observation?.player?.status) === 1
+    && Number(target?.status) === 0
+    && Number(target?.hp_percent) > 0
+    && Number(target?.distance) > 6
+    && Number(now) - Number(lastProgressAt) >= Number(staleMilliseconds);
 }
 
 export function latestLineOfSightFailure(events, {
@@ -476,6 +521,43 @@ export function readyTrustSupport({
     ready: members.length >= Number(minimumCount),
     members: members.map((member) => String(member.name)),
   };
+}
+
+export function trustRepairDisposition({
+  liveCombat,
+  missingCount,
+  supportReady,
+  startedAt,
+  now = Date.now(),
+  timeoutMilliseconds = 60_000,
+}) {
+  if (liveCombat) return "combat";
+  if (Number(missingCount) === 0 && Boolean(supportReady)) return "ready";
+  if (
+    Number.isFinite(Number(startedAt))
+    && Number(now) - Number(startedAt) >= Number(timeoutMilliseconds)
+  ) {
+    return "timeout";
+  }
+  return "retry";
+}
+
+export function shouldCorrectEngagedRange({
+  observation,
+  target,
+  lastAttemptAt = 0,
+  now = Date.now(),
+  minimumDistance = 2.5,
+  maximumDistance = 20,
+  cooldownMilliseconds = 3_000,
+}) {
+  const distance = Number(target?.distance);
+  return Number(observation?.player?.status) === 1
+    && Number(target?.status) === 1
+    && Number.isFinite(distance)
+    && distance > Number(minimumDistance)
+    && distance <= Number(maximumDistance)
+    && Number(now) - Number(lastAttemptAt) >= Number(cooldownMilliseconds);
 }
 
 function escapeRegExp(value) {

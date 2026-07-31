@@ -45,6 +45,7 @@ try {
   if (initialState.isError || !valueOf(initialState).menu_open) {
     throw new Error("Dialogue advance requires an open in-game menu or dialogue.");
   }
+  const initialMenuName = String(valueOf(initialState).menu_name || "");
 
   const initialEvents = await client.callTool({
     name: "ffxi_recent_events",
@@ -91,10 +92,20 @@ try {
       const events = valueOf(recent).data || valueOf(recent);
       const newEvents = meaningfulEvents(events, lastEventId);
       lastEventId = Math.max(lastEventId, ...events.map((event) => event.id));
-      const menuOpen = valueOf(state).menu_open;
+      const stateValue = valueOf(state);
+      const menuOpen = stateValue.menu_open;
+      const menuName = String(stateValue.menu_name || "");
+      const cinematicMenu = /^menu\s+rem/i.test(menuName);
+      const cinematicTransition = menuName === "" && (
+        /^menu\s+rem/i.test(initialMenuName)
+        || steps.some(
+          (entry) => /^menu\s+rem/i.test(String(entry.menu_name || "")),
+        )
+      );
       steps.push({
         step,
         menu_open: menuOpen,
+        menu_name: menuName,
         events: newEvents.map(({ id, mode, message }) => ({ id, mode, message })),
       });
 
@@ -102,7 +113,7 @@ try {
         reason = "dialogue_closed";
         break;
       }
-      if (newEvents.length === 0) {
+      if (newEvents.length === 0 && !cinematicMenu && !cinematicTransition) {
         reason = "selection_menu_or_no_progress";
         break;
       }

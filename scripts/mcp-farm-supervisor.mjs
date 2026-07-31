@@ -7,6 +7,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parseCheckVerdict } from "../src/check-verdict.mjs";
 import {
+  agentUsageOverlayText,
+  summarizeDailyUsage,
+} from "../src/agent-usage-telemetry.mjs";
+import {
   canCompleteCooperativeStop,
   canStopAtFightLimit,
   classifyReactiveTiming,
@@ -25,13 +29,17 @@ import {
   selectProactiveTarget,
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
+  shouldAbandonStaleEngagement,
   shouldAutoCancelMenu,
   shouldRecoverDroppedEngagement,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   shouldSkipEngagementForCooperativeStop,
+  shouldContinueSupervisorLoop,
+  shouldCorrectEngagedRange,
   shouldWaitForLevelProgress,
   targetDefeated,
+  trustRepairDisposition,
 } from "../src/farm-supervisor-policy.mjs";
 import {
   playerPartyMember,
@@ -57,6 +65,7 @@ import {
 } from "../src/nm-route-policy.mjs";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
+const agentUsagePath = path.join(projectDir, "runtime", "agent-usage.json");
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -105,7 +114,14 @@ const autoTransition = booleanArgument("--auto-transition");
 const targetLevel = integerArgument("--target-level", 0, 0, 99);
 const questItemId = integerArgument("--quest-item-id", 0, 0, 65534);
 const trustedCampSweep = booleanArgument("--trusted-camp-sweep");
+const maximumTargetLevelOffset = integerArgument(
+  "--maximum-target-level-offset",
+  1,
+  1,
+  5,
+);
 const autoJobAbilities = booleanArgument("--auto-job-abilities");
+const summonTrusts = booleanArgument("--summon-trusts", true);
 const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
 const combatSpellValue = String(argument("--combat-spell", ""));
 const combatSpell = combatSpellValue
@@ -115,7 +131,7 @@ const maximumCombatSpellsPerFight = integerArgument(
   "--maximum-combat-spells-per-fight",
   0,
   0,
-  3,
+  6,
 );
 const minimumCastMpPercent = integerArgument(
   "--minimum-cast-mp-percent",
@@ -136,6 +152,21 @@ const minimumFreeInventorySlots = integerArgument(
   1,
   20,
 );
+const objectiveTargetNameValue = String(argument("--objective-target-name", ""));
+const objectiveTargetName = objectiveTargetNameValue
+  ? safeLabel(objectiveTargetNameValue, "--objective-target-name")
+  : "";
+const objectiveKillCount = integerArgument(
+  "--objective-kill-count",
+  0,
+  0,
+  200,
+);
+if (Boolean(objectiveTargetName) !== (objectiveKillCount > 0)) {
+  throw new Error(
+    "--objective-target-name and a positive --objective-kill-count must be provided together.",
+  );
+}
 if (!combatSpell && maximumCombatSpellsPerFight > 0) {
   throw new Error("--combat-spell is required when combat spell casts are enabled.");
 }
@@ -205,6 +236,7 @@ if (
     || trustedCampSweep
     || autoTransition
     || autoRelocate
+    || objectiveTargetName
   )
 ) {
   throw new Error(
@@ -246,6 +278,7 @@ const client = new Client({
 
 const counters = {
   fights_completed: 0,
+  objective_kills: 0,
   proactive_engagements: 0,
   reactive_engagements: 0,
   multi_target_handoffs: 0,
@@ -313,11 +346,13 @@ let nmRouteSweepIndex = 0;
 let lastNmRouteSweepAt = 0;
 let nmRoutePostKillScanUntil = 0;
 let nmRouteNmKilled = false;
+let nmRoutePostPlaceholderSweepPending = false;
 const nmRoutePlaceholderKills = new Set();
 const nmRouteObservedRewards = new Set();
 let levelGoalOverlayDirty = targetLevel > 0;
 let lastLevelGoalProgressKey = null;
 let nextLevelGoalOverlayAttemptAt = 0;
+let trustRepairStartedAt = null;
 const cooldowns = new Map();
 const relocationCooldowns = new Map();
 const threatFirstSeen = new Map();
@@ -364,7 +399,9 @@ async function writeState(force = false) {
       target_level: targetLevel,
       quest_item_id: questItemId,
       trusted_camp_sweep: trustedCampSweep,
+      maximum_target_level_offset: maximumTargetLevelOffset,
       auto_job_abilities: autoJobAbilities,
+      summon_trusts: summonTrusts,
       weapon_skill: weaponSkill,
       combat_spell: combatSpell,
       maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
@@ -372,6 +409,8 @@ async function writeState(force = false) {
       nm_route: nmRoute,
       maximum_route_rounds: maximumRouteRounds,
       minimum_free_inventory_slots: minimumFreeInventorySlots,
+      objective_target_name: objectiveTargetName,
+      objective_kill_count: objectiveKillCount,
     },
     nm_route: nmRoute
       ? {
@@ -382,6 +421,11 @@ async function writeState(force = false) {
           maximum_rounds: maximumRouteRounds,
           placeholder_kills_this_visit: nmRoutePlaceholderKills.size,
           sweep_index: nmRouteSweepIndex,
+          post_placeholder_sweep_pending:
+            nmRoutePostPlaceholderSweepPending,
+          trusts_required: Boolean(
+            NM_ROUTE_PROFILES[nmRouteCampIndex]?.requires_trusts,
+          ),
           observed_reward_item_ids: [...nmRouteObservedRewards],
         }
       : null,
@@ -474,6 +518,21 @@ const mainJobNames = new Map([
   [6, "THIEF"],
 ]);
 
+async function currentAgentUsageOverlayText() {
+  try {
+    const state = JSON.parse(await fs.readFile(agentUsagePath, "utf8"));
+    return agentUsageOverlayText(summarizeDailyUsage(state));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      log("agent_usage_telemetry_error", { message: error.message });
+    }
+    return agentUsageOverlayText({
+      model: "ChatGPT 5.6 Sol",
+      tokens_per_hour: null,
+    });
+  }
+}
+
 async function updateLevelGoalOverlay() {
   if (targetLevel <= 0) return null;
   const state = await characterState();
@@ -496,6 +555,7 @@ async function updateLevelGoalOverlay() {
   const existing = state?.goal_overlay || {};
   const gil = Number(existing.current_gil);
   const targetGil = Number(existing.target_gil);
+  const usageText = await currentAgentUsageOverlayText();
   await call("ffxi_set_goal_overlay", {
     enabled: true,
     current_gil: Number.isSafeInteger(gil) && gil >= 0 ? gil : 0,
@@ -504,8 +564,8 @@ async function updateLevelGoalOverlay() {
       : 10_000,
     title: `CURRENT GOAL: ${mainJobName} LEVEL ${targetLevel}`,
     progress_label: level >= targetLevel
-      ? `LEVEL ${level} REACHED | AUTOMATED LEVELING COMPLETE`
-      : `LEVEL ${level} | ${currentExp}/${neededExp} EXP | LOCAL AUTOMATION ACTIVE`,
+      ? `LEVEL ${level} REACHED | COMPLETE | ${usageText}`
+      : `LEVEL ${level} | ${currentExp}/${neededExp} EXP | ${usageText}`,
   });
   log("level_goal_overlay_updated", {
     level,
@@ -521,6 +581,12 @@ async function updateLevelGoalOverlay() {
 
 function currentNmRouteProfile() {
   return NM_ROUTE_PROFILES[nmRouteCampIndex] || null;
+}
+
+function trustSupportRequired() {
+  if (!summonTrusts) return false;
+  if (!nmRoute) return true;
+  return Boolean(currentNmRouteProfile()?.requires_trusts);
 }
 
 async function updateNmRouteOverlay({ complete = false } = {}) {
@@ -595,6 +661,7 @@ function availablePartyNames(observation) {
 }
 
 function missingDesiredTrusts(observation) {
+  if (!trustSupportRequired()) return [];
   const names = availablePartyNames(observation);
   return desiredTrusts.filter(
     (trust) => !names.has(trust.observed_name),
@@ -653,6 +720,51 @@ async function ensureTrustParty(observation) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   return current;
+}
+
+async function repairTrustParty(observation, source) {
+  if (trustRepairStartedAt === null) trustRepairStartedAt = Date.now();
+  const missingBefore = missingDesiredTrusts(observation);
+  await transition("repairing_trusts", {
+    source,
+    missing: missingBefore.map((trust) => trust.observed_name),
+  });
+  let current = await ensureTrustParty(observation);
+  const missingAfter = missingDesiredTrusts(current);
+  const support = readyTrustSupport({
+    party: current.party,
+    playerName: current.player?.name,
+    zoneId: activeZoneId,
+  });
+  const disposition = trustRepairDisposition({
+    liveCombat: hasLiveCombat(current),
+    missingCount: missingAfter.length,
+    supportReady: support.ready,
+    startedAt: trustRepairStartedAt,
+  });
+  if (disposition === "ready") {
+    counters.trust_refreshes += 1;
+    log("trust_party_repaired", {
+      source,
+      available_support: support.members,
+    });
+    trustRepairStartedAt = null;
+  } else if (disposition === "retry") {
+    log("trust_repair_waiting", {
+      source,
+      missing: missingAfter.map((trust) => trust.observed_name),
+      available_support: support.members,
+      player_level: playerPartyMember(current)?.main_job_level,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    current = await sample();
+  }
+  return {
+    observation: current,
+    disposition,
+    support,
+    missing: missingAfter,
+  };
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -816,13 +928,13 @@ async function closeWithTargetFollow(observation, target) {
     entity
     && followDistance > 1.25
     && followDistance >= startedDistance - 0.25
-    && followDistance <= 10
+    && followDistance <= threatDistance
   ) {
     await armControl();
     const movement = await call("ffxi_move_to_entity", {
       server_id: Number(target.server_id),
       name: target.name,
-      max_start_distance: 10,
+      max_start_distance: threatDistance,
       stop_distance: 1.1,
       timeout_seconds: 3,
       stuck_seconds: 1,
@@ -928,8 +1040,11 @@ async function engage(target, mode, {
     los_recovery_attempts: 0,
     last_reengage_attempt_at_ms: 0,
     reengage_attempts: 0,
+    last_range_correction_at_ms: 0,
     combat_spells_used: 0,
     last_combat_spell_at_ms: 0,
+    last_progress_at_ms: Date.now(),
+    last_observed_hp_percent: Number(targetAtAttack?.hp_percent),
   };
   currentMode = mode;
   missingTargetSamples = 0;
@@ -1369,7 +1484,7 @@ async function transitionToLevelBand(profile, camp, observation) {
   counters.zone_transitions += 1;
   ingestEvents(after);
   observeThreats(after);
-  after = await ensureTrustParty(after);
+  if (trustSupportRequired()) after = await ensureTrustParty(after);
   log("zone_transition_complete", {
     zone_id: activeZoneId,
     destination,
@@ -1437,7 +1552,7 @@ async function transitionToNmRouteCamp(profile, observation) {
   if (fromZoneId !== activeZoneId) counters.zone_transitions += 1;
   ingestEvents(after);
   observeThreats(after);
-  if (fromZoneId !== activeZoneId) {
+  if (fromZoneId !== activeZoneId && trustSupportRequired()) {
     log("nm_route_post_zone_trust_delay", {
       camp_name: profile.name,
       delay_ms: postZoneTrustDelayMilliseconds,
@@ -1448,7 +1563,7 @@ async function transitionToNmRouteCamp(profile, observation) {
     ));
     after = await sample();
   }
-  after = await ensureTrustParty(after);
+  if (trustSupportRequired()) after = await ensureTrustParty(after);
   log("nm_route_transition_complete", {
     camp_name: profile.name,
     zone_id: activeZoneId,
@@ -1551,6 +1666,7 @@ async function prepareNmRouteCamp(observation) {
   lastNmRouteSweepAt = Date.now();
   nmRoutePostKillScanUntil = 0;
   nmRouteNmKilled = false;
+  nmRoutePostPlaceholderSweepPending = false;
   nmRoutePlaceholderKills.clear();
   await updateNmRouteOverlay();
   log("nm_route_camp_started", {
@@ -1599,6 +1715,7 @@ async function advanceNmRouteCamp(observation) {
   lastNmRouteSweepAt = 0;
   nmRoutePostKillScanUntil = 0;
   nmRouteNmKilled = false;
+  nmRoutePostPlaceholderSweepPending = false;
   nmRoutePlaceholderKills.clear();
   noTargetSince = null;
   await writeState(true);
@@ -1666,7 +1783,14 @@ async function recordNmRouteDefeat(target) {
   } else if (profile.placeholder_server_ids.includes(serverId)) {
     nmRoutePlaceholderKills.add(serverId);
     counters.nm_placeholders_killed += 1;
-    nmRoutePostKillScanUntil = 0;
+    if (profile.post_placeholder_nm_sweep) {
+      nmRoutePostPlaceholderSweepPending = true;
+      nmRoutePostKillScanUntil = Date.now() + 3_000;
+      nmRouteSweepIndex = 0;
+      lastNmRouteSweepAt = 0;
+    } else {
+      nmRoutePostKillScanUntil = 0;
+    }
     log("nm_route_placeholder_defeated", {
       camp_name: profile.name,
       name: target.name,
@@ -1881,12 +2005,29 @@ function excludedServerIds() {
   return new Set(cooldowns.keys());
 }
 
+function selectObjectiveTarget(observation, name, radius, excludedIds) {
+  if (!name) return null;
+  return (observation?.nearby_entities || [])
+    .filter((entity) => (
+      entity.entity_type === 2
+      && entity.name === name
+      && Number(entity.status) === 0
+      && Number(entity.hp_percent) > 0
+      && Number(entity.distance) <= Number(radius)
+      && !excludedIds.has(Number(entity.server_id))
+    ))
+    .sort((left, right) => (
+      Number(left.distance) - Number(right.distance)
+      || Number(left.server_id) - Number(right.server_id)
+    ))[0] || null;
+}
+
 function watchedDropNames() {
   if (questItemId <= 0) return [];
   return [...new Set(
     metadata
       .filter((mob) => (
-        Number(mob.mob_type || 0) === 0
+        [0, 2].includes(Number(mob.mob_type || 0))
         && (mob.drops || []).some((drop) => (
           Number(drop.item_id) === questItemId
           && Number(drop.item_rate) > 0
@@ -1905,7 +2046,7 @@ function watchedSpawnServerIds() {
     ]);
   }
   const dropMobs = metadata.filter((mob) => (
-    Number(mob.mob_type || 0) === 0
+    [0, 2].includes(Number(mob.mob_type || 0))
     && (mob.drops || []).some((drop) => (
       Number(drop.item_id) === questItemId
       && Number(drop.item_rate) > 0
@@ -1962,6 +2103,13 @@ async function relocateLotterySweep(observation) {
 
 async function handleFight(observation) {
   const entity = entityById(observation, currentTarget.server_id);
+  if (
+    entity
+    && Number(entity.hp_percent) < Number(currentTarget.last_observed_hp_percent)
+  ) {
+    currentTarget.last_progress_at_ms = Date.now();
+    currentTarget.last_observed_hp_percent = Number(entity.hp_percent);
+  }
   if (!entity) missingTargetSamples += 1;
   else missingTargetSamples = 0;
   const defeated = targetDefeated(entity) && (
@@ -1996,6 +2144,48 @@ async function handleFight(observation) {
   }
 
   if (currentTarget.engagement_counted) {
+    if (shouldCorrectEngagedRange({
+      observation,
+      target: entity,
+      lastAttemptAt: currentTarget.last_range_correction_at_ms,
+    })) {
+      currentTarget.last_range_correction_at_ms = Date.now();
+      const startedDistance = Number(entity.distance);
+      try {
+        let selected = observation;
+        if (
+          Number(selected?.target?.server_id)
+          !== Number(currentTarget.server_id)
+        ) {
+          selected = await selectExactTarget(entity, threatDistance);
+        }
+        const corrected = await closeWithTargetFollow(selected, entity);
+        const finishedDistance = Number(
+          entityById(corrected, currentTarget.server_id)?.distance,
+        );
+        if (Number.isFinite(finishedDistance) && finishedDistance <= 2.5) {
+          currentTarget.los_recovery_attempts = 0;
+        }
+        log("engaged_range_corrected", {
+          mode: currentMode,
+          name: currentTarget.name,
+          server_id: currentTarget.server_id,
+          started_distance: startedDistance,
+          finished_distance: finishedDistance,
+        });
+      } catch (error) {
+        log("engaged_range_correction_race", {
+          mode: currentMode,
+          name: currentTarget.name,
+          server_id: currentTarget.server_id,
+          started_distance: startedDistance,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      await transition("fighting");
+      await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
+      return;
+    }
     if (
       shouldRecoverDroppedEngagement({
         observation,
@@ -2041,6 +2231,38 @@ async function handleFight(observation) {
           .replace(/[^\x20-\x7e]+/g, " ")
           .trim(),
       );
+      if (shouldAbandonStaleEngagement({
+        observation,
+        target: entity,
+        outOfRangeFailure: outOfRange,
+        lastProgressAt: currentTarget.last_progress_at_ms,
+      })) {
+        const abandonedTarget = { ...currentTarget };
+        await transition("stale_engagement_recovery", {
+          name: abandonedTarget.name,
+          server_id: abandonedTarget.server_id,
+          distance: entity?.distance,
+          reason: "idle_target_out_of_range",
+        });
+        await command("/attackoff").catch(() => {});
+        await call("ffxi_stop_movement").catch(() => {});
+        cooldowns.set(
+          Number(abandonedTarget.server_id),
+          Date.now() + cooldownMilliseconds,
+        );
+        previousTargetId = abandonedTarget.server_id;
+        currentTarget = null;
+        currentMode = null;
+        missingTargetSamples = 0;
+        log("stale_engagement_abandoned", {
+          name: abandonedTarget.name,
+          server_id: abandonedTarget.server_id,
+          distance: entity?.distance,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        await transition("cooldown");
+        return;
+      }
       if (
         Number(currentTarget.los_recovery_attempts) < 3
         && Date.now() - Number(currentTarget.last_los_recovery_at_ms) >= 3000
@@ -2163,6 +2385,12 @@ async function handleFight(observation) {
   if (defeated) {
     const defeatedTarget = currentTarget;
     counters.fights_completed += 1;
+    if (
+      objectiveTargetName
+      && defeatedTarget.name === objectiveTargetName
+    ) {
+      counters.objective_kills += 1;
+    }
     await recordNmRouteDefeat(defeatedTarget);
     previousTargetId = defeatedTarget.server_id;
     currentTarget = null;
@@ -2173,7 +2401,20 @@ async function handleFight(observation) {
       name: defeatedTarget.name,
       server_id: defeatedTarget.server_id,
       player_hp_percent: observation.player?.hp_percent,
+      objective_kills: counters.objective_kills,
+      objective_kill_count: objectiveKillCount,
     });
+    if (
+      objectiveTargetName
+      && counters.objective_kills >= objectiveKillCount
+    ) {
+      stopReason = "objective_kill_limit";
+      cooperativeStopRequestedAt ??= Date.now();
+      log("objective_kill_limit_reached", {
+        target_name: objectiveTargetName,
+        kills: counters.objective_kills,
+      });
+    }
     const nextThreat = selectReactiveThreat(observation, {
       maxDistance: threatDistance,
       excludedServerIds: [previousTargetId],
@@ -2244,6 +2485,7 @@ try {
     target_level: targetLevel,
     quest_item_id: questItemId,
     trusted_camp_sweep: trustedCampSweep,
+    maximum_target_level_offset: maximumTargetLevelOffset,
     auto_job_abilities: autoJobAbilities,
     combat_spell: combatSpell,
     maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
@@ -2251,11 +2493,16 @@ try {
     nm_route: nmRoute,
     maximum_route_rounds: maximumRouteRounds,
     minimum_free_inventory_slots: minimumFreeInventorySlots,
+    objective_target_name: objectiveTargetName,
+    objective_kill_count: objectiveKillCount,
   });
 
   let observation = await observe();
   lastEventId = maxObservedEventId(observation);
-  if (!nmRoute) {
+  const initialSessionValid = verifySession(observation);
+  if (!initialSessionValid && stopReason === "player_defeated") {
+    await completeDeathRecovery(observation);
+  } else if (initialSessionValid && !nmRoute && summonTrusts) {
     observation = await ensureTrustParty(observation);
   }
   leaseOriginPosition = observation?.player?.position
@@ -2263,7 +2510,11 @@ try {
     : null;
   observeThreats(observation);
   await writeState();
-  while (!stopping) {
+  while (shouldContinueSupervisorLoop({
+    stopping,
+    stopReason,
+    cooperativeStopRequestedAt,
+  })) {
     if (Date.now() - startedAt >= maximumSeconds * 1000) {
       stopReason = "time_limit";
       break;
@@ -2450,21 +2701,22 @@ try {
     }
 
     const missingTrusts = missingDesiredTrusts(observation);
-    if (missingTrusts.length > 0) {
-      await transition("repairing_trusts", {
-        missing: missingTrusts.map((trust) => trust.observed_name),
-      });
-      observation = await ensureTrustParty(observation);
-      if (hasLiveCombat(observation)) continue;
-      const stillMissing = missingDesiredTrusts(observation);
-      if (stillMissing.length > 0) {
-        log("trust_repair_waiting", {
-          missing: stillMissing.map((trust) => trust.observed_name),
-          player_level: playerPartyMember(observation)?.main_job_level,
+    if (trustSupportRequired() && missingTrusts.length > 0) {
+      const repair = await repairTrustParty(observation, "post_combat");
+      observation = repair.observation;
+      if (repair.disposition === "timeout") {
+        stopReason = "trusted_camp_support_unavailable";
+        stopping = true;
+        log("farm_supervisor_blocked", {
+          reason: stopReason,
+          available_support: repair.support.members,
+          missing: repair.missing.map((trust) => trust.observed_name),
         });
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
-        continue;
+        break;
       }
+      continue;
+      } else if (trustSupportRequired()) {
+        trustRepairStartedAt = null;
     }
 
     const partyPlayer = playerPartyMember(observation);
@@ -2511,7 +2763,14 @@ try {
         })
       : null;
     const routeProfile = nmRoute ? currentNmRouteProfile() : null;
-    const target = nmRoute
+    const currentExcludedServerIds = excludedServerIds();
+    const objectiveTarget = selectObjectiveTarget(
+      observation,
+      objectiveTargetName,
+      scanRadius,
+      currentExcludedServerIds,
+    );
+    const target = objectiveTargetName ? objectiveTarget : (nmRoute
       ? selectExactLotteryTarget({
           observation,
           metadata,
@@ -2522,7 +2781,7 @@ try {
           notoriousMonsterServerIds: routeProfile.notorious_monster_server_ids,
           playerLevel: Number(partyPlayer?.main_job_level),
           radius: scanRadius,
-          excludedServerIds: excludedServerIds(),
+          excludedServerIds: currentExcludedServerIds,
           maximumElevationDifference:
             routeProfile.maximum_elevation_difference,
           maximumLevelOffset: 4,
@@ -2533,7 +2792,8 @@ try {
           metadata,
           playerLevel: Number(partyPlayer?.main_job_level),
           radius: scanRadius,
-          excludedServerIds: excludedServerIds(),
+          maximumLevelOffset: maximumTargetLevelOffset,
+          excludedServerIds: currentExcludedServerIds,
         })
       : questProfile?.lottery
         ? selectExactLotteryTarget({
@@ -2543,7 +2803,7 @@ try {
           notoriousMonsterServerIds: questProfile.notorious_monster_server_ids,
           playerLevel: Number(partyPlayer?.main_job_level),
           radius: scanRadius,
-          excludedServerIds: excludedServerIds(),
+          excludedServerIds: currentExcludedServerIds,
         })
         : questProfile
         ? selectQuestDropTarget({
@@ -2554,7 +2814,7 @@ try {
           preferredNames: questProfile.preferred_names,
           playerLevel: Number(partyPlayer?.main_job_level),
           radius: scanRadius,
-          excludedServerIds: excludedServerIds(),
+          excludedServerIds: currentExcludedServerIds,
         })
         : selectProactiveTarget({
           observation,
@@ -2562,8 +2822,8 @@ try {
           playerLevel: Number(partyPlayer?.main_job_level),
           zoneId: activeZoneId,
           radius: scanRadius,
-          excludedServerIds: excludedServerIds(),
-        });
+          excludedServerIds: currentExcludedServerIds,
+        }));
     if (!target) {
       noTargetSince ??= Date.now();
       if (nmRoute) {
@@ -2592,11 +2852,20 @@ try {
           profile,
           nmRoutePlaceholderKills,
         ).length === 0;
+        const postPlaceholderSweepActive = (
+          placeholdersComplete
+          && Boolean(profile.post_placeholder_nm_sweep)
+          && nmRoutePostPlaceholderSweepPending
+        );
         const sweepComplete = !nextRoutePosition({
           profile,
           sweepIndex: nmRouteSweepIndex,
         });
-        if (nmRouteNmKilled || placeholdersComplete || campTimedOut) {
+        if (
+          nmRouteNmKilled
+          || (placeholdersComplete && !postPlaceholderSweepActive)
+          || campTimedOut
+        ) {
           observation = await advanceNmRouteCamp(observation);
           continue;
         }
@@ -2644,16 +2913,18 @@ try {
           allowedServerIds: questItemId > 0
             ? watchedSpawnServerIds()
             : null,
-          allowedNames: questItemId > 0
+          allowedNames: objectiveTargetName
+            ? [objectiveTargetName]
+            : questItemId > 0
             ? null
             : (trustedCampSweep ? null : questProfile?.names),
           excludedServerIds: excludedRelocationServerIds(),
           clusterRadius: scanRadius,
-          minimumAggroDistance: questItemId > 0 ? 0 : 40,
-          allowAggressiveCandidates: questItemId > 0,
-          minimumLevelOffset: questItemId > 0 ? 99 : 3,
+          minimumAggroDistance: (questItemId > 0 || objectiveTargetName) ? 0 : 40,
+          allowAggressiveCandidates: questItemId > 0 || Boolean(objectiveTargetName),
+          minimumLevelOffset: (questItemId > 0 || objectiveTargetName) ? 99 : 3,
           maximumLevelOffset: trustedCampSweep
-            ? 1
+            ? maximumTargetLevelOffset
             : relocationMaximumLevelOffset({
                 zoneId: activeZoneId,
                 playerLevel,
@@ -2694,7 +2965,7 @@ try {
         continue;
       }
 
-      const checked = trustedCampSweep || nmRoute
+      const checked = trustedCampSweep || nmRoute || objectiveTargetName
         ? {
             observation: await selectExactTarget(target, scanRadius),
             threat: null,
@@ -2717,16 +2988,30 @@ try {
         playerName: observation.player?.name,
         zoneId: activeZoneId,
       });
-      if ((trustedCampSweep || nmRoute) && !trustSupport.ready) {
-        stopReason = "trusted_camp_support_unavailable";
-        stopping = true;
-        log("farm_supervisor_blocked", {
-          reason: stopReason,
-          available_support: trustSupport.members,
-        });
-        break;
+      if (
+        trustSupportRequired()
+        && (trustedCampSweep || nmRoute)
+        && !trustSupport.ready
+      ) {
+        cooldowns.set(Number(target.server_id), Date.now() + 5_000);
+        const repair = await repairTrustParty(
+          observation,
+          "pre_engagement_guard",
+        );
+        observation = repair.observation;
+        if (repair.disposition === "timeout") {
+          stopReason = "trusted_camp_support_unavailable";
+          stopping = true;
+          log("farm_supervisor_blocked", {
+            reason: stopReason,
+            available_support: repair.support.members,
+            missing: repair.missing.map((trust) => trust.observed_name),
+          });
+          break;
+        }
+        continue;
       }
-      if (!trustedCampSweep && !nmRoute && !isFarmCheckApproved({
+      if (!trustedCampSweep && !nmRoute && !objectiveTargetName && !isFarmCheckApproved({
         checkVerdict: checked.verdict,
         allowCaution,
         trustedSupportReady: trustSupport.ready,
@@ -2745,6 +3030,7 @@ try {
       if (
         !trustedCampSweep
         && !nmRoute
+        && !objectiveTargetName
         && checked.verdict?.verdict === "caution"
       ) {
         log("target_caution_approved", {

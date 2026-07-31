@@ -63,7 +63,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     targetLevel: 20,
     questItemId: 539,
     trustedCampSweep: true,
+    maximumTargetLevelOffset: 5,
     autoJobAbilities: true,
+    summonTrusts: false,
     weaponSkill: "Combo",
     combatSpell: "Fire",
     maximumCombatSpellsPerFight: 1,
@@ -87,7 +89,9 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--target-level", "20",
     "--quest-item-id", "539",
     "--trusted-camp-sweep", "true",
+    "--maximum-target-level-offset", "5",
     "--auto-job-abilities", "true",
+    "--summon-trusts", "false",
     "--weapon-skill", "Combo",
     "--combat-spell", "Fire",
     "--maximum-combat-spells-per-fight", "1",
@@ -95,6 +99,8 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--nm-route", "true",
     "--maximum-route-rounds", "2",
     "--minimum-free-inventory-slots", "6",
+    "--objective-target-name", "",
+    "--objective-kill-count", "0",
     "--confirmation", FARM_CONFIRMATION,
   ]);
 });

@@ -515,6 +515,13 @@ camp for one drop-bearing family. This separates the reusable combat policy
 from the optional farming outcome and makes unattended combat independent of
 MCP analysis calls. `mcp:farm-drop` remains a short diagnostic lease.
 
+The default trusted-sweep admission ceiling is one level above the player.
+For an explicitly tested private-server camp whose database levels differ
+from the historical guide, `--maximum-target-level-offset` may raise that
+ceiling from 1 through 5 for that lease only. The configured value applies to
+both nearby selection and relocation, is persisted for watchdog renewal, and
+does not relax Trust, HP, inventory, session, combat, or death safeguards.
+
 ### Level-aware Monk abilities
 
 `--auto-job-abilities true` enables a conservative main-job-aware Monk
