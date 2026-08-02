@@ -179,7 +179,7 @@ Jaggedy-Eared Jack, Spiny Spipi, and Valkurm Emperor completed one round in
 - The watchdog briefly reported a stale heartbeat during a blocking zone
   transition, then returned to healthy without intervention.
 
-## Stinging Sophie retirement and reduced route
+## Prior retirements and restored five-camp route
 
 The repeated five-camp lease `5ec3c9f4-0022-4ed2-9c38-37e4da293089` defeated
 Stinging Sophie `17211561` on 2026-07-31 at 13:17:00 local time during round
@@ -190,8 +190,10 @@ a cooperative stop before the route could advance:
   kill, five completed rounds, and zero deaths or recoveries.
 - Stinging Sophie's entire profile—including its placeholders, NM IDs,
   Beestinger watch, and sweep points—was removed from the active route.
-- The active order is now Leaping Lizzy, Jaggedy-Eared Jack, Spiny Spipi, and
-  Valkurm Emperor. Emperor remains the only Trust-enabled camp.
+- Retirements are historical run state, not a permanent deletion of a proven
+  profile. For the current explicit ten-round five-NM goal, the active order is
+  Leaping Lizzy, Stinging Sophie, Jaggedy-Eared Jack, Spiny Spipi, and Valkurm
+  Emperor. Emperor remains the only Trust-enabled camp.
 - Repeated runs can use the watchdog option `--stop-after-nm-kills 1` to stop
   cooperatively as soon as a newly started lease records its first NM.
 

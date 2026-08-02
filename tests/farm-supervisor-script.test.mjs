@@ -61,3 +61,14 @@ test("exact-name objectives count confirmed kills and drain at their limit", asy
   assert.match(source, /stopReason = "objective_kill_limit"/);
   assert.match(source, /cooperativeStopRequestedAt \?\?= Date\.now\(\)/);
 });
+
+test("NM route re-arms control after each zone transition settles", async () => {
+  const source = await fs.readFile(
+    path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /NM route transition to \$\{profile\.name\}[\s\S]*?await armControl\(\);[\s\S]*?activeZoneId = Number\(profile\.zone_id\)/,
+  );
+});

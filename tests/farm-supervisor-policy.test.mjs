@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   canCompleteCooperativeStop,
   canStopAtFightLimit,
+  canStopAtTimeLimit,
   classifyReactiveTiming,
   excludedCombatPocket,
   hasLiveCombat,
@@ -15,6 +16,7 @@ import {
   parseCombatRewards,
   playerDefeated,
   readyTrustSupport,
+  shouldRefreshHealerTrust,
   relocationMaximumLevelOffset,
   safeCombatPosition,
   selectProactiveTarget,
@@ -23,6 +25,7 @@ import {
   shouldAbandonStaleEngagement,
   shouldAutoCancelMenu,
   shouldRecoverDroppedEngagement,
+  shouldRecoverResources,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
   shouldSkipEngagementForCooperativeStop,
@@ -822,6 +825,42 @@ test("retries a missed recovery command only while idle and still below threshol
   }), false);
 });
 
+test("caster recovery waits for the configured player MP reserve", () => {
+  const lowMp = observation({
+    player: { status: 0, hp_percent: 95 },
+    party: [{ slot: 0, mp_percent: 33 }],
+  });
+  const ready = observation({
+    player: { status: 0, hp_percent: 95 },
+    party: [{ slot: 0, mp_percent: 65 }],
+  });
+  assert.equal(shouldRecoverResources({
+    observation: lowMp,
+    minimumHpPercent: 75,
+    minimumMpPercent: 60,
+  }), true);
+  assert.equal(shouldRetryRecoveryCommand({
+    observation: lowMp,
+    minimumHpPercent: 75,
+    minimumMpPercent: 60,
+    lastCommandAt: 1_000,
+    now: 3_000,
+  }), true);
+  assert.equal(shouldRecoverResources({
+    observation: ready,
+    minimumHpPercent: 75,
+    minimumMpPercent: 60,
+  }), false);
+  assert.equal(shouldRecoverResources({
+    observation: observation({
+      player: { status: 33, hp_percent: 95 },
+      party: [{ slot: 0, mp_percent: 65 }],
+    }),
+    minimumHpPercent: 75,
+    minimumMpPercent: 60,
+  }), false);
+});
+
 test("auto-cancels known disposable menus unless reactive defense needs it", () => {
   assert.equal(shouldAutoCancelMenu({
     menuName: "menu    inline  ",
@@ -891,6 +930,35 @@ test("fight limits stop only after current and reactive combat are drained", () 
   assert.equal(canStopAtFightLimit({
     fightsCompleted: 5,
     maximumFights: 6,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+  }), false);
+});
+
+test("time limits stop new pulls but drain current and reactive combat", () => {
+  const idle = observation({ player: { status: 0, hp_percent: 90 } });
+  const fighting = observation({ player: { status: 1, hp_percent: 90 } });
+  assert.equal(canStopAtTimeLimit({
+    timeLimitReached: true,
+    observation: idle,
+    currentTarget: null,
+    reactiveThreat: null,
+  }), true);
+  assert.equal(canStopAtTimeLimit({
+    timeLimitReached: true,
+    observation: fighting,
+    currentTarget: { server_id: 42 },
+    reactiveThreat: null,
+  }), false);
+  assert.equal(canStopAtTimeLimit({
+    timeLimitReached: true,
+    observation: fighting,
+    currentTarget: null,
+    reactiveThreat: { server_id: 43 },
+  }), false);
+  assert.equal(canStopAtTimeLimit({
+    timeLimitReached: false,
     observation: idle,
     currentTarget: null,
     reactiveThreat: null,
@@ -1136,6 +1204,38 @@ test("corrects range only for a live engaged target outside melee distance", () 
   }), false);
 });
 
+test("refreshes an exhausted healer Trust only at a safe idle boundary", () => {
+  const party = [
+    { name: "Pablo", zone_id: 123, hp_percent: 100, mp_percent: 70 },
+    { name: "Valaineral", zone_id: 123, hp_percent: 90, mp_percent: 55 },
+    { name: "Naji", zone_id: 123, hp_percent: 100, mp_percent: 0 },
+    { name: "MihliAliapoh", zone_id: 123, hp_percent: 95, mp_percent: 6 },
+  ];
+  const input = {
+    party,
+    playerName: "Pablo",
+    zoneId: 123,
+    playerStatus: 0,
+    menuOpen: false,
+    liveCombat: false,
+  };
+
+  assert.equal(shouldRefreshHealerTrust(input), true);
+  assert.equal(shouldRefreshHealerTrust({
+    ...input,
+    party: party.map((member) => (
+      member.name === "MihliAliapoh" ? { ...member, mp_percent: 11 } : member
+    )),
+  }), false);
+  assert.equal(shouldRefreshHealerTrust({ ...input, liveCombat: true }), false);
+  assert.equal(shouldRefreshHealerTrust({ ...input, playerStatus: 1 }), false);
+  assert.equal(shouldRefreshHealerTrust({ ...input, menuOpen: true }), false);
+  assert.equal(shouldRefreshHealerTrust({
+    ...input,
+    party: party.filter((member) => member.name !== "MihliAliapoh"),
+  }), false);
+});
+
 test("excludes the unvalidated South Gustaberg multi-aggro pocket", () => {
   assert.equal(excludedCombatPocket({
     zoneId: 107,
@@ -1148,6 +1248,14 @@ test("excludes the unvalidated South Gustaberg multi-aggro pocket", () => {
   assert.equal(excludedCombatPocket({
     zoneId: 106,
     position: { x: 12, y: -168 },
+  }), null);
+  assert.equal(excludedCombatPocket({
+    zoneId: 107,
+    position: { x: -514, y: -410 },
+  })?.reason, "validated_shrapnel_multi_aggro");
+  assert.equal(excludedCombatPocket({
+    zoneId: 107,
+    position: { x: -390, y: -410 },
   }), null);
 });
 

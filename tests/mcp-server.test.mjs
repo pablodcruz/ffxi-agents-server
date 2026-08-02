@@ -36,6 +36,12 @@ async function createMockBridge(token) {
         "buy_vendor_item",
         "service_teleport",
         "private_server_bastok_mission",
+        "private_server_vendor_transaction",
+        "private_server_rdm30_gear",
+        "private_server_rdm_spell",
+        "private_server_rdm_spell_grant",
+        "private_server_reload_agentspell",
+        "cancel_new_adventurer_status",
         "start_roe_objective",
         "set_activity_feed",
         "set_goal_overlay",
@@ -157,6 +163,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_gameplay_command",
       "ffxi_agent_profiles",
       "ffxi_buy_vendor_item",
+      "ffxi_cancel_new_adventurer_status",
       "ffxi_character_state",
       "ffxi_change_job",
       "ffxi_clear_target",
@@ -175,6 +182,11 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_move_to_position",
       "ffxi_observe",
       "ffxi_private_server_bastok_mission",
+      "ffxi_private_server_vendor_transaction",
+      "ffxi_private_server_rdm30_gear",
+      "ffxi_private_server_rdm_spell",
+      "ffxi_private_server_rdm_spell_grant",
+      "ffxi_private_server_reload_agentspell",
       "ffxi_recent_events",
       "ffxi_server_status",
       "ffxi_service_teleport",
@@ -184,6 +196,8 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_start_roe_objective",
       "ffxi_stop_movement",
       "ffxi_target_entity",
+      "ffxi_trade_maat_genkai_items",
+      "ffxi_trade_npc_item_stack",
     ].sort(),
   );
 
@@ -388,6 +402,71 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
     "private_server_bastok_mission",
   );
 
+  const cancelNewAdventurer = await client.callTool({
+    name: "ffxi_cancel_new_adventurer_status",
+    arguments: {
+      confirmation: "CANCEL PRIVATE SERVER NEW ADVENTURER STATUS",
+    },
+  });
+  assert.equal(cancelNewAdventurer.isError, undefined);
+  assert.equal(
+    cancelNewAdventurer.structuredContent.operation,
+    "cancel_new_adventurer_status",
+  );
+
+  const ironSwordPurchase = await client.callTool({
+    name: "ffxi_private_server_vendor_transaction",
+    arguments: {
+      action: "buy",
+      item_id: 16536,
+      quantity: 1,
+      confirmation: "TRANSACT WITH NEARBY PRIVATE SERVER VENDOR",
+    },
+  });
+  assert.equal(ironSwordPurchase.isError, undefined);
+  assert.equal(
+    ironSwordPurchase.structuredContent.operation,
+    "private_server_vendor_transaction",
+  );
+
+  const rdmSpellPurchase = await client.callTool({
+    name: "ffxi_private_server_rdm_spell",
+    arguments: {
+      spell: "enthunder",
+      confirmation: "BUY PRIVATE SERVER RDM SPELL",
+    },
+  });
+  assert.equal(rdmSpellPurchase.isError, undefined);
+  assert.equal(
+    rdmSpellPurchase.structuredContent.operation,
+    "private_server_rdm_spell",
+  );
+
+  const rdmSpellGrant = await client.callTool({
+    name: "ffxi_private_server_rdm_spell_grant",
+    arguments: {
+      spell: "refresh",
+      confirmation: "GRANT PRIVATE SERVER RDM SPELL",
+    },
+  });
+  assert.equal(rdmSpellGrant.isError, undefined);
+  assert.equal(
+    rdmSpellGrant.structuredContent.operation,
+    "private_server_rdm_spell_grant",
+  );
+
+  const rdmSpellReload = await client.callTool({
+    name: "ffxi_private_server_reload_agentspell",
+    arguments: {
+      confirmation: "RELOAD PRIVATE SERVER AGENTSPELL",
+    },
+  });
+  assert.equal(rdmSpellReload.isError, undefined);
+  assert.equal(
+    rdmSpellReload.structuredContent.operation,
+    "private_server_reload_agentspell",
+  );
+
   const itemMove = await client.callTool({
     name: "ffxi_move_inventory_item",
     arguments: {
@@ -426,6 +505,55 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   });
   assert.equal(vendorPurchase.isError, undefined);
   assert.equal(vendorPurchase.structuredContent.operation, "buy_vendor_item");
+
+  const questItemVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17739811,
+      item_id: 13454,
+      maximum_price: 100,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(questItemVendorPurchase.isError, undefined);
+  assert.equal(
+    questItemVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
+
+  const exactNpcTrade = await client.callTool({
+    name: "ffxi_trade_npc_item_stack",
+    arguments: {
+      npc_server_id: 17793039,
+      npc_index: 15,
+      source_slot: 27,
+      item_id: 9082,
+      quantity: 3,
+      confirmation: "TRADE EXACT PRIVATE SERVER NPC ITEM STACK",
+    },
+  });
+  assert.equal(exactNpcTrade.isError, undefined);
+  assert.equal(
+    exactNpcTrade.structuredContent.operation,
+    "trade_npc_item_stack",
+  );
+
+  const weaponVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17739798,
+      item_id: 16535,
+      maximum_price: 281,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(weaponVendorPurchase.isError, undefined);
+  assert.equal(
+    weaponVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
 
   const spellVendorPurchase = await client.callTool({
     name: "ffxi_buy_vendor_item",

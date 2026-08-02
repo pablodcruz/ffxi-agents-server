@@ -50,6 +50,8 @@ local bridge =
 
 local allowed_commands =
 {
+    ['!agentquestsafety'] = true,
+    ['!agentquestmarker'] = true,
     ['/attack'] = true,
     ['/attackoff'] = true,
     ['/check'] = true,
@@ -187,6 +189,10 @@ local allowed_npc_sale_items =
 -- arbitrary vendor packet primitive.
 local allowed_vendor_purchases =
 {
+    [17739798] = -- Zhikkom, Bastok Markets
+    {
+        [16535] = true, -- Bronze Sword
+    },
     [17739806] = -- Zaira, Bastok Markets
     {
         [4762] = true, -- Aero
@@ -204,12 +210,27 @@ local allowed_vendor_purchases =
         [4861] = true, -- Sleep
         [4862] = true, -- Blind
     },
+    [17739811] = -- Raghd, Bastok Markets
+    {
+        [13454] = true, -- Copper Ring (Mom, the Adventurer)
+    },
     [17793068] = -- Chutarmire, Selbina
     {
         [4768] = true, -- Stone II
         [4778] = true, -- Water II
         [4797] = true, -- Stonega
         [4807] = true, -- Waterga
+    },
+};
+
+-- Exact multi-count NPC quest handoffs that may bypass the client trade menu.
+-- LandSandBoat still validates the live inventory slot and quantity, target
+-- identity and distance, then runs the normal NPC onTrade quest handler.
+local allowed_npc_item_trades =
+{
+    [17793039] = -- Abelard, Selbina
+    {
+        [9082] = 3, -- Bee Pollen x3 (Rhapsodies of Vana'diel: Set Free)
     },
 };
 
@@ -1393,10 +1414,17 @@ local function service_teleport(params)
     local party = memory:GetParty();
     local entities = memory:GetEntity();
     local player_index = party:GetMemberTargetIndex(0);
+    local reason = type(params.reason) == 'string' and params.reason:lower() or '';
+    local requested_zone_id = tonumber(params.zone_id);
+    local player_status = player_index > 0 and entities:GetStatus(player_index) or -1;
+    local mounted_quest_navigation =
+        player_status == 85 and
+        reason == 'quest_npc' and
+        requested_zone_id == party:GetMemberZone(0);
     if (
         player_index <= 0 or
         entities:GetServerId(player_index) == 0 or
-        entities:GetStatus(player_index) ~= 0
+        (player_status ~= 0 and not mounted_quest_navigation)
     ) then
         error('Service teleport requires the character to be idle.');
     end
@@ -1404,7 +1432,6 @@ local function service_teleport(params)
         error('Service teleport requires the exact confirmation phrase.');
     end
 
-    local reason = type(params.reason) == 'string' and params.reason:lower() or '';
     if (not allowed_teleport_reasons[reason]) then
         error('Service teleport reason is not allowlisted.');
     end
@@ -1412,7 +1439,7 @@ local function service_teleport(params)
     local x = tonumber(params.x);
     local horizontal_y = tonumber(params.y);
     local elevation = tonumber(params.z);
-    local zone_id = tonumber(params.zone_id);
+    local zone_id = requested_zone_id;
     if (
         x == nil or horizontal_y == nil or elevation == nil or zone_id == nil or
         x ~= x or horizontal_y ~= horizontal_y or elevation ~= elevation or zone_id ~= zone_id or
@@ -1447,7 +1474,24 @@ local function service_teleport(params)
             zone_id
         );
     end
-    AshitaCore:GetChatManager():QueueCommand(1, command);
+    if (mounted_quest_navigation) then
+        -- While mounted, FFXI downgrades QueueCommand('!pos ...') to ordinary
+        -- /say text. Send the same authenticated client chat packet directly
+        -- so LandSandBoat's normal GM command handler receives it. Outgoing
+        -- 0x0B5 is: four-byte header, kind, padding byte, then the message.
+        local packet_size = math.ceil((6 + #command + 1) / 4) * 4;
+        -- FFXI's packet header stores size in two-byte words.
+        local packet = { 0xB5, packet_size / 2, 0x00, 0x00, 0x00, 0x00 };
+        for index = 1, #command do
+            packet[#packet + 1] = command:byte(index);
+        end
+        while #packet < packet_size do
+            packet[#packet + 1] = 0x00;
+        end
+        AshitaCore:GetPacketManager():AddOutgoingPacket(0x0B5, packet);
+    else
+        AshitaCore:GetChatManager():QueueCommand(1, command);
+    end
     add_event(
         -1,
         ('Agent private-server service teleport queued (%s, zone %u, %s).'):fmt(
@@ -1544,6 +1588,395 @@ local function private_server_bastok_mission(params)
     };
 end
 
+local function private_server_vendor_transaction(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Private-server vendor transaction requires a logged-in character.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Private-server vendor transaction requires all menus and dialogue to be closed.');
+    end
+    if (params.confirmation ~= 'TRANSACT WITH NEARBY PRIVATE SERVER VENDOR') then
+        error('Private-server vendor transaction requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    ) then
+        error('Private-server vendor transaction requires the character to be idle.');
+    end
+
+    local action = type(params.action) == 'string' and params.action:lower() or '';
+    local item_id = tonumber(params.item_id) or 0;
+    local quantity = tonumber(params.quantity) or 0;
+    local allowed_items =
+    {
+        [14326] = true, -- Garish slacks
+        [14425] = true, -- Garish tunic
+        [14857] = true, -- Garish mitts
+        [15164] = true, -- Garish crown
+        [15314] = true, -- Garish pumps
+        [16545] = true, -- Broadsword
+        [16536] = true, -- Iron Sword
+        [12385] = true, -- Acheron Shield
+        [8711] = true,  -- Copper Voucher
+    };
+    local purchasable_items =
+    {
+        [14326] = true,
+        [14425] = true,
+        [14857] = true,
+        [15164] = true,
+        [15314] = true,
+        [16545] = true,
+        [16536] = true,
+        [12385] = true,
+    };
+    if (
+        (action ~= 'status' and action ~= 'buy' and action ~= 'sell' and action ~= 'voucher') or
+        not allowed_items[item_id] or
+        quantity < 1 or quantity > 4 or quantity ~= math.floor(quantity)
+    ) then
+        error('Private-server vendor transaction is outside the exact allowlist.');
+    end
+    if (action == 'sell' and quantity ~= 1) then
+        error('Private-server non-stackable resale requires quantity=1.');
+    end
+    if (action == 'voucher' and (item_id ~= 8711 or quantity ~= 1)) then
+        error('Private-server voucher exchange requires Copper Voucher 8711 and quantity=1.');
+    end
+    if action == 'buy' and not purchasable_items[item_id] then
+        error('Private-server purchase requires an allowlisted Sparks item.');
+    end
+    if (action == 'sell' and item_id ~= 12385) then
+        error('Private-server resale requires Acheron Shield 12385.');
+    end
+
+    stop_movement('private_server_vendor_transaction');
+    stop_input_pulse('private_server_vendor_transaction');
+    stop_heading_hold('private_server_vendor_transaction');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(
+        1,
+        ('!agentshop %s %u %u'):fmt(action, item_id, quantity)
+    );
+    add_event(
+        -1,
+        ('Agent private-server vendor transaction queued: %s item=%u quantity=%u.'):fmt(
+            action,
+            item_id,
+            quantity
+        )
+    );
+    return
+    {
+        queued = true,
+        action = action,
+        item_id = item_id,
+        quantity = quantity,
+        private_server_only = true,
+        proximity_enforced_by_server = true,
+        control = control_snapshot(),
+    };
+end
+
+local function private_server_rdm30_gear(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if player:GetLoginStatus() ~= 2 then
+        error('RDM30 gear transaction requires a logged-in private-server character.');
+    end
+    if target:GetIsMenuOpen() ~= 0 then
+        error('RDM30 gear transaction requires all menus and dialogue to be closed.');
+    end
+    if params.confirmation ~= 'APPLY PRIVATE SERVER RDM30 GEAR STEP' then
+        error('RDM30 gear transaction requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    then
+        error('RDM30 gear transaction requires the character to be idle.');
+    end
+
+    -- Queue exactly one fixed step per request. Ashita only reliably submits
+    -- one GM command per frame, so the host verifies each item before sending
+    -- the next step.
+    local commands =
+    {
+        charge = '!delcurrency spark_of_eminence 1077',
+        adjust = '!delcurrency spark_of_eminence 48',
+        remove_seers_crown = '!delitem 15163',
+        remove_seers_tunic = '!delitem 14424',
+        remove_seers_mitts = '!delitem 14856',
+        remove_seers_slacks = '!delitem 14325',
+        remove_seers_pumps = '!delitem 15313',
+        crown = '!additem 15164 1',
+        tunic = '!additem 14425 1',
+        mitts = '!additem 14857 1',
+        slacks = '!additem 14326 1',
+        pumps = '!additem 15314 1',
+        broadsword = '!additem 16545 1',
+    };
+    local step = type(params.step) == 'string' and params.step:lower() or '';
+    local command = commands[step];
+    if command == nil then
+        error('RDM30 gear transaction step is outside the exact allowlist.');
+    end
+    stop_movement('private_server_rdm30_gear');
+    stop_input_pulse('private_server_rdm30_gear');
+    stop_heading_hold('private_server_rdm30_gear');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, command);
+    add_event(-1, ('Agent queued exact RDM30 gear step: %s.'):fmt(step));
+    return
+    {
+        queued = true,
+        step = step,
+        private_server_only = true,
+        exact_checkpoint = true,
+        control = control_snapshot(),
+    };
+end
+
+local function private_server_rdm_spell(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if player:GetLoginStatus() ~= 2 then
+        error('RDM spell transaction requires a logged-in private-server character.');
+    end
+    if target:GetIsMenuOpen() ~= 0 then
+        error('RDM spell transaction requires all menus and dialogue to be closed.');
+    end
+    if params.confirmation ~= 'BUY PRIVATE SERVER RDM SPELL' then
+        error('RDM spell transaction requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    then
+        error('RDM spell transaction requires the character to be idle.');
+    end
+
+    local commands =
+    {
+        dia_ii = '!agentspell buy 24',
+        enthunder = '!agentspell buy 104',
+    };
+    local spell = type(params.spell) == 'string' and params.spell:lower() or '';
+    local command = commands[spell];
+    if command == nil then
+        error('RDM spell transaction is outside the exact allowlist.');
+    end
+
+    stop_movement('private_server_rdm_spell');
+    stop_input_pulse('private_server_rdm_spell');
+    stop_heading_hold('private_server_rdm_spell');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, command);
+    add_event(-1, ('Agent queued exact RDM spell purchase: %s.'):fmt(spell));
+    return
+    {
+        queued = true,
+        spell = spell,
+        private_server_only = true,
+        proximity_enforced_by_server = true,
+        normal_vendor_cost = true,
+        control = control_snapshot(),
+    };
+end
+
+local function private_server_rdm_spell_grant(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if player:GetLoginStatus() ~= 2 then
+        error('RDM utility spell grant requires a logged-in private-server character.');
+    end
+    if target:GetIsMenuOpen() ~= 0 then
+        error('RDM utility spell grant requires all menus and dialogue to be closed.');
+    end
+    if params.confirmation ~= 'GRANT PRIVATE SERVER RDM SPELL' then
+        error('RDM utility spell grant requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    then
+        error('RDM utility spell grant requires the character to be idle.');
+    end
+
+    local commands =
+    {
+        cure_ii = '!agentspell grant 2',
+        cure_iii = '!agentspell grant 3',
+        raise = '!agentspell grant 12',
+        slow = '!agentspell grant 56',
+        haste = '!agentspell grant 57',
+        paralyze = '!agentspell grant 58',
+        silence = '!agentspell grant 59',
+        regen = '!agentspell grant 108',
+        refresh = '!agentspell grant 109',
+        gravity = '!agentspell grant 216',
+        sleep = '!agentspell grant 253',
+        sleep_ii = '!agentspell grant 259',
+        dispel = '!agentspell grant 260',
+    };
+    local spell = type(params.spell) == 'string' and params.spell:lower() or '';
+    local command = commands[spell];
+    if command == nil then
+        error('RDM utility spell grant is outside the exact allowlist.');
+    end
+
+    stop_movement('private_server_rdm_spell_grant');
+    stop_input_pulse('private_server_rdm_spell_grant');
+    stop_heading_hold('private_server_rdm_spell_grant');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, command);
+    add_event(-1, ('Agent queued exact RDM utility spell grant: %s.'):fmt(spell));
+    return
+    {
+        queued = true,
+        spell = spell,
+        private_server_only = true,
+        self_only = true,
+        level_gate_enforced_by_server = true,
+        arbitrary_spell_input = false,
+        control = control_snapshot(),
+    };
+end
+
+local function private_server_reload_agentspell(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if player:GetLoginStatus() ~= 2 then
+        error('AgentSpell reload requires a logged-in private-server character.');
+    end
+    if target:GetIsMenuOpen() ~= 0 then
+        error('AgentSpell reload requires all menus and dialogue to be closed.');
+    end
+    if params.confirmation ~= 'RELOAD PRIVATE SERVER AGENTSPELL' then
+        error('AgentSpell reload requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    then
+        error('AgentSpell reload requires the character to be idle.');
+    end
+
+    stop_movement('private_server_reload_agentspell');
+    stop_input_pulse('private_server_reload_agentspell');
+    stop_heading_hold('private_server_reload_agentspell');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, '!agentreload');
+    add_event(-1, 'Agent queued exact AgentSpell module reload.');
+    return
+    {
+        queued = true,
+        private_server_only = true,
+        exact_module = 'agentspell',
+        arbitrary_module_input = false,
+        control = control_snapshot(),
+    };
+end
+
+local function cancel_new_adventurer_status(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Canceling New Adventurer status requires a logged-in private-server character.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Canceling New Adventurer status requires all menus and dialogue to be closed.');
+    end
+    if (params.confirmation ~= 'CANCEL PRIVATE SERVER NEW ADVENTURER STATUS') then
+        error('Canceling New Adventurer status requires the exact confirmation phrase.');
+    end
+
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = party:GetMemberTargetIndex(0);
+    if (
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    ) then
+        error('Canceling New Adventurer status requires the character to be idle.');
+    end
+
+    stop_movement('cancel_new_adventurer_status');
+    stop_input_pulse('cancel_new_adventurer_status');
+    stop_heading_hold('cancel_new_adventurer_status');
+    target:SetTarget(0, true);
+
+    -- Normal FFXI outgoing config packet 0x0DC. The selected flag is bit 26,
+    -- NewAdventurerOffFlg, and SetFlg=1 sets that off-flag. LandSandBoat also
+    -- enforces that this setting can only transition from false to true.
+    local packet =
+    {
+        0xDC, 0x0A, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x04,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+    };
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x0DC, packet);
+    add_event(-1, 'Agent private-server New Adventurer cancellation queued.');
+    return
+    {
+        queued = true,
+        private_server_only = true,
+        irreversible = true,
+        packet_id = 0x0DC,
+        normal_client_packet = true,
+        control = control_snapshot(),
+    };
+end
+
 local function monitor_movement()
     if (bridge.movement == nil) then
         return;
@@ -1614,7 +2047,12 @@ local function validate_command(command)
     if (#command == 0 or #command > 200) then
         error('Command must contain between 1 and 200 characters.');
     end
-    if (command:find('[\r\n;|]') ~= nil or command:sub(1, 1) == '!') then
+    local is_agent_quest_safety_command =
+        command == '!agentquestsafety on' or
+        command == '!agentquestsafety off' or
+        command == '!agentquestsafety status';
+    local is_agent_quest_marker_command = command == '!agentquestmarker coal1';
+    if (command:find('[\r\n;|]') ~= nil or (command:sub(1, 1) == '!' and not is_agent_quest_safety_command and not is_agent_quest_marker_command)) then
         error('Command chaining, control characters, and GM commands are blocked.');
     end
 
@@ -2009,7 +2447,15 @@ local function buy_vendor_item(params)
     if (params.confirmation ~= 'BUY PRIVATE SERVER VENDOR ITEM') then
         error('Vendor purchase requires the exact private-server confirmation phrase.');
     end
-    if (target:GetIsMenuOpen() == 0 or current_menu_name() ~= 'menu    shopmain') then
+    local menu_name = current_menu_name();
+    if (
+        target:GetIsMenuOpen() == 0 or
+        (
+            menu_name ~= 'menu    shopmain' and
+            menu_name ~= 'menu    shop    ' and
+            menu_name ~= 'menu    shopbuy '
+        )
+    ) then
         error('Vendor purchase requires an active general-shop merchant context.');
     end
 
@@ -2083,6 +2529,174 @@ local function buy_vendor_item(params)
         unit_price = purchase.unit_price,
         maximum_price = maximum_price,
         packet_id = 0x083,
+        normal_client_packet = true,
+    };
+end
+
+local function trade_npc_item_stack(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    local entities = memory:GetEntity();
+    local inventory = memory:GetInventory();
+    if player:GetLoginStatus() ~= 2 then
+        error('NPC item trade requires a logged-in private-server character.');
+    end
+    if player:GetIsZoning() ~= 0 or target:GetIsMenuOpen() ~= 0 then
+        error('NPC item trade requires a stable character and closed menus.');
+    end
+    if params.confirmation ~= 'TRADE EXACT PRIVATE SERVER NPC ITEM STACK' then
+        error('NPC item trade requires the exact private-server confirmation phrase.');
+    end
+
+    local npc_server_id = tonumber(params.npc_server_id);
+    local npc_index = tonumber(params.npc_index);
+    local source_slot = tonumber(params.source_slot);
+    local item_id = tonumber(params.item_id);
+    local quantity = tonumber(params.quantity);
+    local npc_catalog = allowed_npc_item_trades[npc_server_id];
+    if (
+        npc_server_id == nil or npc_server_id ~= math.floor(npc_server_id) or
+        npc_index == nil or npc_index ~= math.floor(npc_index) or
+        npc_index < 0 or npc_index >= entities:GetEntityMapSize() or
+        source_slot == nil or source_slot ~= math.floor(source_slot) or
+        source_slot < 1 or source_slot > 80 or
+        item_id == nil or item_id ~= math.floor(item_id) or
+        quantity == nil or quantity ~= math.floor(quantity) or
+        npc_catalog == nil or npc_catalog[item_id] ~= quantity
+    ) then
+        error('NPC item trade is outside the repository-controlled exact allowlist.');
+    end
+    if (
+        tonumber(entities:GetServerId(npc_index)) ~= npc_server_id or
+        math.max(0, tonumber(entities:GetDistance(npc_index)) or 999) > 36
+    ) then
+        error('The exact allowlisted NPC is not active within six yalms.');
+    end
+    local source_item = inventory:GetContainerItem(0, source_slot);
+    if (
+        source_item == nil or
+        tonumber(source_item.Id) ~= item_id or
+        (tonumber(source_item.Count) or 0) < quantity
+    ) then
+        error('The exact inventory slot, item ID, and quantity are unavailable.');
+    end
+
+    stop_movement('npc_item_trade');
+    stop_input_pulse('npc_item_trade');
+    stop_heading_hold('npc_item_trade');
+
+    local packet = { 0x36, 0x10, 0x00, 0x00 };
+    for shift = 0, 3 do
+        table.insert(packet, math.floor(npc_server_id / (0x0100 ^ shift)) % 0x0100);
+    end
+    for item_index = 0, 9 do
+        local item_quantity = item_index == 0 and quantity or 0;
+        for shift = 0, 3 do
+            table.insert(packet, math.floor(item_quantity / (0x0100 ^ shift)) % 0x0100);
+        end
+    end
+    table.insert(packet, source_slot);
+    for _ = 1, 9 do table.insert(packet, 0x00); end
+    table.insert(packet, npc_index % 0x0100);
+    table.insert(packet, math.floor(npc_index / 0x0100) % 0x0100);
+    table.insert(packet, 0x01);
+    table.insert(packet, 0x00);
+    table.insert(packet, 0x00);
+    table.insert(packet, 0x00);
+
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x036, packet);
+    add_event(-1, ('Agent traded exact NPC item %u x%u to NPC %u.'):fmt(
+        item_id,
+        quantity,
+        npc_server_id
+    ));
+    return
+    {
+        queued = true,
+        npc_server_id = npc_server_id,
+        npc_index = npc_index,
+        source_slot = source_slot,
+        item_id = item_id,
+        quantity = quantity,
+        packet_id = 0x036,
+        normal_client_packet = true,
+    };
+end
+
+local function trade_maat_genkai_items(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local target = memory:GetTarget();
+    local entities = memory:GetEntity();
+    local inventory = memory:GetInventory();
+    local npc_server_id = 17772593;
+    local expected_item_ids = { 1089, 1090, 1088 };
+    if player:GetLoginStatus() ~= 2 or player:GetIsZoning() ~= 0 or target:GetIsMenuOpen() ~= 0 then
+        error('Maat Genkai trade requires a stable logged-in character and closed menus.');
+    end
+    if params.confirmation ~= 'TRADE EXACT MAAT GENKAI ITEMS' then
+        error('Maat Genkai trade requires the exact confirmation phrase.');
+    end
+
+    local npc_index = tonumber(params.npc_index);
+    local slots = { tonumber(params.mold_slot), tonumber(params.coal_slot), tonumber(params.papyrus_slot) };
+    if (
+        npc_index == nil or npc_index ~= math.floor(npc_index) or
+        npc_index < 0 or npc_index >= entities:GetEntityMapSize() or
+        tonumber(entities:GetServerId(npc_index)) ~= npc_server_id or
+        math.max(0, tonumber(entities:GetDistance(npc_index)) or 999) > 36
+    ) then
+        error('Exact Maat is not active within six yalms.');
+    end
+    for index = 1, 3 do
+        local slot = slots[index];
+        if slot == nil or slot ~= math.floor(slot) or slot < 1 or slot > 80 then
+            error('Maat Genkai trade contains an invalid inventory slot.');
+        end
+        local item = inventory:GetContainerItem(0, slot);
+        if item == nil or tonumber(item.Id) ~= expected_item_ids[index] or tonumber(item.Count) ~= 1 then
+            error('Maat Genkai trade item ID, slot, or quantity mismatch.');
+        end
+    end
+
+    stop_movement('maat_genkai_trade');
+    stop_input_pulse('maat_genkai_trade');
+    stop_heading_hold('maat_genkai_trade');
+
+    local packet = { 0x36, 0x10, 0x00, 0x00 };
+    for shift = 0, 3 do
+        table.insert(packet, math.floor(npc_server_id / (0x0100 ^ shift)) % 0x0100);
+    end
+    for item_index = 0, 9 do
+        local quantity = item_index < 3 and 1 or 0;
+        for shift = 0, 3 do
+            table.insert(packet, math.floor(quantity / (0x0100 ^ shift)) % 0x0100);
+        end
+    end
+    for index = 1, 3 do table.insert(packet, slots[index]); end
+    for _ = 1, 7 do table.insert(packet, 0x00); end
+    table.insert(packet, npc_index % 0x0100);
+    table.insert(packet, math.floor(npc_index / 0x0100) % 0x0100);
+    table.insert(packet, 0x03);
+    table.insert(packet, 0x00);
+    table.insert(packet, 0x00);
+    table.insert(packet, 0x00);
+
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x036, packet);
+    add_event(-1, 'Agent traded exact Genkai item set to Maat.');
+    return
+    {
+        queued = true,
+        npc_server_id = npc_server_id,
+        npc_index = npc_index,
+        item_ids = expected_item_ids,
+        source_slots = slots,
+        packet_id = 0x036,
         normal_client_packet = true,
     };
 end
@@ -2236,6 +2850,18 @@ local function dispatch(request)
         return service_teleport(params);
     elseif (request.operation == 'private_server_bastok_mission') then
         return private_server_bastok_mission(params);
+    elseif (request.operation == 'private_server_vendor_transaction') then
+        return private_server_vendor_transaction(params);
+    elseif (request.operation == 'private_server_rdm30_gear') then
+        return private_server_rdm30_gear(params);
+    elseif (request.operation == 'private_server_rdm_spell') then
+        return private_server_rdm_spell(params);
+    elseif (request.operation == 'private_server_rdm_spell_grant') then
+        return private_server_rdm_spell_grant(params);
+    elseif (request.operation == 'private_server_reload_agentspell') then
+        return private_server_reload_agentspell(params);
+    elseif (request.operation == 'cancel_new_adventurer_status') then
+        return cancel_new_adventurer_status(params);
     elseif (request.operation == 'start_roe_objective') then
         return start_roe_objective(params);
     elseif (request.operation == 'change_job') then
@@ -2246,6 +2872,10 @@ local function dispatch(request)
         return sell_inventory_item(params);
     elseif (request.operation == 'buy_vendor_item') then
         return buy_vendor_item(params);
+    elseif (request.operation == 'trade_npc_item_stack') then
+        return trade_npc_item_stack(params);
+    elseif (request.operation == 'trade_maat_genkai_items') then
+        return trade_maat_genkai_items(params);
     elseif (request.operation == 'gameplay_command') then
         require_control_enabled();
         local command = validate_command(params.command);

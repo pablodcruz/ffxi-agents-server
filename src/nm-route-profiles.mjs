@@ -63,6 +63,23 @@ export const NM_ROUTE_PROFILES = Object.freeze([
     ],
   }),
   profile({
+    id: "jaggedy_eared_jack",
+    name: "Jaggedy-Eared Jack",
+    zone_id: 100,
+    placeholder_server_ids: [17187110],
+    notorious_monster_server_ids: [17187111],
+    watched_items: [{ item_id: 13112, name: "Rabbit Charm" }],
+    requires_trusts: false,
+    maximum_placeholder_kills_per_visit: 1,
+    maximum_elevation_difference: 15,
+    sweep_positions: [
+      { x: -260, y: -220, z: -20 },
+      { x: -350, y: -230, z: -15 },
+      { x: -260, y: -315, z: -15 },
+      { x: -355, y: -310, z: -15 },
+    ],
+  }),
+  profile({
     id: "spiny_spipi",
     name: "Spiny Spipi",
     zone_id: 116,

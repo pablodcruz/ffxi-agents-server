@@ -8,6 +8,13 @@ export const defaultExcludedCombatPockets = Object.freeze([
     radius: 35,
     reason: "unvalidated_quadav_multi_aggro",
   }),
+  Object.freeze({
+    zone_id: 107,
+    x: -510,
+    y: -430,
+    radius: 100,
+    reason: "validated_shrapnel_multi_aggro",
+  }),
 ]);
 
 export function hasLiveCombat(observation) {
@@ -417,13 +424,33 @@ export function lineOfSightNudgeDestination({
 export function shouldRetryRecoveryCommand({
   observation,
   minimumHpPercent,
+  minimumMpPercent = 0,
   lastCommandAt,
   now = Date.now(),
   retryAfterMs = 2000,
 }) {
-  return Number(observation?.player?.hp_percent) < Number(minimumHpPercent)
+  return shouldRecoverResources({
+    observation,
+    minimumHpPercent,
+    minimumMpPercent,
+  })
     && Number(observation?.player?.status) === 0
     && Number(now) - Number(lastCommandAt) >= Number(retryAfterMs);
+}
+
+export function shouldRecoverResources({
+  observation,
+  minimumHpPercent,
+  minimumMpPercent = 0,
+}) {
+  const playerPartyMember = observation?.party?.find(
+    (member) => Number(member?.slot) === 0,
+  );
+  return Number(observation?.player?.hp_percent) < Number(minimumHpPercent)
+    || (
+      Number(minimumMpPercent) > 0
+      && Number(playerPartyMember?.mp_percent) < Number(minimumMpPercent)
+    );
 }
 
 export function shouldAutoCancelMenu({ menuName, reactiveThreat }) {
@@ -460,6 +487,18 @@ export function canStopAtFightLimit({
   reactiveThreat,
 }) {
   return Number(fightsCompleted) >= Number(maximumFights)
+    && !currentTarget
+    && !reactiveThreat
+    && !hasLiveCombat(observation);
+}
+
+export function canStopAtTimeLimit({
+  timeLimitReached,
+  observation,
+  currentTarget,
+  reactiveThreat,
+}) {
+  return Boolean(timeLimitReached)
     && !currentTarget
     && !reactiveThreat
     && !hasLiveCombat(observation);
@@ -521,6 +560,27 @@ export function readyTrustSupport({
     ready: members.length >= Number(minimumCount),
     members: members.map((member) => String(member.name)),
   };
+}
+
+export function shouldRefreshHealerTrust({
+  party,
+  playerName,
+  zoneId,
+  healerName = "MihliAliapoh",
+  maximumMpPercent = 10,
+  liveCombat = false,
+  playerStatus = 0,
+  menuOpen = false,
+}) {
+  if (liveCombat || Number(playerStatus) !== 0 || menuOpen) return false;
+  const healer = (party || []).find((member) => (
+    String(member?.name || "") === String(healerName)
+    && String(member?.name || "") !== String(playerName || "")
+    && Number(member?.zone_id) === Number(zoneId)
+    && Number(member?.hp_percent) > 0
+  ));
+  return Boolean(healer)
+    && Number(healer.mp_percent) <= Number(maximumMpPercent);
 }
 
 export function trustRepairDisposition({

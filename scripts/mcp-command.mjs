@@ -13,6 +13,13 @@ if (!command) {
   throw new Error("--command is required and must pass the MCP gameplay allowlist.");
 }
 
+// Usable items have a materially longer activation window than ordinary
+// slash commands. Keep control armed long enough for the client to finish the
+// item action before the finally-block issues the emergency stop.
+const completionWaitMilliseconds = command.trim().toLowerCase().startsWith("/item ")
+  ? 12_000
+  : 1_500;
+
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(projectDir, "src", "mcp-server.mjs")],
@@ -41,7 +48,7 @@ try {
   if (response.isError) {
     throw new Error("The MCP gameplay command was rejected.");
   }
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await new Promise((resolve) => setTimeout(resolve, completionWaitMilliseconds));
   const observation = await client.callTool({
     name: "ffxi_observe",
     arguments: { radius: 30, max_entities: 32, event_limit: 20 },

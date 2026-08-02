@@ -43,6 +43,7 @@ const allowEngagedToughWithTrusts = process.argv.includes(
   "--allow-engaged-tough-with-trusts",
 );
 const skipRecovery = process.argv.includes("--skip-recovery");
+const skipKnownSafeCheck = process.argv.includes("--skip-known-safe-check");
 
 if (!targetName) {
   throw new Error("Combat requires --target with one exact nearby entity name.");
@@ -62,6 +63,11 @@ if (
 }
 if (!Number.isInteger(targetServerId) || targetServerId <= 0) {
   throw new Error("Combat requires --server-id with the exact positive ID from observation.");
+}
+if (skipKnownSafeCheck && (!commitOnceEngaged || !allowCaution)) {
+  throw new Error(
+    "--skip-known-safe-check requires --commit-once-engaged and --allow-caution.",
+  );
 }
 if (!Number.isFinite(maxStartDistance) || maxStartDistance < 2 || maxStartDistance > 40) {
   throw new Error("--max-start-distance must be a number from 2 through 40.");
@@ -299,7 +305,7 @@ async function nudgeThroughExactTarget(observation, target) {
 }
 
 async function waitForCheckVerdict(afterEventId) {
-  const deadline = Date.now() + 3000;
+  const deadline = Date.now() + 5000;
   let observation;
   let verdict = parseCheckVerdict([], { afterEventId });
   while (Date.now() < deadline) {
@@ -414,12 +420,27 @@ try {
     target.server_id,
     stopDistance + 2,
   );
-  const checkBaselineEventId = Math.max(
-    0,
-    ...(approached.recent_events || []).map((event) => Number(event.id) || 0),
-  );
-  await command("/check <t>");
-  const checked = await waitForCheckVerdict(checkBaselineEventId);
+  let checked;
+  if (skipKnownSafeCheck) {
+    checked = {
+      observation: await observe(),
+      verdict: {
+        event_id: null,
+        message: "Skipped for an exact, metadata-pinned quest target.",
+        difficulty: "too_weak",
+        verdict: "safe",
+        high_defense: false,
+        high_evasion: false,
+      },
+    };
+  } else {
+    const checkBaselineEventId = Math.max(
+      0,
+      ...(approached.recent_events || []).map((event) => Number(event.id) || 0),
+    );
+    await command("/check <t>");
+    checked = await waitForCheckVerdict(checkBaselineEventId);
+  }
   const checkVerdict = checked.verdict;
   if (checkVerdict.verdict === "unknown") {
     throw new Error(`No authoritative /check result arrived for ${targetName}.`);
@@ -484,6 +505,7 @@ try {
   let engagementObserved = false;
   let attackIssuedAt = Date.now();
   let lastWeaponSkillAt = 0;
+  let lastChaseAt = 0;
   const weaponSkillAttempts = [];
 
   while (Date.now() < deadline) {
@@ -572,11 +594,10 @@ try {
       continue;
     }
     engagementObserved ||= (
-      Number.isFinite(attackStartPlayerHp)
-      && (observation.player?.hp_percent ?? attackStartPlayerHp) < attackStartPlayerHp
-    ) || (
       Number.isFinite(attackStartTargetHp)
       && (observedTarget?.hp_percent ?? attackStartTargetHp) < attackStartTargetHp
+    ) || (
+      Number(observedTarget?.status) === 1
     );
     if (
       !commitOnceEngaged
@@ -592,6 +613,29 @@ try {
     if (observation.login_status !== 2) {
       reason = "not_logged_in";
       break;
+    }
+    if (
+      engagementObserved
+      && observedTarget
+      && Number(observedTarget.status) === 1
+      && Number(observedTarget.distance) > stopDistance + 0.5
+      && Date.now() - lastChaseAt >= 4000
+    ) {
+      lastChaseAt = Date.now();
+      const chase = await client.callTool({
+        name: "ffxi_move_to_entity",
+        arguments: {
+          server_id: target.server_id,
+          max_start_distance: 40,
+          stop_distance: stopDistance,
+          timeout_seconds: 5,
+          stuck_seconds: 2,
+        },
+      });
+      if (!chase.isError) {
+        await waitForMovement(5).catch(() => {});
+      }
+      continue;
     }
     if (!engagementObserved && Date.now() - attackIssuedAt >= 8000) {
       reason = "engagement_stalled";
@@ -655,6 +699,7 @@ try {
       recovery_timeout_seconds: recoveryTimeoutSeconds,
       recovery_skipped: recoverySkipped,
       recovery_skip_reason: recoverySkipReason,
+      known_safe_check_skipped: skipKnownSafeCheck,
       attack_attempts_limit: attackAttemptsLimit,
       weapon_skill: weaponSkill || null,
       preserved_committed_engagement: preservedCommittedEngagement,

@@ -78,9 +78,10 @@ function gil(snapshot) {
 try {
   await client.connect(transport);
   const before = await state();
+  const merchantMenu = String(before.menu_name || "").trim();
   if (
     !before.menu_open
-    || String(before.menu_name || "").trim() !== "menu    shopmain"
+    || !["menu    shopmain", "menu    shop", "menu    shopbuy"].includes(merchantMenu)
   ) {
     throw new Error(
       "Direct purchase requires an active general-shop merchant context.",

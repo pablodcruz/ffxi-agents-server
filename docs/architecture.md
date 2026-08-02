@@ -16,6 +16,11 @@ Do not add agent-control endpoints to LandSandBoat core for the first vertical
 slice. Server-side control alone cannot reproduce the observations and UI state
 available to a real client, and a fork would make upstream updates harder.
 
+The cross-cutting decision rules for normal gameplay, low-token supervisors,
+typed native-client operations, GM-backed private-server outcomes, temporary
+quest recovery, and authoritative verification are recorded in
+[private-server-automation-policy.md](private-server-automation-policy.md).
+
 ## Why MCP fits
 
 MCP gives Codex typed, auditable tools rather than unconstrained keyboard or
@@ -40,6 +45,7 @@ packet control. The initial tool set is intentionally small:
 | `ffxi_move_inventory_item` | Yes | Move one exact item between five allowlisted containers |
 | `ffxi_directional_input` | Yes | Send one automatically released fallback input pulse |
 | `ffxi_gameplay_command` | Yes | Queue one allowlisted gameplay command, including a standard NPC trade window |
+| `ffxi_cancel_new_adventurer_status` | Yes | Permanently set only FFXI's one-way New Adventurer off-flag through the normal config packet |
 | `ffxi_farm_start` | Yes | Start one bounded local proactive/reactive combat lease |
 | `ffxi_farm_status` | No | Read the lease phase, target, counters, and latency metrics |
 | `ffxi_farm_stop` | Yes | Cooperatively stop the current exact lease |
@@ -150,6 +156,58 @@ omits LandSandBoat's zone argument so it does not reload the area or dismiss
 Trusts. Normal movement remains available for routes that have already
 completed reliably and been cached.
 
+### Proximity-gated private-server outcomes
+
+Menu navigation is not the default automation boundary for NPC transactions or
+quest progression. The preferred private-server interface requires Pablo to be
+in the correct zone and within six yalms of one exact NPC, then invokes a narrow
+server command that performs one allowlisted outcome while retaining the
+underlying costs, prerequisites, and state checks. Normal menu input remains a
+fallback for one-off or not-yet-modeled interactions, not the primary path.
+
+The first implementation is `ffxi_private_server_vendor_transaction`, backed
+by `!agentshop`. Its allowlist contains Acheron Shield (12385) and Copper
+A.M.A.N. Voucher (8711):
+Isakoth purchases deduct 2,755 real Sparks, enforce the weekly exchange limit
+and inventory capacity, and Balthilda sales require ownership and use the
+item's normal server-side base sale price. At Isakoth, voucher exchange consumes
+one owned voucher from its actual accessible container before adding the normal
+1,000 Sparks, subject to the Sparks cap. Non-stackable resale and voucher
+exchange are one unit per
+call so item removal can be verified before gil is added. The MCP wrapper
+verifies the server response and relevant inventory/gil deltas. Raw GM command
+text remains unavailable.
+
+The RDM spell implementation follows the same boundary. The
+`ffxi_private_server_rdm_spell` operation is backed by `!agentspell` and
+accepts only `enthunder` or `dia_ii`. Pablo must be Red Mage at the spell's
+normal learning level and within six yalms of Shohrun-Tuhrun in Windurst
+Waters. The server deducts the normal shop price, rejects duplicate ownership,
+grants only the exact allowlisted spell, and refunds the charge if the grant
+fails. The client helper verifies both the server event and exact gil delta;
+it never exposes arbitrary spell IDs or command text.
+
+The separate `ffxi_private_server_rdm_spell_grant` operation is an explicit
+local-lab convenience for the core RDM utility spellbook. It exposes only a
+fixed list (Cure II/III, Raise, Slow, Haste, Paralyze, Silence, Regen, Refresh,
+Gravity, Sleep I/II, and Dispel), is self-only, requires the corresponding RDM
+level on the server, and never accepts an arbitrary spell ID. Unlike the
+vendor helper, it intentionally bypasses scroll acquisition and gil costs.
+`mcp:rdm-utility-spells` grants every currently eligible entry and verifies
+both the server grant/already-learned event and the final learned status.
+The fixed `agentreload` command and
+`ffxi_private_server_reload_agentspell` wrapper clear and reload only this
+single command module, allowing an allowlist update without a map-server
+restart. Neither interface accepts a caller-selected module path or raw Lua.
+
+Use this pattern for future high-friction quest and vendor menus: exact nearby
+NPC, action-specific allowlist, normal prerequisites and costs, bounded
+parameters, and authoritative post-action verification. Quest helpers must
+encode the exact mission/quest state transition and required items or currency;
+they must not expose arbitrary quest IDs, event IDs, reward grants, or raw GM
+text. This is the default automation interface for the local lab, not a general
+progress or reward grant.
+
 ## Trust boundaries
 
 ### FFXI client
@@ -165,8 +223,9 @@ assets.
 - Accepts one JSON-lines request per connection.
 - Caps request size and observation result size.
 - Does not expose raw packet injection, Lua evaluation, arbitrary files, chat,
-  console commands, scripts, or arbitrary GM commands. The guarded service
-  teleport is the sole dedicated GM-backed operation. One separate exact RoE
+  console commands, scripts, or arbitrary GM commands. Dedicated GM-backed
+  operations are individually typed and allowlisted: service teleport, Bastok
+  mission selection, and proximity-gated vendor outcomes. One separate exact RoE
   helper emits only FFXI's normal `0x10C` objective-start packet after explicit
   private-server confirmation. AgentBridge 0.27.0 also exposes one exact item
   transfer operation using FFXI's normal `0x029` packet. It accepts only

@@ -80,6 +80,24 @@
 - [ ] If approved, deploy to a dedicated Linux host with private administration,
   monitoring, pinned images, and documented source/license compliance.
 
+## Future goal — viewer-directed gameplay
+
+- [ ] Build a separate `ffxi-chat-director` service that reads Restream's
+  unified Twitch and YouTube live chat without coupling chat ingestion to the
+  agent runtime.
+- [ ] Validate commands in shadow mode using a strict prefix, verb, argument
+  allowlist, idempotency keys, cooldowns, and an auditable state machine.
+- [ ] Add a minimal loopback-only typed goal gateway while keeping this
+  repository responsible for final game-state and safety validation.
+- [ ] Pilot owner/moderator commands, then timed viewer votes, before allowing
+  automatic dispatch of bounded NM goals.
+- [ ] Export privacy-preserving command, vote, queue, outcome, and latency
+  events to the telemetry lab.
+
+The complete deferred design, safety policy, rollout, and acceptance criteria
+are in
+[future-viewer-directed-gameplay.md](future-viewer-directed-gameplay.md).
+
 ## Decisions that require the operator
 
 1. Where the first Windows client will run.

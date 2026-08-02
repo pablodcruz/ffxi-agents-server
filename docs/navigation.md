@@ -879,6 +879,33 @@ list. It then verifies that the shield count reaches zero and that gil rises
 by exactly 27,550 before updating the stream overlay. The shield is not part of
 `mcp:sell-loot`'s farming allowlist.
 
+The private-server-first replacement for this menu sequence is:
+
+```sh
+pnpm mcp:private-shop -- --action buy --item-id 12385 --quantity 1
+pnpm mcp:private-shop -- --action sell --item-id 12385 --quantity 1
+pnpm mcp:private-shop -- --action voucher --item-id 8711 --quantity 1
+```
+
+This proximity-first pattern is also the default for future quest and NPC
+interactions: travel to the exact NPC, prove zone and distance, invoke one typed
+allowlisted outcome, then verify authoritative state. Menu navigation is the
+fallback only when that exact outcome has not yet been modeled.
+
+The server requires exact Isakoth or Balthilda proximity within six yalms.
+Purchase still spends 2,755 Sparks and respects the weekly limit and inventory
+headroom; resale removes one owned non-stackable shield before adding its
+normal 27,550-gil base price. Isakoth voucher exchange removes one Copper
+A.M.A.N. Voucher from its real container before adding the normal 1,000 Sparks,
+and rejects a request that would exceed the Sparks cap. The wrapper verifies
+the authoritative server outcome; repeat the one-unit voucher action rather
+than requesting a bulk exchange.
+The first live two-shield purchase spent 5,510 Sparks. A bulk resale exposed
+that `delItem(item, 2)` does not remove two separate non-stackable slots even
+though the old helper added gil. Verification stopped the retry; the two
+already-paid shields were explicitly removed, and resale was restricted to one
+unit per call before further use.
+
 ### One-command inventory cleanup
 
 Use the repository-owned inventory policy instead of supplying raw container
@@ -910,6 +937,15 @@ sale. This is useful failure evidence: desktop focus loss produces a safe
 no-op, not a guessed confirmation.
 
 ### Level-20 Sparks equipment upgrade
+
+The private-server `!agentshop` allowlist also supports an exact Iron Sword
+(16536) purchase from Isakoth for its normal 132-Sparks price. The command is
+self-only, requires Isakoth within six yalms, checks inventory headroom and the
+weekly Sparks exchange limit, and records the normal currency spend. This is
+the low-friction RDM level-18/20 weapon path: it removes only the Sparks menu
+navigation and does not grant free equipment. Iron Sword has damage 14 and
+delay 231 in the pinned server data, replacing the level-1 Bronze Sword's
+damage 6 at the RDM20 maintenance checkpoint.
 
 At Monk 20, the pinned server's equipment data and Isakoth's live
 `Equipment Lv. 20-29` shop page identified the Trader's set as the appropriate

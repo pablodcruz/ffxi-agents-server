@@ -171,11 +171,20 @@ export function validateGameplayCommand(command) {
   if (!normalized || normalized.length > 200) {
     throw new BridgeError("Command must contain between 1 and 200 characters.", "invalid_command");
   }
-  if (/[\r\n;|]/.test(normalized) || normalized.startsWith("!")) {
+  const isAgentQuestSafetyCommand =
+    /^!agentquestsafety (?:on|off|status)$/.test(normalized);
+  const isAgentQuestMarkerCommand = normalized === "!agentquestmarker coal1";
+  if (
+    /[\r\n;|]/.test(normalized)
+    || (normalized.startsWith("!") && !isAgentQuestSafetyCommand && !isAgentQuestMarkerCommand)
+  ) {
     throw new BridgeError(
       "Command chaining, control characters, and GM commands are blocked.",
       "unsafe_command",
     );
+  }
+  if (isAgentQuestSafetyCommand || isAgentQuestMarkerCommand) {
+    return normalized;
   }
   if (!SAFE_COMMANDS.some((pattern) => pattern.test(normalized))) {
     throw new BridgeError(

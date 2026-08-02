@@ -1047,6 +1047,248 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_private_server_vendor_transaction",
+  {
+    title: "Perform an allowlisted transaction at an exact nearby vendor",
+    description:
+      "Queue the private server's self-only !agentshop command. The server requires the exact configured NPC within six yalms and preserves normal costs, exchange caps, inventory capacity, item ownership, and NPC resale value. The narrow allowlist includes the RDM level-30 Garish set and Broadsword checkpoint, Iron Sword, Acheron Shield, and one-at-a-time Copper Voucher exchange at Isakoth.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      action: z.enum(["status", "buy", "sell", "voucher"]),
+      item_id: z.union([
+        z.literal(14326), z.literal(14425), z.literal(14857),
+        z.literal(15164), z.literal(15314), z.literal(16545),
+        z.literal(16536), z.literal(12385), z.literal(8711),
+      ]),
+      quantity: z.number().int().min(1).max(4).default(1),
+      confirmation: z.literal("TRANSACT WITH NEARBY PRIVATE SERVER VENDOR"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, action, item_id, quantity, confirmation }) => {
+    try {
+      if (action === "sell" && quantity !== 1) {
+        throw new Error("Non-stackable resale requires quantity 1.");
+      }
+      if (action === "voucher" && (item_id !== 8711 || quantity !== 1)) {
+        throw new Error("Voucher exchange requires Copper Voucher 8711 and quantity 1.");
+      }
+      if (
+        action === "buy" &&
+        ![14326, 14425, 14857, 15164, 15314, 16545, 16536, 12385].includes(item_id)
+      ) {
+        throw new Error("Purchase requires an allowlisted Sparks item.");
+      }
+      if (action === "sell" && item_id !== 12385) {
+        throw new Error("Resale requires Acheron Shield 12385.");
+      }
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_vendor_transaction",
+          { action, item_id, quantity, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_private_server_rdm30_gear",
+  {
+    title: "Buy the exact RDM level-30 gear checkpoint",
+    description:
+      "Queue one fixed step of the private server's exact RDM30 checkpoint transaction: the 1077-Sparks charge, a reconciled 48-Sparks adjustment/removal, or one of six allowlisted Garish/Broadsword grants. No arbitrary command or item input is exposed; the caller verifies every step before continuing.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      step: z.enum([
+        "charge", "adjust",
+        "remove_seers_crown", "remove_seers_tunic", "remove_seers_mitts",
+        "remove_seers_slacks", "remove_seers_pumps",
+        "crown", "tunic", "mitts", "slacks", "pumps", "broadsword",
+      ]),
+      confirmation: z.literal("APPLY PRIVATE SERVER RDM30 GEAR STEP"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, step, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_rdm30_gear",
+          { step, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_private_server_rdm_spell",
+  {
+    title: "Buy an exact RDM leveling spell",
+    description:
+      "Buy exactly Dia II or Enthunder from the proximity-gated local private-server Windurst vendor helper. The server requires RDM level eligibility, rejects duplicates before charging, preserves the normal gil price, and exposes no arbitrary spell or GM command input.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      spell: z.enum(["dia_ii", "enthunder"]),
+      confirmation: z.literal("BUY PRIVATE SERVER RDM SPELL"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, spell, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_rdm_spell",
+          { spell, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_private_server_rdm_spell_grant",
+  {
+    title: "Grant an exact level-gated RDM utility spell",
+    description:
+      "Grant one spell from the exact private-server RDM utility allowlist. The local server independently requires the eligible RDM level, rejects arbitrary spell input, and grants only to the logged-in character. This intentionally bypasses scroll acquisition for the local automation lab.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      spell: z.enum([
+        "cure_ii",
+        "cure_iii",
+        "raise",
+        "slow",
+        "haste",
+        "paralyze",
+        "silence",
+        "regen",
+        "refresh",
+        "gravity",
+        "sleep",
+        "sleep_ii",
+        "dispel",
+      ]),
+      confirmation: z.literal("GRANT PRIVATE SERVER RDM SPELL"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, spell, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_rdm_spell_grant",
+          { spell, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_private_server_reload_agentspell",
+  {
+    title: "Reload the exact private-server AgentSpell module",
+    description:
+      "Reload only the repository-controlled agentspell command module on the local private server. The caller cannot choose a module path or provide Lua/GM command text, and Pablo must be logged in and idle.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      confirmation: z.literal("RELOAD PRIVATE SERVER AGENTSPELL"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_reload_agentspell",
+          { confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_cancel_new_adventurer_status",
+  {
+    title: "Cancel the private-server character's New Adventurer status",
+    description:
+      "Queue the normal FFXI 0x0DC config packet selecting only NewAdventurerOffFlg. LandSandBoat persists the setting and independently enforces that it can only transition from false to true. This removes the red question-mark icon and cannot be reversed through normal FFXI gameplay; arbitrary packet injection is never exposed.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      confirmation: z.literal("CANCEL PRIVATE SERVER NEW ADVENTURER STATUS"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "cancel_new_adventurer_status",
+          { confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_move_inventory_item",
   {
     title: "Move one exact FFXI inventory item",
@@ -1177,13 +1419,17 @@ server.registerTool(
     inputSchema: {
       agent_id: agentIdSchema,
       npc_server_id: z.union([
+        z.literal(17739798),
         z.literal(17739806),
+        z.literal(17739811),
         z.literal(17793068),
       ]),
       item_id: z.number().int().refine(
         (value) => [
+          16535,
           4762, 4767, 4772, 4777, 4828, 4838, 4843, 4844, 4845, 4846,
           4847, 4848, 4861, 4862,
+          13454,
           4768, 4778, 4797, 4807,
         ].includes(value),
         "item_id is outside the repository-controlled vendor-purchase allowlist",
@@ -1229,6 +1475,75 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_trade_npc_item_stack",
+  {
+    title: "Trade one exact allowlisted item stack to an FFXI NPC",
+    description:
+      "Send one exact repository-allowlisted multi-count quest item stack through FFXI's normal 0x036 NPC trade packet. AgentBridge rechecks the live NPC identity, entity index, six-yalm distance, Inventory slot, item ID, quantity, closed-menu state, and confirmation phrase; LandSandBoat then runs the normal NPC onTrade handler.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      npc_server_id: z.literal(17793039),
+      npc_index: z.number().int().min(0).max(4095),
+      source_slot: z.number().int().min(1).max(80),
+      item_id: z.literal(9082),
+      quantity: z.literal(3),
+      confirmation: z.literal("TRADE EXACT PRIVATE SERVER NPC ITEM STACK"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      return agentResult(
+        await agents.request(args.agent_id, "trade_npc_item_stack", args, {
+          write: true,
+        }),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_trade_maat_genkai_items",
+  {
+    title: "Trade the exact three Genkai-1 items to Maat",
+    description:
+      "Send exactly Exoray Mold, Bomb Coal, and Ancient Papyrus x1 through FFXI's normal 0x036 NPC trade packet to exact Maat. AgentBridge rechecks identity, distance, slots, IDs, quantities, closed menus, and confirmation.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      npc_index: z.number().int().min(0).max(4095),
+      mold_slot: z.number().int().min(1).max(80),
+      coal_slot: z.number().int().min(1).max(80),
+      papyrus_slot: z.number().int().min(1).max(80),
+      confirmation: z.literal("TRADE EXACT MAAT GENKAI ITEMS"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      return agentResult(
+        await agents.request(args.agent_id, "trade_maat_genkai_items", args, {
+          write: true,
+        }),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_farm_start",
   {
     title: "Start a bounded private-server farm supervisor",
@@ -1241,6 +1556,7 @@ server.registerTool(
       maximum_fights: z.number().int().min(1).max(200).default(30),
       scan_radius: z.number().int().min(10).max(50).default(50),
       minimum_start_hp_percent: z.number().int().min(50).max(100).default(90),
+      minimum_start_mp_percent: z.number().int().min(0).max(100).default(0),
       allow_caution: z.boolean().default(false),
       auto_relocate: z.boolean().default(false),
       auto_transition: z.boolean().default(false),
@@ -1252,15 +1568,25 @@ server.registerTool(
       summon_trusts: z.boolean().default(true),
       weapon_skill: z
         .string()
-        .min(1)
         .max(64)
-        .regex(/^[^"\r\n;|]+$/)
+        .regex(/^[^"\r\n;|]*$/)
         .default("Combo"),
       combat_spell: z
         .string()
         .max(64)
         .regex(/^[^"\r\n;|]*$/)
         .default(""),
+      combat_spell_upgrade: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
+      combat_spell_upgrade_level: z
+        .number()
+        .int()
+        .min(0)
+        .max(99)
+        .default(0),
       maximum_combat_spells_per_fight: z
         .number()
         .int()
@@ -1273,6 +1599,28 @@ server.registerTool(
         .min(10)
         .max(100)
         .default(35),
+      opening_combat_spell: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
+      minimum_opening_spell_mp_percent: z
+        .number()
+        .int()
+        .min(10)
+        .max(100)
+        .default(65),
+      self_buff_spell: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
+      self_buff_interval_seconds: z
+        .number()
+        .int()
+        .min(30)
+        .max(600)
+        .default(150),
       nm_route: z.boolean().default(false),
       maximum_route_rounds: z.number().int().min(1).max(20).default(1),
       minimum_free_inventory_slots: z.number().int().min(1).max(20).default(5),
@@ -1298,6 +1646,7 @@ server.registerTool(
     maximum_fights,
     scan_radius,
     minimum_start_hp_percent,
+    minimum_start_mp_percent,
     allow_caution,
     auto_relocate,
     auto_transition,
@@ -1309,8 +1658,14 @@ server.registerTool(
     summon_trusts,
     weapon_skill,
     combat_spell,
+    combat_spell_upgrade,
+    combat_spell_upgrade_level,
     maximum_combat_spells_per_fight,
     minimum_cast_mp_percent,
+    opening_combat_spell,
+    minimum_opening_spell_mp_percent,
+    self_buff_spell,
+    self_buff_interval_seconds,
     nm_route,
     maximum_route_rounds,
     minimum_free_inventory_slots,
@@ -1327,6 +1682,7 @@ server.registerTool(
         maximumFights: maximum_fights,
         scanRadius: scan_radius,
         minimumStartHpPercent: minimum_start_hp_percent,
+        minimumStartMpPercent: minimum_start_mp_percent,
         allowCaution: allow_caution,
         autoRelocate: auto_relocate,
         autoTransition: auto_transition,
@@ -1338,8 +1694,14 @@ server.registerTool(
         summonTrusts: summon_trusts,
         weaponSkill: weapon_skill,
         combatSpell: combat_spell,
+        combatSpellUpgrade: combat_spell_upgrade,
+        combatSpellUpgradeLevel: combat_spell_upgrade_level,
         maximumCombatSpellsPerFight: maximum_combat_spells_per_fight,
         minimumCastMpPercent: minimum_cast_mp_percent,
+        openingCombatSpell: opening_combat_spell,
+        minimumOpeningSpellMpPercent: minimum_opening_spell_mp_percent,
+        selfBuffSpell: self_buff_spell,
+        selfBuffIntervalSeconds: self_buff_interval_seconds,
         nmRoute: nm_route,
         maximumRouteRounds: maximum_route_rounds,
         minimumFreeInventorySlots: minimum_free_inventory_slots,

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
-  FARM_CONFIRMATION,
+  farmRenewalConfig,
   farmStatus,
   startFarm,
   stopFarm,
@@ -85,40 +85,6 @@ async function writeState({
   );
 }
 
-function configForRenewal(farm) {
-  const config = farm.config;
-  return {
-    projectDir,
-    agentId,
-    zoneId: config.nm_route
-      ? Number(farm.active_zone_id ?? config.zone_id)
-      : config.zone_id,
-    maximumSeconds: config.maximum_seconds,
-    maximumFights: config.maximum_fights,
-    scanRadius: config.scan_radius,
-    minimumStartHpPercent: config.minimum_start_hp_percent,
-    allowCaution: config.allow_caution,
-    autoRelocate: config.auto_relocate,
-    autoTransition: config.auto_transition,
-    targetLevel: config.target_level,
-    questItemId: config.quest_item_id,
-    trustedCampSweep: config.trusted_camp_sweep,
-    maximumTargetLevelOffset: config.maximum_target_level_offset ?? 1,
-    autoJobAbilities: config.auto_job_abilities,
-    summonTrusts: config.summon_trusts ?? true,
-    weaponSkill: config.weapon_skill,
-    combatSpell: config.combat_spell,
-    maximumCombatSpellsPerFight: config.maximum_combat_spells_per_fight,
-    minimumCastMpPercent: config.minimum_cast_mp_percent,
-    nmRoute: config.nm_route,
-    maximumRouteRounds: config.maximum_route_rounds,
-    minimumFreeInventorySlots: config.minimum_free_inventory_slots,
-    objectiveTargetName: config.objective_target_name ?? "",
-    objectiveKillCount: config.objective_kill_count ?? 0,
-    confirmation: FARM_CONFIRMATION,
-  };
-}
-
 function logTransition(farm, disposition) {
   const leaseId = farm?.lease_id || null;
   if (leaseId === lastLeaseId && disposition === lastDisposition) return;
@@ -169,7 +135,11 @@ async function monitorOnce() {
   ) {
     logTransition(farm, "renewing");
     await writeState({ status: "running", disposition: "renewing", farm });
-    const renewed = await startFarm(configForRenewal(farm));
+    const renewed = await startFarm(farmRenewalConfig({
+      projectDir,
+      agentId,
+      farm,
+    }));
     renewals += 1;
     logTransition(renewed, "renewed");
     await writeState({

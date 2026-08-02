@@ -23,6 +23,9 @@ const autoJobAbilitiesValue = argument("--auto-job-abilities", "false");
 const summonTrustsValue = argument("--summon-trusts", "true");
 const nmRouteValue = argument("--nm-route", "false");
 const combatSpell = argument("--combat-spell", "");
+const combatSpellUpgrade = argument("--combat-spell-upgrade", "");
+const openingCombatSpell = argument("--opening-combat-spell", "");
+const selfBuffSpell = argument("--self-buff-spell", "");
 if (!["start", "status", "stop"].includes(action)) {
   throw new Error("--action must be start, status, or stop.");
 }
@@ -91,6 +94,9 @@ try {
       minimum_start_hp_percent: Number(
         argument("--minimum-start-hp-percent", "90"),
       ),
+      minimum_start_mp_percent: Number(
+        argument("--minimum-start-mp-percent", "0"),
+      ),
       allow_caution: allowCautionValue === "true",
       auto_relocate: autoRelocateValue === "true",
       auto_transition: autoTransitionValue === "true",
@@ -104,11 +110,23 @@ try {
       summon_trusts: summonTrustsValue === "true",
       weapon_skill: argument("--weapon-skill", "Combo"),
       combat_spell: combatSpell,
+      combat_spell_upgrade: combatSpellUpgrade,
+      combat_spell_upgrade_level: Number(
+        argument("--combat-spell-upgrade-level", "0"),
+      ),
       maximum_combat_spells_per_fight: Number(
         argument("--maximum-combat-spells-per-fight", "0"),
       ),
       minimum_cast_mp_percent: Number(
         argument("--minimum-cast-mp-percent", "35"),
+      ),
+      opening_combat_spell: openingCombatSpell,
+      minimum_opening_spell_mp_percent: Number(
+        argument("--minimum-opening-spell-mp-percent", "65"),
+      ),
+      self_buff_spell: selfBuffSpell,
+      self_buff_interval_seconds: Number(
+        argument("--self-buff-interval-seconds", "150"),
       ),
       nm_route: nmRouteValue === "true",
       maximum_route_rounds: Number(argument("--maximum-route-rounds", "1")),

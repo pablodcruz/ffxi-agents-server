@@ -25,6 +25,18 @@ x-lsb-common: &lsb-common
     # Narrow, self-only private-server command used to bypass only the Bastok
     # mission-selection menu. Mission stages and completion remain normal.
     - ./server-extensions/commands/agentmission.lua:/server/scripts/commands/agentmission.lua:ro
+    # Proximity-gated, allowlisted shop outcomes that preserve normal costs,
+    # weekly limits, inventory capacity, ownership, and NPC resale values.
+    - ./server-extensions/commands/agentshop.lua:/server/scripts/commands/agentshop.lua:ro
+    # Exact RDM leveling-spell purchases at the normal Windurst vendor price.
+    - ./server-extensions/commands/agentspell.lua:/server/scripts/commands/agentspell.lua:ro
+    # Narrow hot reload for only the repository-controlled agentspell module.
+    - ./server-extensions/commands/agentreload.lua:/server/scripts/commands/agentreload.lua:ro
+    # Explicit, quest-gated temporary survival protection for the nine
+    # aggressive Genkai-1 ??? pockets. It cannot advance quest state or grant
+    # items and must be disabled after the route.
+      - ./server-extensions/commands/agentquestsafety.lua:/server/scripts/commands/agentquestsafety.lua:ro
+      - ./server-extensions/commands/agentquestmarker.lua:/server/scripts/commands/agentquestmarker.lua:ro
 
 services:
   mesh-seed:

@@ -267,6 +267,31 @@ configuration. Logout, death, stale supervisor heartbeats, inventory blocks,
 manual stops, and unknown errors remain blocked for diagnosis instead of being
 blindly restarted.
 
+Watchdog renewal must pass every persisted spell field through
+`farmRenewalConfig`, including the primary spell, level-gated upgrade, opener,
+MP floors, self-buff, and self-buff interval. An RDM run exposed the failure
+mode: the supervisor persisted these fields correctly, but an older watchdog
+mapper silently omitted the newer options at each 30-minute renewal. The
+renewal mapper now has a regression test covering the complete RDM spell
+configuration. Restart the detached watchdog after changing renewal behavior;
+editing the file does not replace an already running Node process.
+
+Caster leases can also set `--minimum-start-mp-percent`. The default is zero,
+which preserves the original HP-only recovery behavior. A positive value makes
+the detached supervisor rest between fights until both the configured HP and
+player MP reserves are restored. This prevents long RDM/BLM/WHM runs from
+silently degrading into auto-attack-only combat after their initial MP is
+spent, while reactive threats still interrupt recovery immediately.
+
+The `--minimum-free-inventory-slots` margin applies before every proactive
+pull in ordinary leveling as well as NM routes. A level-37 RDM run exposed that
+the original check existed only inside the NM-route branch, allowing the
+general loop to continue at four free slots despite a configured minimum of
+five. The shared idle-boundary guard now drains live combat and stops with
+`inventory_pressure` before another pull. Run the reviewed one-command cleanup,
+verify restored capacity, and then start a new lease; the watchdog does not
+renew inventory-pressure stops.
+
 For a level-appropriate camp that admits `decent challenge` checks (including
 high defense only while at least two healthy in-zone companions are verified):
 
@@ -674,6 +699,36 @@ zero deaths or combat teleports/recoveries. It stopped itself with
 `target_level`. A separate live state call verified Black Mage 20 / Warrior 10
 at 153/4,600 EXP, idle and logged in, with the overlay displaying
 `LEVEL 20 REACHED | AUTOMATED LEVELING COMPLETE`.
+
+### Red Mage enspell and opener support
+
+Red Mage leveling adds two independently bounded spell roles without turning
+the supervisor into a general spell bot:
+
+- `--self-buff-spell Enthunder` casts the enspell only at an idle, combat-free
+  boundary. `--self-buff-interval-seconds 150` prevents repeated attempts
+  inside the normal effect duration, and a failed command still consumes that
+  local attempt interval.
+- `--opening-combat-spell "Dia II"` casts at most once per registered fight,
+  only after both Pablo and the exact selected target are engaged.
+  `--minimum-opening-spell-mp-percent 65` reserves the opener for healthy MP
+  and prevents it from draining every pull.
+- The existing `--combat-spell` remains the primary damage spell. Opening
+  spell, job ability, primary spell, and weapon skill are mutually sequenced
+  so one observation cannot queue competing actions. A shared five-second
+  spell-command gate also prevents Trust, self-buff, opener, and damage casts
+  from colliding with FFXI's action cooldown.
+- `--combat-spell-upgrade "Stone II" --combat-spell-upgrade-level 35`
+  changes the primary damage spell locally as soon as the observed main-job
+  level reaches 35; no model poll or supervisor restart is required.
+- The self-buff is never attempted during live combat, while zoning, or while
+  the player is not idle. Normal death, disconnect, Trust, inventory, and
+  target-level stop gates remain unchanged.
+
+The intended RDM 34 configuration uses Enthunder for sword-hit damage, Dia II
+as the MP-gated opener, and Thunder as the once-per-fight nuke. At RDM 35 the
+configured upgrade automatically selects the already learned Stone II; Water
+II remains reserved for RDM 40.
 
 ### Exact lottery prototype
 

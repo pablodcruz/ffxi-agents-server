@@ -12,12 +12,13 @@ import {
   watchedItemsOwned,
 } from "../src/nm-route-policy.mjs";
 
-test("defines the guarded post-Jack NM route with unique exact IDs", () => {
+test("defines the guarded five-camp NM route with unique exact IDs", () => {
   assert.deepEqual(
     NM_ROUTE_PROFILES.map((profile) => profile.name),
     [
       "Leaping Lizzy",
       "Stinging Sophie",
+      "Jaggedy-Eared Jack",
       "Spiny Spipi",
       "Valkurm Emperor",
     ],
@@ -108,7 +109,7 @@ test("walks bounded sweep positions and advances rounds", () => {
   assert.deepEqual(nextRouteCamp({
     campIndex: 0,
     round: 1,
-    profileCount: 4,
+    profileCount: 5,
     maximumRounds: 2,
   }), {
     complete: false,
@@ -116,9 +117,9 @@ test("walks bounded sweep positions and advances rounds", () => {
     round: 1,
   });
   assert.deepEqual(nextRouteCamp({
-    campIndex: 3,
+    campIndex: 4,
     round: 1,
-    profileCount: 4,
+    profileCount: 5,
     maximumRounds: 2,
   }), {
     complete: false,
@@ -126,13 +127,13 @@ test("walks bounded sweep positions and advances rounds", () => {
     round: 2,
   });
   assert.deepEqual(nextRouteCamp({
-    campIndex: 3,
+    campIndex: 4,
     round: 2,
-    profileCount: 4,
+    profileCount: 5,
     maximumRounds: 2,
   }), {
     complete: true,
-    camp_index: 3,
+    camp_index: 4,
     round: 2,
   });
 });

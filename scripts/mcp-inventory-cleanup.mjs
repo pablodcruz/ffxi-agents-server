@@ -21,7 +21,29 @@ const sellPolicy = new Map([
   [12864,"Slacks"],[12976,"Gaiters"],[17051,"Yew Wand"],
 ]);
 const crystals = new Set([4096, 4098, 4099, 4101]);
-const archive = new Set([537, 1025, 1708, 2758, 2759, 6181, 10158]);
+// Retained collectibles, keys, quest items, and crafting materials that do not
+// need to consume field-inventory slots. Keep combat consumables and utility
+// items (Warp/Echad/Raising) immediately available instead.
+const archive = new Set([
+  501,   // Quadav Helm
+  537,
+  816,   // Silk Thread
+  889,   // Beetle Shell
+  1025,
+  1032,  // Shakhrami Chest Key
+  1146,  // Elshimo Marble
+  1156,  // Crawler Calculus
+  1534,  // Mithra Fang Sack
+  1708,
+  1789,  // Chocopass
+  2758,
+  2759,
+  4377,  // Coeurl Meat
+  6181,
+  10158,
+  16486, // Beestinger
+  17397, // Shell Bug
+]);
 const wardrobe = new Set([12816, 12944, 13116]);
 const currency = new Set([1126, 8711]);
 const unsoldArchive = new Set([508, 511, 12631, 12754, 12883, 13005]);
@@ -144,8 +166,9 @@ try {
   await applyMovePolicy(archive,7,[0,6,8]);
   await applyMovePolicy(unsoldArchive,7,[0,6,8]);
   await applyMovePolicy(wardrobe,8,[0,6,7,9]);
-  await applyMovePolicy(currency,7,[0,6,8]);
-  await applyMovePolicy(currency,6,[7]);
+  // Consolidate seals and vouchers directly in the Mog Sack. Routing them
+  // through the Case first needlessly moved every existing stack twice.
+  await applyMovePolicy(currency,6,[0,7,8]);
 
   const finalStates=await Promise.all(containers.map(state));
   report.containers=Object.fromEntries(finalStates.map((snapshot,index)=>[

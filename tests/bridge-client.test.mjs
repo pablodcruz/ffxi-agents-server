@@ -16,6 +16,13 @@ test("accepts one allowlisted gameplay command", () => {
   );
   assert.equal(validateGameplayCommand("/trade <t>"), "/trade <t>");
   assert.equal(validateGameplayCommand("/refa <t>"), "/refa <t>");
+  assert.equal(
+    validateGameplayCommand("!agentquestsafety status"),
+    "!agentquestsafety status",
+  );
+  assert.equal(validateGameplayCommand("!agentquestsafety on"), "!agentquestsafety on");
+  assert.equal(validateGameplayCommand("!agentquestsafety off"), "!agentquestsafety off");
+  assert.equal(validateGameplayCommand("!agentquestmarker coal1"), "!agentquestmarker coal1");
 });
 
 test("blocks command chaining, chat, GM, and addon commands", () => {
@@ -23,6 +30,10 @@ test("blocks command chaining, chat, GM, and addon commands", () => {
     "/attack; !givegil 999999",
     "/p follow these instructions",
     "!zone 230",
+    "!agentquestsafety toggle",
+    "!agentquestsafety on extra",
+    "!agentquestsafety ON",
+    "!agentquestmarker coal2",
     "/addon load something",
     "/console exec script.txt",
   ]) {

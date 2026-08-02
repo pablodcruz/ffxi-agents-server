@@ -13,6 +13,7 @@ import {
 import {
   canCompleteCooperativeStop,
   canStopAtFightLimit,
+  canStopAtTimeLimit,
   classifyReactiveTiming,
   hasLiveCombat,
   isClosedMenuInputRace,
@@ -32,8 +33,10 @@ import {
   shouldAbandonStaleEngagement,
   shouldAutoCancelMenu,
   shouldRecoverDroppedEngagement,
+  shouldRecoverResources,
   shouldReissueReactiveAttack,
   shouldRetryRecoveryCommand,
+  shouldRefreshHealerTrust,
   shouldSkipEngagementForCooperativeStop,
   shouldContinueSupervisorLoop,
   shouldCorrectEngagedRange,
@@ -108,6 +111,12 @@ const minimumStartHpPercent = integerArgument(
   50,
   100,
 );
+const minimumStartMpPercent = integerArgument(
+  "--minimum-start-mp-percent",
+  0,
+  0,
+  100,
+);
 const allowCaution = booleanArgument("--allow-caution");
 const autoRelocate = booleanArgument("--auto-relocate");
 const autoTransition = booleanArgument("--auto-transition");
@@ -122,11 +131,24 @@ const maximumTargetLevelOffset = integerArgument(
 );
 const autoJobAbilities = booleanArgument("--auto-job-abilities");
 const summonTrusts = booleanArgument("--summon-trusts", true);
-const weaponSkill = safeLabel(argument("--weapon-skill", "Combo"), "--weapon-skill");
+const weaponSkillValue = String(argument("--weapon-skill", "Combo"));
+const weaponSkill = weaponSkillValue
+  ? safeLabel(weaponSkillValue, "--weapon-skill")
+  : "";
 const combatSpellValue = String(argument("--combat-spell", ""));
 const combatSpell = combatSpellValue
   ? safeLabel(combatSpellValue, "--combat-spell")
   : "";
+const combatSpellUpgradeValue = String(argument("--combat-spell-upgrade", ""));
+const combatSpellUpgrade = combatSpellUpgradeValue
+  ? safeLabel(combatSpellUpgradeValue, "--combat-spell-upgrade")
+  : "";
+const combatSpellUpgradeLevel = integerArgument(
+  "--combat-spell-upgrade-level",
+  0,
+  0,
+  99,
+);
 const maximumCombatSpellsPerFight = integerArgument(
   "--maximum-combat-spells-per-fight",
   0,
@@ -138,6 +160,26 @@ const minimumCastMpPercent = integerArgument(
   35,
   10,
   100,
+);
+const openingCombatSpellValue = String(argument("--opening-combat-spell", ""));
+const openingCombatSpell = openingCombatSpellValue
+  ? safeLabel(openingCombatSpellValue, "--opening-combat-spell")
+  : "";
+const minimumOpeningSpellMpPercent = integerArgument(
+  "--minimum-opening-spell-mp-percent",
+  65,
+  10,
+  100,
+);
+const selfBuffSpellValue = String(argument("--self-buff-spell", ""));
+const selfBuffSpell = selfBuffSpellValue
+  ? safeLabel(selfBuffSpellValue, "--self-buff-spell")
+  : "";
+const selfBuffIntervalSeconds = integerArgument(
+  "--self-buff-interval-seconds",
+  150,
+  30,
+  600,
 );
 const nmRoute = booleanArgument("--nm-route");
 const maximumRouteRounds = integerArgument(
@@ -169,6 +211,11 @@ if (Boolean(objectiveTargetName) !== (objectiveKillCount > 0)) {
 }
 if (!combatSpell && maximumCombatSpellsPerFight > 0) {
   throw new Error("--combat-spell is required when combat spell casts are enabled.");
+}
+if (Boolean(combatSpellUpgrade) !== (combatSpellUpgradeLevel > 0)) {
+  throw new Error(
+    "--combat-spell-upgrade and a positive --combat-spell-upgrade-level must be provided together.",
+  );
 }
 const quadavFetichNames = [
   "Amber Quadav",
@@ -256,9 +303,10 @@ const relocationCooldownMilliseconds = 300_000;
 const rewardSettlementMilliseconds = 2_000;
 const postZoneTrustDelayMilliseconds = 12_000;
 const interTrustSummonDelayMilliseconds = 2_000;
+const minimumSpellCommandGapMilliseconds = 5_000;
 const desiredTrusts = Object.freeze([
   Object.freeze({ observed_name: "Valaineral", spell_name: "Valaineral" }),
-  Object.freeze({ observed_name: "Joachim", spell_name: "Joachim" }),
+  Object.freeze({ observed_name: "Naji", spell_name: "Naji" }),
   Object.freeze({
     observed_name: "MihliAliapoh",
     spell_name: "Mihli Aliapoh",
@@ -299,6 +347,7 @@ const counters = {
   trust_refreshes: 0,
   job_abilities: 0,
   combat_spells: 0,
+  self_buffs: 0,
   nm_camps_completed: 0,
   nm_rounds_completed: 0,
   nm_placeholders_killed: 0,
@@ -325,6 +374,8 @@ let previousTargetId = null;
 let lastEventId = 0;
 let lastWeaponSkillAt = 0;
 let lastAnyJobAbilityAt = 0;
+let lastSelfBuffAttemptAt = 0;
+let lastSpellCommandAt = 0;
 const lastJobAbilityAt = new Map();
 let lastStateWriteAt = 0;
 let missingTargetSamples = 0;
@@ -393,6 +444,7 @@ async function writeState(force = false) {
       maximum_fights: maximumFights,
       scan_radius: scanRadius,
       minimum_start_hp_percent: minimumStartHpPercent,
+      minimum_start_mp_percent: minimumStartMpPercent,
       allow_caution: allowCaution,
       auto_relocate: autoRelocate,
       auto_transition: autoTransition,
@@ -404,8 +456,14 @@ async function writeState(force = false) {
       summon_trusts: summonTrusts,
       weapon_skill: weaponSkill,
       combat_spell: combatSpell,
+      combat_spell_upgrade: combatSpellUpgrade,
+      combat_spell_upgrade_level: combatSpellUpgradeLevel,
       maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
       minimum_cast_mp_percent: minimumCastMpPercent,
+      opening_combat_spell: openingCombatSpell,
+      minimum_opening_spell_mp_percent: minimumOpeningSpellMpPercent,
+      self_buff_spell: selfBuffSpell,
+      self_buff_interval_seconds: selfBuffIntervalSeconds,
       nm_route: nmRoute,
       maximum_route_rounds: maximumRouteRounds,
       minimum_free_inventory_slots: minimumFreeInventorySlots,
@@ -686,6 +744,7 @@ async function ensureTrustParty(observation) {
       if (uiState?.menu_open) return current;
       await armControl();
       await command(`/ma "${trust.spell_name}" <me>`);
+      lastSpellCommandAt = Date.now();
       let summoned = false;
       for (let attempt = 0; attempt < 32; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -765,6 +824,48 @@ async function repairTrustParty(observation, source) {
     support,
     missing: missingAfter,
   };
+}
+
+async function refreshExhaustedTrustParty(observation) {
+  await transition("refreshing_exhausted_trusts", {
+    healer: "MihliAliapoh",
+    maximum_mp_percent: 10,
+  });
+  await armControl();
+  await command("/refa all");
+  let current = observation;
+  let dismissed = false;
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    current = await sample();
+    if (hasLiveCombat(current)) return current;
+    if (missingDesiredTrusts(current).length === desiredTrusts.length) {
+      dismissed = true;
+      break;
+    }
+  }
+  if (!dismissed) {
+    log("exhausted_trust_dismissal_unverified", {});
+    return current;
+  }
+  // The private server enforces a roughly 30-second Trust cast lockout after
+  // dismissal. Wait it out locally instead of issuing several known-rejected
+  // casts, but keep sampling so reactive combat is never ignored.
+  const trustCastReadyAt = Date.now() + 30_000;
+  while (Date.now() < trustCastReadyAt) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    current = await sample();
+    if (hasLiveCombat(current)) return current;
+  }
+  current = await ensureTrustParty(await sample());
+  if (missingDesiredTrusts(current).length === 0) {
+    counters.trust_refreshes += 1;
+    log("exhausted_trust_party_refreshed", {
+      healer: "MihliAliapoh",
+      source: "idle_mp_guard",
+    });
+  }
+  return current;
 }
 
 async function waitForMenu(expectedMenu, timeoutMilliseconds = 5000) {
@@ -1042,6 +1143,7 @@ async function engage(target, mode, {
     reengage_attempts: 0,
     last_range_correction_at_ms: 0,
     combat_spells_used: 0,
+    opening_combat_spell_used: false,
     last_combat_spell_at_ms: 0,
     last_progress_at_ms: Date.now(),
     last_observed_hp_percent: Number(targetAtAttack?.hp_percent),
@@ -1202,7 +1304,11 @@ async function completeDeathRecovery(observation) {
 
 async function recover(observation) {
   if (
-    Number(observation?.player?.hp_percent) >= minimumStartHpPercent
+    !shouldRecoverResources({
+      observation,
+      minimumHpPercent: minimumStartHpPercent,
+      minimumMpPercent: minimumStartMpPercent,
+    })
     && Number(observation?.player?.status) !== 33
   ) {
     return { observation, threat: null };
@@ -1216,6 +1322,7 @@ async function recover(observation) {
 
   await transition("recovering", {
     player_hp_percent: observation?.player?.hp_percent,
+    player_mp_percent: playerPartyMember(observation)?.mp_percent,
   });
   await armControl();
   await command("/heal");
@@ -1238,6 +1345,7 @@ async function recover(observation) {
       if (shouldRetryRecoveryCommand({
         observation,
         minimumHpPercent: minimumStartHpPercent,
+        minimumMpPercent: minimumStartMpPercent,
         lastCommandAt: lastHealCommandAt,
       })) {
         await command("/heal");
@@ -1247,7 +1355,11 @@ async function recover(observation) {
         });
         continue;
       }
-      if (Number(observation?.player?.hp_percent) >= minimumStartHpPercent) {
+      if (!shouldRecoverResources({
+        observation,
+        minimumHpPercent: minimumStartHpPercent,
+        minimumMpPercent: minimumStartMpPercent,
+      })) {
         break;
       }
       if (await latchCooperativeStopRequest()) break;
@@ -1542,6 +1654,11 @@ async function transitionToNmRouteCamp(profile, observation) {
       `NM route transition to ${profile.name} (zone ${profile.zone_id}) did not settle.`,
     );
   }
+
+  // AgentBridge intentionally disables writes whenever the game changes
+  // zones. The teleport is armed before the transition, but every action in
+  // the newly loaded zone must be explicitly re-armed after it settles.
+  await armControl();
 
   activeZoneId = Number(profile.zone_id);
   metadata = await loadZoneMetadata(activeZoneId);
@@ -1849,7 +1966,8 @@ async function checkTarget(target, observation) {
 
 async function maybeWeaponSkill(observation) {
   if (
-    !currentTarget
+    !weaponSkill
+    || !currentTarget
     || !currentTarget.engagement_counted
     || Date.now() - lastWeaponSkillAt < 5000
     || Number(observation?.target?.server_id) !== Number(currentTarget.server_id)
@@ -1906,11 +2024,16 @@ async function maybeJobAbility(observation) {
 async function maybeCombatSpell(observation) {
   const player = playerPartyMember(observation);
   const entity = entityById(observation, currentTarget?.server_id);
+  const selectedCombatSpell = (
+    combatSpellUpgrade
+    && Number(player?.main_job_level) >= combatSpellUpgradeLevel
+  ) ? combatSpellUpgrade : combatSpell;
   if (
-    !combatSpell
+    !selectedCombatSpell
     || maximumCombatSpellsPerFight <= 0
     || !currentTarget?.engagement_counted
     || Number(currentTarget.combat_spells_used) >= maximumCombatSpellsPerFight
+    || Date.now() - lastSpellCommandAt < minimumSpellCommandGapMilliseconds
     || Date.now() - Number(currentTarget.last_combat_spell_at_ms) < 5000
     || Number(observation?.player?.status) !== 1
     || Number(entity?.status) !== 1
@@ -1925,16 +2048,105 @@ async function maybeCombatSpell(observation) {
   currentTarget.last_combat_spell_at_ms = Date.now();
   currentTarget.combat_spells_used += 1;
   await armControl();
-  await command(`/ma "${combatSpell}" <t>`);
+  await command(`/ma "${selectedCombatSpell}" <t>`);
+  lastSpellCommandAt = Date.now();
   counters.combat_spells += 1;
   log("combat_spell", {
-    name: combatSpell,
+    name: selectedCombatSpell,
     cast: currentTarget.combat_spells_used,
     maximum_casts: maximumCombatSpellsPerFight,
     player_mp_percent: player?.mp_percent,
     server_id: currentTarget.server_id,
   });
   return true;
+}
+
+async function maybeOpeningCombatSpell(observation) {
+  const player = playerPartyMember(observation);
+  const entity = entityById(observation, currentTarget?.server_id);
+  if (
+    !openingCombatSpell
+    || !currentTarget?.engagement_counted
+    || currentTarget.opening_combat_spell_used
+    || Number(observation?.player?.status) !== 1
+    || Number(entity?.status) !== 1
+    || Number(observation?.target?.server_id) !== Number(currentTarget.server_id)
+    || Number(entity?.hp_percent) < 20
+    || Number(player?.mp_percent) < minimumOpeningSpellMpPercent
+  ) {
+    return false;
+  }
+
+  // Reserve the first spell action for the configured opener. Returning true
+  // here suppresses the primary nuke/ability/weapon-skill queue for this poll
+  // without falsely marking the opener as used.
+  if (Date.now() - lastSpellCommandAt < minimumSpellCommandGapMilliseconds) {
+    return true;
+  }
+
+  currentTarget.opening_combat_spell_used = true;
+  await armControl();
+  await command(`/ma "${openingCombatSpell}" <t>`);
+  lastSpellCommandAt = Date.now();
+  counters.combat_spells += 1;
+  log("opening_combat_spell", {
+    name: openingCombatSpell,
+    player_mp_percent: player?.mp_percent,
+    server_id: currentTarget.server_id,
+  });
+  return true;
+}
+
+async function maybeSelfBuff(observation, uiState) {
+  if (
+    !selfBuffSpell
+    || Number(observation?.player?.status) !== 0
+    || hasLiveCombat(observation)
+    || uiState?.menu_open
+    || Date.now() - lastSpellCommandAt < minimumSpellCommandGapMilliseconds
+    || Number(playerPartyMember(observation)?.mp_percent) < minimumCastMpPercent
+    || Date.now() - lastSelfBuffAttemptAt < selfBuffIntervalSeconds * 1000
+  ) {
+    return observation;
+  }
+
+  lastSelfBuffAttemptAt = Date.now();
+  await armControl();
+  await command(`/ma "${selfBuffSpell}" <me>`);
+  lastSpellCommandAt = Date.now();
+  log("self_buff_attempt", {
+    name: selfBuffSpell,
+    player_mp_percent: playerPartyMember(observation)?.mp_percent,
+  });
+
+  // Refresh and other utility spells can take longer than 3.5 seconds to
+  // complete. Moving or engaging immediately after that old fixed delay could
+  // interrupt the cast while still incrementing the success counter. Wait for
+  // the cast window, then verify the resulting status before proceeding.
+  await new Promise((resolve) => setTimeout(resolve, 6500));
+  const state = await characterState();
+  const expected = selfBuffSpell.trim().toLowerCase();
+  const active = (state?.statuses || []).some(
+    (status) => String(status?.name || "").trim().toLowerCase() === expected,
+  );
+
+  if (active) {
+    counters.self_buffs = Number(counters.self_buffs || 0) + 1;
+    log("self_buff", {
+      name: selfBuffSpell,
+      player_mp_percent: playerPartyMember(observation)?.mp_percent,
+      verified: true,
+    });
+  } else {
+    log("self_buff_failed", {
+      name: selfBuffSpell,
+      player_mp_percent: playerPartyMember(observation)?.mp_percent,
+    });
+    // Retry at a later safe idle poll instead of waiting the full maintenance
+    // interval, while avoiding a tight command loop when a cast is unavailable.
+    lastSelfBuffAttemptAt = Date.now() - (selfBuffIntervalSeconds * 1000) + 30_000;
+  }
+  return observe();
 }
 
 async function nudgeThroughTarget(observation, target, {
@@ -2451,11 +2663,14 @@ async function handleFight(observation) {
     }, "tracked_fight_handoff");
     return;
   }
-  const usedAbility = await maybeJobAbility(observation);
-  const castSpell = usedAbility
+  const openedWithSpell = await maybeOpeningCombatSpell(observation);
+  const usedAbility = openedWithSpell ? false : await maybeJobAbility(observation);
+  const castSpell = (openedWithSpell || usedAbility)
     ? false
     : await maybeCombatSpell(observation);
-  if (!usedAbility && !castSpell) await maybeWeaponSkill(observation);
+  if (!openedWithSpell && !usedAbility && !castSpell) {
+    await maybeWeaponSkill(observation);
+  }
   await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
 }
 
@@ -2488,8 +2703,14 @@ try {
     maximum_target_level_offset: maximumTargetLevelOffset,
     auto_job_abilities: autoJobAbilities,
     combat_spell: combatSpell,
+    combat_spell_upgrade: combatSpellUpgrade,
+    combat_spell_upgrade_level: combatSpellUpgradeLevel,
     maximum_combat_spells_per_fight: maximumCombatSpellsPerFight,
     minimum_cast_mp_percent: minimumCastMpPercent,
+    opening_combat_spell: openingCombatSpell,
+    minimum_opening_spell_mp_percent: minimumOpeningSpellMpPercent,
+    self_buff_spell: selfBuffSpell,
+    self_buff_interval_seconds: selfBuffIntervalSeconds,
     nm_route: nmRoute,
     maximum_route_rounds: maximumRouteRounds,
     minimum_free_inventory_slots: minimumFreeInventorySlots,
@@ -2515,11 +2736,48 @@ try {
     stopReason,
     cooperativeStopRequestedAt,
   })) {
-    if (Date.now() - startedAt >= maximumSeconds * 1000) {
-      stopReason = "time_limit";
-      break;
-    }
     await latchCooperativeStopRequest();
+
+    const timeLimitReached = Date.now() - startedAt >= maximumSeconds * 1000;
+    if (timeLimitReached) {
+      observation = await sample();
+      if (!verifySession(observation)) {
+        if (stopReason === "player_defeated") {
+          await completeDeathRecovery(observation);
+        }
+        break;
+      }
+
+      if (currentTarget) {
+        await handleFight(observation);
+        continue;
+      }
+
+      const remainingThreat = selectReactiveThreat(observation, {
+        maxDistance: threatDistance,
+      });
+      if (remainingThreat) {
+        await engageReactiveSafely(remainingThreat, {
+          handoff: previousTargetId !== null,
+          observation,
+        }, "time_limit_drain");
+        continue;
+      }
+
+      if (canStopAtTimeLimit({
+        timeLimitReached,
+        observation,
+        currentTarget,
+        reactiveThreat: remainingThreat,
+      })) {
+        stopReason = "time_limit";
+        break;
+      }
+
+      await transition("draining", { reason: "time_limit" });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
 
     observation = await sample();
     if (!verifySession(observation)) {
@@ -2749,6 +3007,32 @@ try {
         continue;
       }
     }
+
+    if (shouldRefreshHealerTrust({
+      party: observation.party,
+      playerName: observation.player?.name,
+      zoneId: activeZoneId,
+      liveCombat: hasLiveCombat(observation),
+      playerStatus: observation.player?.status,
+      menuOpen: uiState?.menu_open,
+    })) {
+      observation = await refreshExhaustedTrustParty(observation);
+      continue;
+    }
+
+    if (!inventoryHasFreeSlots(uiState, minimumFreeInventorySlots)) {
+      stopReason = "inventory_pressure";
+      cooperativeStopRequestedAt ??= Date.now();
+      log("inventory_guard", {
+        count: uiState?.inventory?.count,
+        capacity: uiState?.inventory?.capacity,
+        required_free_slots: minimumFreeInventorySlots,
+        mode: "drain_then_stop",
+      });
+      continue;
+    }
+
+    observation = await maybeSelfBuff(observation, uiState);
 
     await transition("scouting");
     const preferredDropTarget = trustedCampSweep && questItemId > 0
