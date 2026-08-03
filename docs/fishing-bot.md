@@ -39,8 +39,11 @@ the third narrow Bastok fishing zone; the bot still cannot run in arbitrary
 zones.
 
 The stream-friendly Markets camp used for the level-10 run is at AgentBridge
-coordinates `x=-198, y=-73, z=-6`. It faces the canal with open sky, trees,
-and city architecture rather than the wall at the original Mines test point.
+coordinates `x=-198, y=-73, z=-6`. Heading `3.1415` plus one client camera
+reset (`Numpad 5`) frames the canal on the right with open sky, trees, and city
+architecture rather than the wall at the original Mines test point. The
+heading is part of the supervisor renewal command; the camera reset is only a
+stream-composition step and is not required by the fixed fishing packets.
 
 Do not infer a fish cap from client text or the AgentBridge raw skill field.
 For exact progress in tenths, query the server-owned `char_skills.value` for
@@ -84,7 +87,7 @@ pnpm mcp:fishing-start -- \
   --maximum-seconds 1800 \
   --maximum-casts 100 \
   --minimum-free-inventory-slots 3 \
-  --heading 0 \
+  --heading 3.1415 \
   --confirmation 'START PRIVATE SERVER FISHING BOT'
 ```
 
@@ -131,12 +134,15 @@ leave the character stuck in fishing status.
 For inventory pressure, the private-server `!agentshop` path allowlists only
 the verified fishing catches and junk produced by these camps: Rusty Bucket,
 Moat Carp, Tricolored Carp, Gold Carp, Crayfish, Copper Ring, Rusty Leggings,
-and Rusty Subligar. Pablo must be within six yalms of Balthilda in Bastok
+and Rusty Subligar. The same bounded cleanup also includes four exact old
+combat-loot stacks observed blocking this run: Fruit Seeds, Beetle Jaw, Loam,
+and Royal Jelly. Pablo must be within six yalms of Balthilda in Bastok
 Markets. The command removes only main-inventory items, reads each item's
 normal server base-sale value, removes the exact quantity before adding gil,
-and permits stack quantities only for fish. The MCP wrapper independently
-verifies the exact inventory decrease and gil increase before reporting
-success. Broken rods have a zero NPC value and are intentionally excluded.
+and permits stack quantities only for the explicit stackable cleanup items.
+The MCP wrapper independently verifies the exact inventory decrease and gil
+increase before reporting success. Broken rods have a zero NPC value and are
+intentionally excluded.
 
 The same item list is also available through the normal `0x084`/`0x085` sale
 packet helper as a live-compatible fallback when the running map process has
@@ -147,6 +153,15 @@ sold 7 Crayfish for 70 gil, 1 Gold Carp for 300 gil, 4 Moat Carp for 40 gil,
 and 2 Tricolored Carp for 104 gil. After a future map restart, live-proof the
 lower-friction proximity-gated path before replacing this fallback in the
 monitor.
+
+AgentBridge 0.32.5 extended that exact normal-packet fallback to the four old
+combat-loot stacks that blocked the level-10 run. A single verified cleanup
+sold 51 Loam for 19,329 gil, 15 Beetle Jaws for 1,815 gil, 5 Fruit Seeds for
+400 gil, and 1 Royal Jelly for 150 gil. Together with the fishing catch and
+junk cleanup, main inventory fell from 34/35 to 21/35 while all food, seals,
+equipment, bait, usable rods, and broken rods were preserved. Goblin Mask and
+Goblin Helm produced no verified normal sale, so the monitor leaves them alone
+instead of retrying blindly.
 
 ## Live proof
 

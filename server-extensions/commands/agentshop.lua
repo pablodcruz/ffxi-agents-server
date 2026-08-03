@@ -62,6 +62,10 @@ local allowedItems =
     -- sale value and require Pablo to be physically beside Balthilda. Fish
     -- stacks may be sold together; non-stackable junk remains quantity=1.
     [90]    = { maxQuantity = 1,  maxSaleQuantity = 1,  saleVendor = balthilda }, -- Rusty bucket
+    [574]   = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Fruit seeds
+    [894]   = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Beetle jaw
+    [2016]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Loam
+    [4508]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Royal jelly
     [4401]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Moat carp
     [4426]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Tricolored carp
     [4427]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Gold carp

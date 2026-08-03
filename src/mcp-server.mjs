@@ -1170,6 +1170,7 @@ server.registerTool(
         z.literal(90), z.literal(4401), z.literal(4426),
         z.literal(4427), z.literal(4472), z.literal(13454),
         z.literal(14117), z.literal(14242),
+        z.literal(574), z.literal(894), z.literal(2016), z.literal(4508),
       ]),
       quantity: z.number().int().min(1).max(99).default(1),
       confirmation: z.literal("TRANSACT WITH NEARBY PRIVATE SERVER VENDOR"),
@@ -1183,7 +1184,7 @@ server.registerTool(
   },
   async ({ agent_id, action, item_id, quantity, confirmation }) => {
     try {
-      const stackableSaleItems = [4401, 4426, 4427, 4472];
+      const stackableSaleItems = [574, 894, 2016, 4401, 4426, 4427, 4472, 4508];
       const saleItems = [90, ...stackableSaleItems, 12385, 13454, 14117, 14242];
       if (action === "sell" && !stackableSaleItems.includes(item_id) && quantity !== 1) {
         throw new Error("Non-stackable resale requires quantity 1.");
@@ -1480,7 +1481,7 @@ server.registerTool(
       source_slot: z.number().int().min(1).max(80),
       item_id: z.number().int().refine(
         (value) => [
-          90, 4401, 4426, 4427, 4472, 13454, 14117, 14242,
+          90, 574, 894, 2016, 4401, 4426, 4427, 4472, 4508, 13454, 14117, 14242,
           505, 573, 575, 768, 847, 852, 856, 881, 882, 924, 925, 926,
           936, 953, 4570, 12385,
           508, 511, 642, 750, 846, 912, 922, 1984, 4358, 4362, 4366,

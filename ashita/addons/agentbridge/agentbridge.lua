@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.4';
+addon.version = '0.32.5';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -135,6 +135,10 @@ local job_change_npc_names =
 local allowed_npc_sale_items =
 {
     [90] = true,    -- Rusty Bucket
+    [574] = true,   -- Fruit Seeds
+    [894] = true,   -- Beetle Jaw
+    [2016] = true,  -- Loam
+    [4508] = true,  -- Royal Jelly
     [505] = true,   -- Sheepskin
     [573] = true,   -- Vegetable Seeds
     [575] = true,   -- Grain Seeds
@@ -2114,6 +2118,10 @@ local function private_server_vendor_transaction(params)
         [8711] = true,  -- Copper Voucher
         [17391] = true, -- Willow Fishing Rod
         [17396] = true, -- Little Worm
+        [574] = true,   -- Fruit Seeds
+        [894] = true,   -- Beetle Jaw
+        [2016] = true,  -- Loam
+        [4508] = true,  -- Royal Jelly
         [90] = true,    -- Rusty Bucket
         [4401] = true,  -- Moat Carp
         [4426] = true,  -- Tricolored Carp
@@ -2141,12 +2149,14 @@ local function private_server_vendor_transaction(params)
         not allowed_items[item_id] or
         quantity < 1 or
         quantity > (item_id == 17396 and 99 or
-            ((item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472) and 12 or 4)) or
+            ((item_id == 574 or item_id == 894 or item_id == 2016 or item_id == 4508 or
+                item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472) and 12 or 4)) or
         quantity ~= math.floor(quantity)
     ) then
         error('Private-server vendor transaction is outside the exact allowlist.');
     end
-    local stackable_sale = item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472;
+    local stackable_sale = item_id == 574 or item_id == 894 or item_id == 2016 or item_id == 4508 or
+        item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472;
     if (action == 'sell' and not stackable_sale and quantity ~= 1) then
         error('Private-server non-stackable resale requires quantity=1.');
     end

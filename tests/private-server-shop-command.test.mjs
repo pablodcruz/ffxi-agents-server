@@ -37,7 +37,7 @@ test("private-server shop preserves proximity, costs, ownership, and sale atomic
   assert.match(source, /sparksCost\s*=\s*2755/);
   assert.match(source, /id\s*=\s*17739953, name\s*=\s*'Isakoth'/);
   assert.match(source, /id\s*=\s*17739803, name\s*=\s*'Balthilda'/);
-  for (const itemId of [90, 4401, 4426, 4427, 4472, 13454, 14117, 14242]) {
+  for (const itemId of [90, 574, 894, 2016, 4401, 4426, 4427, 4472, 4508, 13454, 14117, 14242]) {
     assert.match(source, new RegExp(`\\[${itemId}\\]`));
   }
   assert.match(source, /maxSaleQuantity\s*=\s*12/);

@@ -23,6 +23,10 @@ const purchasableItems = new Set([
 ]);
 const saleUnitGil = new Map([
   [90, 50], // Rusty Bucket
+  [574, 80], // Fruit Seeds
+  [894, 121], // Beetle Jaw
+  [2016, 379], // Loam
+  [4508, 150], // Royal Jelly
   [4401, 10], // Moat Carp
   [4426, 52], // Tricolored Carp
   [4427, 300], // Gold Carp
@@ -32,7 +36,7 @@ const saleUnitGil = new Map([
   [14117, 10], // Rusty Leggings
   [14242, 15], // Rusty Subligar
 ]);
-const stackableSaleItems = new Set([4401, 4426, 4427, 4472]);
+const stackableSaleItems = new Set([574, 894, 2016, 4401, 4426, 4427, 4472, 4508]);
 const allowedItems = new Set([...purchasableItems, ...saleUnitGil.keys(), 8711]);
 if (!["status", "buy", "sell", "voucher"].includes(action)) {
   throw new Error("--action must be status, buy, sell, or voucher.");
