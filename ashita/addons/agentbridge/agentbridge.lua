@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.0';
+addon.version = '0.32.1';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -3497,9 +3497,24 @@ ashita.events.register('packet_in', 'fishing_bot_packet_in_cb', function (event)
         bot.hook_packet_layout = 'payload';
     end
     bot.hooks = bot.hooks + 1;
-    bot.phase = 'hooked';
-    bot.next_action_at = socket.gettime() + 0.8;
-    add_event(-1, ('Agent fishing hook %u observed.'):fmt(bot.hooks));
+    -- Reel in the packet callback, before the native fishing minigame can
+    -- submit its own failed RequestEndMiniGame packet.  The old 0.8-second
+    -- delay created a race that produced generic "lost your catch" results
+    -- even though the server-issued intuition value was decoded correctly.
+    -- This still sends the ordinary mode-3 packet with stamina zero, so
+    -- LandSandBoat remains authoritative for catches, breaks, bait, and
+    -- fishing skill-ups.
+    if (send_fishing_reel_packet(bot.pending_special)) then
+        bot.reel_requests = bot.reel_requests + 1;
+        bot.phase = 'resolving';
+        bot.phase_deadline = socket.gettime() + 5.0;
+        add_event(-1, ('Agent fishing hook %u observed; reel request %u queued.'):fmt(
+            bot.hooks,
+            bot.reel_requests
+        ));
+    else
+        stop_fishing_bot('player_identity_unavailable');
+    end
 end);
 
 ashita.events.register('packet_in', 'merchant_catalog_packet_in_cb', function (event)

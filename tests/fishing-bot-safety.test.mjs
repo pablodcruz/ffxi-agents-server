@@ -39,6 +39,8 @@ test("fishing reel is a fixed normal packet with server-owned outcomes", () => {
   assert.match(bridge, /AddOutgoingPacket\(0x01A, packet\)/);
   assert.match(bridge, /append_u16\(packet, 0x0E\)/);
   assert.match(bridge, /bot\.phase = 'starting'/);
+  assert.match(bridge, /Agent fishing hook %u observed; reel request %u queued/);
+  assert.match(bridge, /bot\.phase = 'resolving'/);
   assert.match(bridge, /bot\.next_action_at = socket\.gettime\(\) \+ 6\.0/);
   assert.match(bridge, /packet\[#packet \+ 1\] = 2/);
   assert.match(bridge, /packet\[#packet \+ 1\] = 4/);

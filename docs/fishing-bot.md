@@ -76,10 +76,12 @@ stream view, but hook checks no longer depend on camera orientation.
 The loop is
 `cooldown -> starting -> queued -> hooked -> resolving -> release -> cooldown`.
 No-bite text returns directly to cooldown. Incoming packet `0x115` provides the
-server-generated hook special value; AgentBridge echoes it only in the fixed
-reel request. The decoder supports both full-packet and payload-relative Ashita
-event layouts without allowing callers to supply this value. Catch/loss text
-triggers the normal release request.
+server-generated hook special value; AgentBridge immediately echoes it only in
+the fixed reel request. Reeling in that packet callback prevents the native
+minigame from racing the supervisor with its own failed end request. The
+decoder supports both full-packet and payload-relative Ashita event layouts
+without allowing callers to supply this value. Catch/loss text triggers the
+normal release request.
 
 The run stops on target skill, time limit, cast limit, inventory pressure,
 missing rod, missing bait, logout, zoning, disabled control, or unavailable
@@ -104,11 +106,20 @@ risk” warning, and describes the default fishing skill-up multiplier as very
 hard. This lab opts in only on the isolated private server. Catch and skill-up
 rates remain server RNG; the supervisor does not manufacture fish or skill.
 
-During the 2026-08-03 bring-up, more than 100 aggregate test casts produced
-the verified catches above but no observable skill progress, alongside an
-abnormally high rate of generic reel losses. After stopping the bot, the local
-administrator set fishing to level 1 once so later automation work could
-continue. That was a documented private-server testing fallback, not a bot
-feature or evidence that normal skill-up RNG succeeded. Do not automate that
-admin command or represent it as earned progression; diagnose or repair the
-upstream experimental fishing path before using targets above level 1.
+During the initial 2026-08-03 bring-up, more than 100 aggregate test casts
+produced the verified catches above but no observable skill progress, alongside
+an abnormally high rate of generic reel losses. After stopping the bot, the
+local administrator set fishing to level 1 once so later automation work could
+continue. That remains a documented private-server testing fallback, not a bot
+feature or evidence of earned progression.
+
+Inspection of the exact server revision (`2949f26b`) showed that the packet
+layouts and server intuition check were correct. The failure was a client-side
+race: AgentBridge waited 0.8 seconds after packet `0x115`, allowing the native
+minigame to submit a failed end request first. Version 0.32.1 reels immediately
+from that hook callback. The first bounded live proof after this change caught
+nine Crayfish with normal bait consumption and advanced the authoritative
+server fishing value from 10 to 14 (skill 1.0 to 1.4), without any admin skill
+command. Targets above level 1 are therefore allowed only with this corrected
+server-authoritative path; never automate or represent an admin skill command
+as earned fishing progress.
