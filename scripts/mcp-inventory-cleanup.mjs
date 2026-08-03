@@ -6,6 +6,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
+const mogHouseRelief = process.argv.includes("--moghouse-relief");
 const containers = [0, 6, 7, 8, 9];
 const sellPolicy = new Map([
   [505,"Sheepskin"],[573,"Vegetable Seeds"],[575,"Grain Seeds"],
@@ -31,6 +32,7 @@ const archive = new Set([
   889,   // Beetle Shell
   1025,
   1032,  // Shakhrami Chest Key
+  1040,  // Nest Chest Key
   1146,  // Elshimo Marble
   1156,  // Crawler Calculus
   1534,  // Mithra Fang Sack
@@ -38,6 +40,10 @@ const archive = new Set([
   1789,  // Chocopass
   2758,
   2759,
+  3297,  // Flame Geode
+  3298,  // Snow Geode
+  3302,  // Aqua Geode
+  3304,  // Shadow Geode
   4377,  // Coeurl Meat
   6181,
   10158,
@@ -160,7 +166,12 @@ try {
     }
   }
 
-  await applyMovePolicy(crystals,7,[0,6]);
+  // Safe 2 is writable only while the live character is inside the Mog House.
+  // The explicit relief mode empties accumulated crystal stacks from the
+  // field-accessible Case into Safe 2; ordinary field cleanup still targets
+  // the Case and safely rejects locked destinations.
+  await applyMovePolicy(crystals,mogHouseRelief ? 9 : 7,
+    mogHouseRelief ? [0,6,7] : [0,6]);
   // Mog Safe 2 is not writable outside the Mog House. The always-available
   // Mog Case is the low-friction archive while adventuring.
   await applyMovePolicy(archive,7,[0,6,8]);

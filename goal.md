@@ -1,62 +1,44 @@
-# Active goal
+# Latest completed goal
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-03
 
-Complete one guarded round of the established five-camp notorious-monster
-route on the isolated local LandSandBoat server. The detached supervisor owns
-travel, exact placeholder/NM targeting, reactive defense, inventory guards,
-and the final safe exit so Codex monitors outcomes instead of driving each
-fight.
+Level Pablo's Red Mage from RDM49 to RDM55 on the isolated local
+LandSandBoat server using the detached guarded combat supervisor, with sparse
+event-only monitoring and an authoritative stopped-state completion audit.
 
-## Route
+## Result
 
-1. Leaping Lizzy — South Gustaberg, zone 107
-2. Stinging Sophie — North Gustaberg, zone 106
-3. Jaggedy-Eared Jack — West Ronfaure, zone 100
-4. Spiny Spipi — East Sarutabaruta, zone 116
-5. Valkurm Emperor — Valkurm Dunes, zone 103
+- Completed at RDM55 with 231/12,800 EXP and RDM/WHM active.
+- Earned exactly 48,215 EXP across 155 fights in Crawler's Nest (zone 197).
+- The final lease `e4403ff7-906a-4353-bf17-1f61fa8a312e` stopped normally for
+  `target_level`; the persisted control plane reports `active: false`, no
+  target, and no error.
+- Final live verification found Pablo logged in, not zoning, no menu open, no
+  selected item, and the goal overlay reporting `LEVEL 55 REACHED | COMPLETE`.
+- The campaign had zero deaths. Trust repair, recovery, combat selection,
+  spells, weapon skills, and camp relocation remained inside the detached
+  supervisor rather than model-driven gameplay calls.
 
-Only Valkurm Emperor rebuilds Valaineral, Naji, and Mihli Aliapoh. The first
-four low-level camps intentionally skip Trust setup.
+## Low-token operating result
 
-## Operating policy
+- Codex listened to filtered supervisor events in five-minute windows instead
+  of polling player state after fights.
+- Full MCP state reads were reserved for material stops: inventory pressure,
+  time-limit renewal, and final completion.
+- Two clean one-hour time-limit stops were verified and renewed with the exact
+  same guarded configuration. Inventory-pressure stops were diagnosed before
+  cleanup and never restarted blindly.
 
-- Keep at least five Inventory slots free. Mercury was moved to Mog Case before
-  this run to restore the margin.
-- Prioritize exact NMs over their local lottery placeholders and never broaden
-  proactive targeting to unrelated mobs.
-- Handle genuine linked aggro reactively and finish live combat before changing
-  zones or stopping.
-- Visit each camp once, kill its bounded placeholder quota, and move on without
-  waiting through respawn timers. Emperor receives its bounded NM-only sweep.
-- Stop on death, disconnect, inventory pressure, unknown error, or completion
-  of the single configured round; diagnose abnormal stops before restarting.
+## Inventory findings
 
-## Exit criteria
-
-- All five camps are authoritatively completed for round one.
-- Any NM defeats and watched rare drops are recorded and verified.
-- Pablo returns to the validated Bastok Markets safe endpoint.
-- The supervisor is stopped with `nm_route_complete` and Pablo is idle.
-
-The completed Argus result remains documented in repository history.
-Credentials remain ignored and local.
-
-## Latest run
-
-- Completed on 2026-08-01 with lease
-  `56f9e362-f028-43d8-bd2c-d135a394f2cf` in 171 seconds.
-- Processed all five profiles and stopped normally with `nm_route_complete` at
-  the validated Bastok Markets endpoint.
-- Leaping Lizzy was skipped because Bounding Boots were found in a searched
-  storage container. Sophie contributed three exact placeholder defeats;
-  Jack and Spipi had no live exact lottery slot during their visits; Emperor's
-  Damselfly placeholder was defeated and all eight NM-only sweep points were
-  checked.
-- Completed four fights, four exact placeholder kills, five camps, and one
-  route round. No notorious monster spawned and no watched rare reward dropped.
-- Summoned all three Trusts only for Valkurm Emperor. There were no deaths,
-  reactive engagements, target-cycle errors, or recovery actions.
-- Final Inventory is 26/35 with nine free slots. The supervisor is stopped,
-  Pablo is logged in, no menu is open, and the watchdog will not renew this
-  normal objective completion.
+- Long Crawler's Nest runs fill Inventory with Insect Wings, crystals, Beetle
+  Shells/Jaws, Loam, geodes, seals, and keys.
+- `pnpm mcp:inventory-cleanup -- --moghouse-relief` now provides an explicit
+  Mog-House-only path that moves accumulated crystal stacks from Inventory,
+  Mog Sack, and Mog Case to the unlocked Mog Safe 2 using exact verified item
+  transfers.
+- The live relief run moved 50 crystal stacks into Safe 2 and reduced Mog Case
+  usage from 80/80 to 38/80. Field cleanup later archived newly observed Flame,
+  Snow, Aqua, and Shadow Geodes plus the Nest Chest Key.
+- Final Inventory is 30/35 and gil is 103,842. Credentials remain ignored and
+  all automation remains private-server-only.

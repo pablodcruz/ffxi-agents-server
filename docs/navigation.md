@@ -915,6 +915,17 @@ slots for routine cleanup:
 pnpm mcp:inventory-cleanup
 ```
 
+When the Mog Case itself is full, enter the Mog House through the documented
+residential zone line and run the explicit relief mode:
+
+```sh
+pnpm mcp:inventory-cleanup -- --moghouse-relief
+```
+
+That mode moves accumulated common-crystal stacks from Inventory, Mog Sack,
+and Mog Case into the unlocked Mog Safe 2. The server still rejects Safe 2
+outside the Mog House, so this flag is never used by field cleanup or combat.
+
 The command keeps one AgentBridge connection open, resolves each item by its
 current item ID and live location, and uses exact slots only as an internal
 FFXI packet detail. It sells only the reviewed common-loot and obsolete-gear
