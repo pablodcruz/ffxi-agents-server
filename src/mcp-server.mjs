@@ -22,7 +22,7 @@ const agentIdSchema = z
 const server = new McpServer(
   {
     name: "ffxi-agent-control",
-    version: "0.7.0",
+    version: "0.8.0",
   },
   {
     instructions:
@@ -380,6 +380,113 @@ server.registerTool(
           include_recasts,
           max_recasts,
         }),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_fishing_bot_status",
+  {
+    title: "Read FFXI fishing bot status",
+    description:
+      "Read the bounded local fishing bot's phase, skill target, inventory headroom, exact rod/bait setup, counters, and stop reason.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id }) => {
+    try {
+      return agentResult(await agents.request(agent_id, "fishing_bot_status"));
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_fishing_bot_start",
+  {
+    title: "Start bounded FFXI fishing bot",
+    description:
+      "Start the private-server-only fishing supervisor in a validated Bastok starter zone. AgentBridge requires a Willow Fishing Rod, Little Worm bait, closed menus, idle state, inventory headroom, and exact confirmation. The normal LandSandBoat server retains catch, bait, rod-break, inventory, and skill-up checks.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      target_skill: z.number().int().min(1).max(100).default(10),
+      maximum_seconds: z.number().int().min(60).max(3600).default(1800),
+      maximum_casts: z.number().int().min(1).max(200).default(100),
+      minimum_free_inventory_slots: z.number().int().min(1).max(10).default(3),
+      confirmation: z.literal("START PRIVATE SERVER FISHING BOT"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({
+    agent_id,
+    target_skill,
+    maximum_seconds,
+    maximum_casts,
+    minimum_free_inventory_slots,
+    confirmation,
+  }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "fishing_bot_start",
+          {
+            target_skill,
+            maximum_seconds,
+            maximum_casts,
+            minimum_free_inventory_slots,
+            confirmation,
+          },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "ffxi_fishing_bot_stop",
+  {
+    title: "Stop FFXI fishing bot",
+    description:
+      "Stop future fishing casts and leave the bot in a persisted inspectable stopped state.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "fishing_bot_stop",
+          {},
+          { write: true, urgent: true },
+        ),
       );
     } catch (error) {
       return toolError(error);
@@ -1051,7 +1158,7 @@ server.registerTool(
   {
     title: "Perform an allowlisted transaction at an exact nearby vendor",
     description:
-      "Queue the private server's self-only !agentshop command. The server requires the exact configured NPC within six yalms and preserves normal costs, exchange caps, inventory capacity, item ownership, and NPC resale value. The narrow allowlist includes the RDM level-30 Garish set and Broadsword checkpoint, Iron Sword, Acheron Shield, and one-at-a-time Copper Voucher exchange at Isakoth.",
+      "Queue the private server's self-only !agentshop command. The server requires the exact configured NPC within six yalms and preserves normal gil or Sparks costs, exchange caps, inventory capacity, item ownership, and NPC resale value. The narrow allowlist also includes Gelzerio's Willow Fishing Rod and Little Worm starter stock.",
     inputSchema: {
       agent_id: agentIdSchema,
       action: z.enum(["status", "buy", "sell", "voucher"]),
@@ -1059,8 +1166,9 @@ server.registerTool(
         z.literal(14326), z.literal(14425), z.literal(14857),
         z.literal(15164), z.literal(15314), z.literal(16545),
         z.literal(16536), z.literal(12385), z.literal(8711),
+        z.literal(17391), z.literal(17396),
       ]),
-      quantity: z.number().int().min(1).max(4).default(1),
+      quantity: z.number().int().min(1).max(99).default(1),
       confirmation: z.literal("TRANSACT WITH NEARBY PRIVATE SERVER VENDOR"),
     },
     annotations: {
@@ -1078,11 +1186,14 @@ server.registerTool(
       if (action === "voucher" && (item_id !== 8711 || quantity !== 1)) {
         throw new Error("Voucher exchange requires Copper Voucher 8711 and quantity 1.");
       }
+      if (quantity > (item_id === 17396 ? 99 : 4)) {
+        throw new Error("Quantity exceeds the exact item's transaction limit.");
+      }
       if (
         action === "buy" &&
-        ![14326, 14425, 14857, 15164, 15314, 16545, 16536, 12385].includes(item_id)
+        ![14326, 14425, 14857, 15164, 15314, 16545, 16536, 12385, 17391, 17396].includes(item_id)
       ) {
-        throw new Error("Purchase requires an allowlisted Sparks item.");
+        throw new Error("Purchase requires an allowlisted item.");
       }
       if (action === "sell" && item_id !== 12385) {
         throw new Error("Resale requires Acheron Shield 12385.");

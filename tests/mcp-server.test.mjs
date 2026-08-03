@@ -46,6 +46,8 @@ async function createMockBridge(token) {
         "set_activity_feed",
         "set_goal_overlay",
         "gameplay_command",
+        "fishing_bot_start",
+        "fishing_bot_stop",
       ].includes(request.operation);
       let ok = authenticated;
       let error;
@@ -175,6 +177,9 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_farm_start",
       "ffxi_farm_status",
       "ffxi_farm_stop",
+      "ffxi_fishing_bot_start",
+      "ffxi_fishing_bot_status",
+      "ffxi_fishing_bot_stop",
       "ffxi_interact",
       "ffxi_menu_input",
       "ffxi_move_to_entity",

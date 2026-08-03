@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.31.0';
+addon.version = '0.32.0';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -46,6 +46,7 @@ local bridge =
     goal_progress_label = nil,
     merchant_context_server_id = nil,
     merchant_catalog = {},
+    fishing = nil,
 };
 
 local allowed_commands =
@@ -458,6 +459,12 @@ local function stop_heading_hold(reason)
 end
 
 local function emergency_stop(reason)
+    if (bridge.fishing ~= nil and bridge.fishing.active) then
+        bridge.fishing.active = false;
+        bridge.fishing.stop_reason = reason or 'emergency_stop';
+        bridge.fishing.stopped_at = os.time();
+        add_event(-1, ('Agent fishing bot stopped: %s.'):fmt(bridge.fishing.stop_reason));
+    end
     bridge.control_enabled = false;
     bridge.control_changed_at = os.time();
     bridge.control_reason = reason or 'emergency_stop';
@@ -720,6 +727,27 @@ local function current_menu_name()
     return value:sub(1, 16);
 end
 
+local function fishing_skill_snapshot()
+    local player = AshitaCore:GetMemoryManager():GetPlayer();
+    local ok, skill = pcall(function ()
+        return player:GetCraftSkill(0);
+    end);
+    if (not ok or skill == nil) then
+        return { observable = false, skill = 0, rank = 0, capped = false };
+    end
+    local skill_ok, skill_value = pcall(function () return skill:GetSkill(); end);
+    local rank_ok, rank_value = pcall(function () return skill:GetRank(); end);
+    local capped_ok, capped_value = pcall(function () return skill:IsCapped(); end);
+    return
+    {
+        observable = skill_ok,
+        skill = skill_ok and (tonumber(skill_value) or 0) or 0,
+        rank = rank_ok and (tonumber(rank_value) or 0) or 0,
+        capped = capped_ok and capped_value == true or false,
+        raw = tonumber(skill.Raw) or 0,
+    };
+end
+
 local function character_state(params)
     local memory = AshitaCore:GetMemoryManager();
     local player = memory:GetPlayer();
@@ -759,6 +787,7 @@ local function character_state(params)
             rank_points = tonumber(player:GetRankPoints()),
             nation_id = tonumber(player:GetNation()),
             zoning = player:GetIsZoning() ~= 0,
+            fishing_skill = fishing_skill_snapshot(),
         },
         menu_open = menu_open,
         menu_name = menu_open and current_menu_name() or '',
@@ -942,6 +971,390 @@ local function character_state(params)
     end
 
     return result;
+end
+
+local fishing_zone_allowlist =
+{
+    [234] = true, -- Bastok Mines: fixed starter-fishing zone for this bot.
+    [236] = true, -- Port Bastok: fixed starter-fishing zone with accessible docks.
+};
+
+local function equipped_item_id(inventory, equipment_slot)
+    local equipment = inventory:GetEquippedItem(equipment_slot);
+    local packed_index = equipment ~= nil and tonumber(equipment.Index) or 0;
+    if (packed_index <= 0) then return 0; end
+    local container = bit.band(packed_index, 0xFF00) / 0x0100;
+    local slot = packed_index % 0x0100;
+    local item = inventory:GetContainerItem(container, slot);
+    return item ~= nil and (tonumber(item.Id) or 0) or 0;
+end
+
+local function update_fishing_overlay(bot, label)
+    local skill = fishing_skill_snapshot().skill;
+    bridge.goal_overlay_enabled = true;
+    bridge.goal_current_gil = 0;
+    bridge.goal_target_gil = 1;
+    bridge.goal_title = ('GOAL: FISHING SKILL %u'):fmt(bot.target_skill);
+    bridge.goal_progress_label = label or
+        ('Fishing %.1f / %u | casts %u | hooks %u'):fmt(
+            skill,
+            bot.target_skill,
+            bot.casts,
+            bot.hooks
+        );
+    refresh_goal_overlay();
+end
+
+local function fishing_status_snapshot()
+    local bot = bridge.fishing;
+    if (bot == nil) then
+        return
+        {
+            active = false,
+            status = 'idle',
+            fishing_skill = fishing_skill_snapshot(),
+        };
+    end
+    local now = socket.gettime();
+    local memory = AshitaCore:GetMemoryManager();
+    local inventory = memory:GetInventory();
+    return
+    {
+        active = bot.active,
+        status = bot.active and 'running' or 'stopped',
+        phase = bot.phase,
+        pending_special = bot.pending_special,
+        hook_packet_layout = bot.hook_packet_layout,
+        started_at = bot.started_at_epoch,
+        stopped_at = bot.stopped_at,
+        stop_reason = bot.stop_reason,
+        elapsed_seconds = math.max(0, math.floor(now - bot.started_at)),
+        target_skill = bot.target_skill,
+        maximum_seconds = bot.maximum_seconds,
+        maximum_casts = bot.maximum_casts,
+        minimum_free_inventory_slots = bot.minimum_free_inventory_slots,
+        fishing_skill = fishing_skill_snapshot(),
+        inventory =
+        {
+            count = tonumber(inventory:GetContainerCount(0)) or 0,
+            capacity = tonumber(inventory:GetContainerCountMax(0)) or 0,
+        },
+        equipment =
+        {
+            rod_item_id = equipped_item_id(inventory, 2),
+            bait_item_id = equipped_item_id(inventory, 3),
+        },
+        counters =
+        {
+            casts = bot.casts,
+            hooks = bot.hooks,
+            reel_requests = bot.reel_requests,
+            catches = bot.catches,
+            failures = bot.failures,
+            timeouts = bot.timeouts,
+        },
+        private_server_only = true,
+        normal_server_catch_checks = true,
+    };
+end
+
+local function stop_fishing_bot(reason)
+    local bot = bridge.fishing;
+    if (bot == nil or not bot.active) then
+        return fishing_status_snapshot();
+    end
+    bot.active = false;
+    bot.stop_reason = reason or 'requested';
+    bot.stopped_at = os.time();
+    bot.phase = 'stopped';
+    update_fishing_overlay(
+        bot,
+        bot.stop_reason == 'target_skill' and
+            ('Fishing %.1f reached | COMPLETE'):fmt(fishing_skill_snapshot().skill) or
+            ('Fishing stopped | %s'):fmt(bot.stop_reason)
+    );
+    add_event(-1, ('Agent fishing bot stopped: %s.'):fmt(bot.stop_reason));
+    return fishing_status_snapshot();
+end
+
+local function start_fishing_bot(params)
+    require_control_enabled();
+    if (params.confirmation ~= 'START PRIVATE SERVER FISHING BOT') then
+        error('Fishing bot start requires the exact confirmation phrase.');
+    end
+    if (bridge.fishing ~= nil and bridge.fishing.active) then
+        error('A fishing bot run is already active.');
+    end
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local party = memory:GetParty();
+    local target = memory:GetTarget();
+    local inventory = memory:GetInventory();
+    if (player:GetLoginStatus() ~= 2 or player:GetIsZoning() ~= 0) then
+        error('Fishing bot requires a logged-in character that is not zoning.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Fishing bot requires all menus and dialogue to be closed.');
+    end
+    local player_index = party:GetMemberTargetIndex(0);
+    local entities = memory:GetEntity();
+    if (player_index <= 0 or entities:GetStatus(player_index) ~= 0) then
+        error('Fishing bot requires the character to be idle.');
+    end
+    local zone_id = tonumber(party:GetMemberZone(0)) or 0;
+    if (fishing_zone_allowlist[zone_id] ~= true) then
+        error('Fishing bot is allowlisted only for the validated Bastok starter zones.');
+    end
+    if (equipped_item_id(inventory, 2) ~= 17391 or equipped_item_id(inventory, 3) ~= 17396) then
+        error('Fishing bot requires the exact Willow Fishing Rod and Little Worm starter setup.');
+    end
+    local target_skill = math.floor(tonumber(params.target_skill) or 10);
+    local maximum_seconds = math.floor(tonumber(params.maximum_seconds) or 1800);
+    local maximum_casts = math.floor(tonumber(params.maximum_casts) or 100);
+    local minimum_free = math.floor(tonumber(params.minimum_free_inventory_slots) or 3);
+    if (target_skill < 1 or target_skill > 100) then
+        error('Fishing target_skill must be an integer from 1 through 100.');
+    end
+    if (maximum_seconds < 60 or maximum_seconds > 3600) then
+        error('Fishing maximum_seconds must be from 60 through 3600.');
+    end
+    if (maximum_casts < 1 or maximum_casts > 200) then
+        error('Fishing maximum_casts must be from 1 through 200.');
+    end
+    if (minimum_free < 1 or minimum_free > 10) then
+        error('Fishing minimum_free_inventory_slots must be from 1 through 10.');
+    end
+    local current_skill = fishing_skill_snapshot().skill;
+    if (current_skill >= target_skill) then
+        error('Fishing skill already meets or exceeds the requested target.');
+    end
+    local capacity = tonumber(inventory:GetContainerCountMax(0)) or 0;
+    local count = tonumber(inventory:GetContainerCount(0)) or 0;
+    if (capacity - count < minimum_free) then
+        error('Fishing bot cannot start without the configured Inventory headroom.');
+    end
+
+    local now = socket.gettime();
+    bridge.fishing =
+    {
+        active = true,
+        phase = 'cooldown',
+        started_at = now,
+        started_at_epoch = os.time(),
+        stopped_at = nil,
+        stop_reason = nil,
+        next_action_at = now + 1.0,
+        phase_deadline = 0,
+        pending_special = 0,
+        target_skill = target_skill,
+        maximum_seconds = maximum_seconds,
+        maximum_casts = maximum_casts,
+        minimum_free_inventory_slots = minimum_free,
+        casts = 0,
+        hooks = 0,
+        reel_requests = 0,
+        catches = 0,
+        failures = 0,
+        timeouts = 0,
+        last_overlay_at = 0,
+    };
+    update_fishing_overlay(bridge.fishing);
+    add_event(-1, ('Agent fishing bot started: skill %.1f to %u, maximum %u casts.'):fmt(
+        current_skill,
+        target_skill,
+        maximum_casts
+    ));
+    return fishing_status_snapshot();
+end
+
+local function append_u16(packet, value)
+    value = math.floor(tonumber(value) or 0);
+    packet[#packet + 1] = value % 0x100;
+    packet[#packet + 1] = math.floor(value / 0x100) % 0x100;
+end
+
+local function append_u32(packet, value)
+    value = math.floor(tonumber(value) or 0);
+    for shift = 0, 3 do
+        packet[#packet + 1] = math.floor(value / (0x100 ^ shift)) % 0x100;
+    end
+end
+
+local function read_u32_le(data, offset)
+    -- Packet offsets are zero-based in the protocol documentation, while
+    -- Lua string indexes are one-based.  Decode explicitly so the fishing
+    -- token is independent of the host `struct` module's native-long rules.
+    local b1, b2, b3, b4 = data:byte(offset + 1, offset + 4);
+    if b4 == nil then return 0; end
+    return b1 + (b2 * 0x100) + (b3 * 0x10000) + (b4 * 0x1000000);
+end
+
+local function send_fishing_reel_packet(special)
+    local memory = AshitaCore:GetMemoryManager();
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = tonumber(party:GetMemberTargetIndex(0)) or 0;
+    local server_id = player_index > 0 and tonumber(entities:GetServerId(player_index)) or 0;
+    if (server_id <= 0 or player_index <= 0) then
+        return false;
+    end
+    -- Fixed normal-client 0x110 RequestEndMiniGame packet. Stamina zero asks
+    -- LandSandBoat to run its ordinary ReelCheck; the server still owns catch,
+    -- bait, rod-break, inventory, and fishing skill-up outcomes.
+    local packet = { 0x10, 0x15, 0x00, 0x00 };
+    append_u32(packet, server_id);
+    append_u32(packet, 0);
+    append_u16(packet, player_index);
+    packet[#packet + 1] = 3;
+    packet[#packet + 1] = 0;
+    append_u32(packet, special);
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x110, packet);
+    return true;
+end
+
+local function send_fishing_start_packet()
+    local memory = AshitaCore:GetMemoryManager();
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = tonumber(party:GetMemberTargetIndex(0)) or 0;
+    local server_id = player_index > 0 and tonumber(entities:GetServerId(player_index)) or 0;
+    if (server_id <= 0 or player_index <= 0) then
+        return false;
+    end
+    -- Normal 0x01A Fish action. LandSandBoat's StartFishing initializes the
+    -- cast token, hook delay, fatigue timer, equipment checks, and animation.
+    local packet = { 0x1A, 0x1C, 0x00, 0x00 };
+    append_u32(packet, server_id);
+    append_u16(packet, player_index);
+    append_u16(packet, 0x0E);
+    for _ = 1, 4 do append_u32(packet, 0); end
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x01A, packet);
+    return true;
+end
+
+local function send_fishing_hook_check_packet()
+    local memory = AshitaCore:GetMemoryManager();
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = tonumber(party:GetMemberTargetIndex(0)) or 0;
+    local server_id = player_index > 0 and tonumber(entities:GetServerId(player_index)) or 0;
+    if (server_id <= 0 or player_index <= 0) then
+        return false;
+    end
+    -- Fixed normal-client 0x110 RequestCheckHook packet. Sending the ordinary
+    -- fishing request directly avoids the client's camera/collision-dependent
+    -- `/fish` pre-check while preserving every LandSandBoat server check and
+    -- outcome, including zone catches, bait loss, rod breakage, and skill-ups.
+    local packet = { 0x10, 0x15, 0x00, 0x00 };
+    append_u32(packet, server_id);
+    append_u32(packet, 0);
+    append_u16(packet, player_index);
+    packet[#packet + 1] = 2;
+    packet[#packet + 1] = 0;
+    append_u32(packet, 0);
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x110, packet);
+    return true;
+end
+
+local function send_fishing_release_packet()
+    local memory = AshitaCore:GetMemoryManager();
+    local party = memory:GetParty();
+    local entities = memory:GetEntity();
+    local player_index = tonumber(party:GetMemberTargetIndex(0)) or 0;
+    local server_id = player_index > 0 and tonumber(entities:GetServerId(player_index)) or 0;
+    if (server_id <= 0 or player_index <= 0) then
+        return false;
+    end
+    local packet = { 0x10, 0x15, 0x00, 0x00 };
+    append_u32(packet, server_id);
+    append_u32(packet, 0);
+    append_u16(packet, player_index);
+    packet[#packet + 1] = 4;
+    packet[#packet + 1] = 0;
+    append_u32(packet, 0);
+    AshitaCore:GetPacketManager():AddOutgoingPacket(0x110, packet);
+    return true;
+end
+
+local function monitor_fishing_bot()
+    local bot = bridge.fishing;
+    if (bot == nil or not bot.active) then return; end
+    local now = socket.gettime();
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local inventory = memory:GetInventory();
+    if (not bridge.control_enabled) then stop_fishing_bot('control_disabled'); return; end
+    if (player:GetLoginStatus() ~= 2) then stop_fishing_bot('disconnect'); return; end
+    if (player:GetIsZoning() ~= 0) then stop_fishing_bot('zoning'); return; end
+    if (now - bot.started_at >= bot.maximum_seconds) then stop_fishing_bot('time_limit'); return; end
+    if (fishing_skill_snapshot().skill >= bot.target_skill) then stop_fishing_bot('target_skill'); return; end
+    local capacity = tonumber(inventory:GetContainerCountMax(0)) or 0;
+    local count = tonumber(inventory:GetContainerCount(0)) or 0;
+    if (capacity - count < bot.minimum_free_inventory_slots) then
+        stop_fishing_bot('inventory_pressure'); return;
+    end
+    if (equipped_item_id(inventory, 2) ~= 17391) then stop_fishing_bot('missing_rod'); return; end
+    if (equipped_item_id(inventory, 3) ~= 17396) then stop_fishing_bot('missing_bait'); return; end
+
+    if (now - bot.last_overlay_at >= 2.0) then
+        update_fishing_overlay(bot);
+        bot.last_overlay_at = now;
+    end
+
+    if (bot.phase == 'hooked' and now >= bot.next_action_at) then
+        if (send_fishing_reel_packet(bot.pending_special)) then
+            bot.reel_requests = bot.reel_requests + 1;
+            bot.phase = 'resolving';
+            bot.phase_deadline = now + 5.0;
+            add_event(-1, ('Agent fishing reel request %u queued.'):fmt(bot.reel_requests));
+        else
+            stop_fishing_bot('player_identity_unavailable');
+        end
+        return;
+    end
+    if (bot.phase == 'starting' and now >= bot.next_action_at) then
+        if (not send_fishing_hook_check_packet()) then
+            stop_fishing_bot('player_identity_unavailable');
+            return;
+        end
+        bot.phase = 'queued';
+        bot.phase_deadline = now + 8.0;
+        add_event(-1, ('Agent fishing cast %u hook check queued.'):fmt(bot.casts));
+        return;
+    end
+    if (bot.phase == 'queued' and now >= bot.phase_deadline) then
+        bot.timeouts = bot.timeouts + 1;
+        send_fishing_release_packet();
+        bot.phase = 'cooldown';
+        bot.next_action_at = now + 6.0;
+        return;
+    end
+    if (bot.phase == 'resolving' and now >= bot.phase_deadline) then
+        send_fishing_release_packet();
+        bot.phase = 'cooldown';
+        bot.next_action_at = now + 6.0;
+        return;
+    end
+    if (bot.phase == 'cooldown' and now >= bot.next_action_at) then
+        if (bot.casts >= bot.maximum_casts) then stop_fishing_bot('cast_limit'); return; end
+        local party = memory:GetParty();
+        local entities = memory:GetEntity();
+        local player_index = party:GetMemberTargetIndex(0);
+        if (memory:GetTarget():GetIsMenuOpen() ~= 0 or player_index <= 0 or entities:GetStatus(player_index) ~= 0) then
+            bot.next_action_at = now + 2.0;
+            return;
+        end
+        if (not send_fishing_start_packet()) then
+            stop_fishing_bot('player_identity_unavailable');
+            return;
+        end
+        bot.casts = bot.casts + 1;
+        bot.phase = 'starting';
+        -- LandSandBoat's ordinary hook delay is 7-13 Vana'diel seconds; a
+        -- fixed 13-second real-time wait safely clears the server threshold.
+        bot.next_action_at = now + 13.0;
+        add_event(-1, ('Agent fishing cast %u started.'):fmt(bot.casts));
+    end
 end
 
 local function find_target(params)
@@ -1629,6 +2042,8 @@ local function private_server_vendor_transaction(params)
         [16536] = true, -- Iron Sword
         [12385] = true, -- Acheron Shield
         [8711] = true,  -- Copper Voucher
+        [17391] = true, -- Willow Fishing Rod
+        [17396] = true, -- Little Worm
     };
     local purchasable_items =
     {
@@ -1640,11 +2055,15 @@ local function private_server_vendor_transaction(params)
         [16545] = true,
         [16536] = true,
         [12385] = true,
+        [17391] = true,
+        [17396] = true,
     };
     if (
         (action ~= 'status' and action ~= 'buy' and action ~= 'sell' and action ~= 'voucher') or
         not allowed_items[item_id] or
-        quantity < 1 or quantity > 4 or quantity ~= math.floor(quantity)
+        quantity < 1 or
+        quantity > (item_id == 17396 and 99 or 4) or
+        quantity ~= math.floor(quantity)
     ) then
         error('Private-server vendor transaction is outside the exact allowlist.');
     end
@@ -1655,7 +2074,7 @@ local function private_server_vendor_transaction(params)
         error('Private-server voucher exchange requires Copper Voucher 8711 and quantity=1.');
     end
     if action == 'buy' and not purchasable_items[item_id] then
-        error('Private-server purchase requires an allowlisted Sparks item.');
+        error('Private-server purchase requires an allowlisted item.');
     end
     if (action == 'sell' and item_id ~= 12385) then
         error('Private-server resale requires Acheron Shield 12385.');
@@ -2827,6 +3246,14 @@ local function dispatch(request)
         return observe(params);
     elseif (request.operation == 'character_state') then
         return character_state(params);
+    elseif (request.operation == 'fishing_bot_status') then
+        return fishing_status_snapshot();
+    elseif (request.operation == 'fishing_bot_start') then
+        return start_fishing_bot(params);
+    elseif (request.operation == 'fishing_bot_stop') then
+        local snapshot = stop_fishing_bot('requested');
+        send_fishing_release_packet();
+        return snapshot;
     elseif (request.operation == 'recent_events') then
         return recent_events(params.limit);
     elseif (request.operation == 'target_entity') then
@@ -3020,6 +3447,59 @@ end);
 
 ashita.events.register('text_in', 'text_in_cb', function (event)
     add_event(event.mode, event.message_modified);
+    local bot = bridge.fishing;
+    if (bot ~= nil and bot.active and type(event.message_modified) == 'string') then
+        local message = event.message_modified:gsub('%c', ' ');
+        if (message:find('You catch') ~= nil or message:find('You caught') ~= nil) then
+            bot.catches = bot.catches + 1;
+            if (bot.phase == 'resolving') then
+                send_fishing_release_packet();
+                bot.phase = 'cooldown';
+                bot.next_action_at = socket.gettime() + 6.0;
+            end
+        elseif
+            message:find("didn't catch") ~= nil or
+            message:find('lost your catch') ~= nil or
+            message:find('line breaks') ~= nil or
+            message:find('rod breaks') ~= nil
+        then
+            bot.failures = bot.failures + 1;
+            if (bot.phase == 'resolving') then
+                send_fishing_release_packet();
+                bot.phase = 'cooldown';
+                bot.next_action_at = socket.gettime() + 6.0;
+            elseif (bot.phase == 'queued') then
+                send_fishing_release_packet();
+                bot.phase = 'cooldown';
+                bot.next_action_at = socket.gettime() + 6.0;
+            end
+        end
+    end
+end);
+
+ashita.events.register('packet_in', 'fishing_bot_packet_in_cb', function (event)
+    local bot = bridge.fishing;
+    if (
+        bot == nil or not bot.active or bot.phase ~= 'queued' or
+        event.id ~= 0x115 or type(event.data) ~= 'string' or event.size < 24
+    ) then
+        return;
+    end
+    -- Ashita builds differ on whether packet event data includes the four-byte
+    -- FFXI header.  Prefer the documented full-packet offset (0x14), then use
+    -- the payload-relative offset (0x10) only when the former is unavailable.
+    local full_packet_special = read_u32_le(event.data, 0x14);
+    if (full_packet_special > 0) then
+        bot.pending_special = full_packet_special;
+        bot.hook_packet_layout = 'full_packet';
+    else
+        bot.pending_special = read_u32_le(event.data, 0x10);
+        bot.hook_packet_layout = 'payload';
+    end
+    bot.hooks = bot.hooks + 1;
+    bot.phase = 'hooked';
+    bot.next_action_at = socket.gettime() + 0.8;
+    add_event(-1, ('Agent fishing hook %u observed.'):fmt(bot.hooks));
 end);
 
 ashita.events.register('packet_in', 'merchant_catalog_packet_in_cb', function (event)
@@ -3098,6 +3578,7 @@ end);
 ashita.events.register('d3d_present', 'present_cb', function ()
     apply_heading_hold();
     monitor_movement();
+    monitor_fishing_bot();
     if (bridge.listener ~= nil) then
         process_client();
     end

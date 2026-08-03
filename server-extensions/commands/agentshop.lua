@@ -19,8 +19,21 @@ commandObj.cmdprops =
 
 local maximumDistance = 6
 local isakoth = { zone = xi.zone.BASTOK_MARKETS, id = 17739953, name = 'Isakoth' }
+local gelzerio = { zone = xi.zone.BASTOK_MINES, id = 17735725, name = 'Gelzerio' }
 local allowedItems =
 {
+    [xi.item.WILLOW_FISHING_ROD] =
+    {
+        gilCost = 75,
+        maxQuantity = 1,
+        purchaseVendor = gelzerio,
+    },
+    [xi.item.LITTLE_WORM] =
+    {
+        gilCost = 4,
+        maxQuantity = 99,
+        purchaseVendor = gelzerio,
+    },
     -- RDM level-30 checkpoint. These entries mirror the normal Isakoth
     -- Sparks catalog and only remove menu navigation.
     [15164] = { sparksCost =  80, purchaseVendor = isakoth }, -- Garish crown
@@ -136,33 +149,43 @@ local function purchase(player, itemId, quantity, config)
         return false, detail
     end
 
-    local cost = config.sparksCost * quantity
+    local isGilPurchase = config.gilCost ~= nil
+    local unitCost = isGilPurchase and config.gilCost or config.sparksCost
+    local cost = unitCost * quantity
     local sparks = player:getCurrency('spark_of_eminence')
     local weeklySpent = player:getCharVar('weekly_sparks_spent')
     local remainingLimit = xi.settings.main.WEEKLY_EXCHANGE_LIMIT - weeklySpent
-    if sparks < cost then
+    if isGilPurchase and player:getGil() < cost then
+        return false, string.format('insufficient gil have=%u need=%u', player:getGil(), cost)
+    end
+    if not isGilPurchase and sparks < cost then
         return false, string.format('insufficient sparks have=%u need=%u', sparks, cost)
     end
-    if xi.settings.main.ENABLE_EXCHANGE_LIMIT == 1 and cost > remainingLimit then
+    if not isGilPurchase and xi.settings.main.ENABLE_EXCHANGE_LIMIT == 1 and cost > remainingLimit then
         return false, string.format('weekly exchange limit remaining=%u need=%u', remainingLimit, cost)
     end
-    if player:getFreeSlotsCount() < quantity then
-        return false, string.format('inventory headroom=%u need=%u', player:getFreeSlotsCount(), quantity)
+    if player:getFreeSlotsCount() < 1 then
+        return false, 'inventory has no free slot for the purchase'
     end
 
     if not npcUtil.giveItem(player, { { itemId, quantity } }) then
         return false, 'normal item grant rejected the purchase'
     end
 
-    player:delCurrency('spark_of_eminence', cost)
-    if xi.settings.main.ENABLE_EXCHANGE_LIMIT == 1 then
+    if isGilPurchase then
+        player:delGil(cost)
+    else
+        player:delCurrency('spark_of_eminence', cost)
+    end
+    if not isGilPurchase and xi.settings.main.ENABLE_EXCHANGE_LIMIT == 1 then
         player:setCharVar('weekly_sparks_spent', weeklySpent + cost)
     end
     report(player, string.format(
-        'purchased item=%u quantity=%u cost=%u vendor=%s distance=%.2f',
+        'purchased item=%u quantity=%u cost=%u currency=%s vendor=%s distance=%.2f',
         itemId,
         quantity,
         cost,
+        isGilPurchase and 'gil' or 'sparks',
         config.purchaseVendor.name,
         detail
     ))
@@ -209,7 +232,10 @@ commandObj.onTrigger = function(player, action, itemId, quantity)
     quantity = tonumber(quantity) or 1
     local config = allowedItems[itemId]
 
-    if config == nil or quantity < 1 or quantity > 4 or quantity ~= math.floor(quantity) then
+    if
+        config == nil or quantity < 1 or
+        quantity > (config.maxQuantity or 4) or quantity ~= math.floor(quantity)
+    then
         report(player, 'rejected reason=item or quantity is outside the allowlist')
         return
     end

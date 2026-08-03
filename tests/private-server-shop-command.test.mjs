@@ -12,6 +12,13 @@ test("private-server shop preserves proximity, costs, ownership, and sale atomic
   assert.match(source, /\[xi\.item\.ACHERON_SHIELD\]/);
   assert.match(source, /\[xi\.item\.IRON_SWORD\]/);
   assert.match(source, /\[xi\.item\.BROADSWORD\]/);
+  assert.match(source, /\[xi\.item\.WILLOW_FISHING_ROD\]/);
+  assert.match(source, /\[xi\.item\.LITTLE_WORM\]/);
+  assert.match(source, /id\s*=\s*17735725, name\s*=\s*'Gelzerio'/);
+  assert.match(source, /gilCost\s*=\s*75/);
+  assert.match(source, /gilCost\s*=\s*4/);
+  assert.match(source, /maxQuantity\s*=\s*99/);
+  assert.match(source, /player:delGil\(cost\)/);
   for (const itemId of [14326, 14425, 14857, 15164, 15314]) {
     assert.match(source, new RegExp(`\\[${itemId}\\]`));
   }

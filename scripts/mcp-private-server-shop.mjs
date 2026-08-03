@@ -19,6 +19,7 @@ const purchasableItems = new Set([
   14326, 14425, 14857, 15164, 15314, // Garish level-30 RDM set
   16536, 16545, // Iron Sword and level-30 Broadsword
   12385, // Acheron Shield
+  17391, 17396, // Willow Fishing Rod and Little Worm
 ]);
 const allowedItems = new Set([...purchasableItems, 8711]);
 if (!["status", "buy", "sell", "voucher"].includes(action)) {
@@ -27,8 +28,8 @@ if (!["status", "buy", "sell", "voucher"].includes(action)) {
 if (!allowedItems.has(itemId)) {
   throw new Error("The requested item is outside the private-shop allowlist.");
 }
-if (!Number.isInteger(quantity) || quantity < 1 || quantity > 4) {
-  throw new Error("--quantity must be an integer from 1 through 4.");
+if (!Number.isInteger(quantity) || quantity < 1 || quantity > (itemId === 17396 ? 99 : 4)) {
+  throw new Error("--quantity is outside the exact item's transaction limit.");
 }
 if (action === "sell" && quantity !== 1) {
   throw new Error("Non-stackable resale requires --quantity 1.");

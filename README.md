@@ -33,6 +33,9 @@ the [public FFXI telemetry dashboard](https://ffxi-telemetry.vercel.app).
 - Guarded NPC interaction/dialogue helpers and a bounded combat orchestrator
   with exact-entity verification, pre-fight recovery, health-floor, timeout,
   `/attackoff`, and emergency-stop behavior.
+- A bounded private-server fishing supervisor that uses fixed starter gear,
+  normal LandSandBoat hook/reel/release requests, server-owned catch and
+  skill-up outcomes, inventory headroom, and skill/time/cast stop conditions.
 - Allowlisted, automatically released DirectInput menu pulses through
   AgentBridge, avoiding VM focus and camera dependence.
 - Automated tests for MCP discovery, bridge authentication, telemetry,
@@ -144,6 +147,8 @@ The addon comparison and MCP-native read-only mob scout are in
 [docs/addon-tooling.md](docs/addon-tooling.md).
 The researched bot architecture, bounded aggro guard, and shared-server
 limitations are in [docs/combat-supervisor.md](docs/combat-supervisor.md).
+The starter fishing setup, control loop, commands, and recovery rules are in
+[docs/fishing-bot.md](docs/fishing-bot.md).
 The rationale for choosing normal mechanics, durable supervisors, typed client
 operations, or narrowly gated GM/private-server helpers is in
 [docs/private-server-automation-policy.md](docs/private-server-automation-policy.md).

@@ -151,6 +151,7 @@ destroy state even when the first response was lost.
 |---|---|---|
 | Combat supervisor | Aggro and combat are too fast and repetitive for model turns | Normal targets/actions, bounded lease, health/inventory/death stops |
 | NM route supervisor | Repeated camp loops are deterministic and expensive to poll | Fixed profiles, watched drops, round limits, persisted progress |
+| Fishing supervisor | Camera/collision casting and the minigame are repetitive, while the server already owns the meaningful outcomes | Fixed starter zones/gear and packet modes; normal catch, bait, rod, inventory, fatigue, and skill rules; bounded skill/time/casts |
 | Service teleport | Collision/pathing is not yet reliable enough for unattended routes | Idle only, typed destination/reason, never an active-combat escape |
 | Private vendor transaction | Shop menus add friction but not a useful decision | Exact NPC/item, normal Sparks/gil/inventory rules, verified deltas |
 | Fixed RDM utility spells | Local lab prioritized testing the RDM combat loop | Fixed named allowlist and level gates; documented exception to scroll cost |

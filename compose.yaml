@@ -15,6 +15,9 @@ x-lsb-common: &lsb-common
     XI_NETWORK_HTTP_HOST: 0.0.0.0
     XI_NETWORK_ZONE_IP: ${LSB_ZONE_IP:-127.0.0.1}
     XI_LOGIN_ACCOUNT_CREATION: ${LSB_ACCOUNT_CREATION:-true}
+    # Upstream disables fishing by default. This lab explicitly enables the
+    # normal LandSandBoat fishing system for the bounded local fishing bot.
+    XI_MAP_FISHING_ENABLE: "true"
     # The upstream 2s default is too aggressive for the amd64 image under
     # Apple-Silicon QEMU. Keep the watchdog enabled, but allow slow ticks.
     XI_MAIN_INACTIVITY_WATCHDOG_PERIOD: ${LSB_WATCHDOG_PERIOD_MS:-30000}
@@ -35,8 +38,8 @@ x-lsb-common: &lsb-common
     # Explicit, quest-gated temporary survival protection for the nine
     # aggressive Genkai-1 ??? pockets. It cannot advance quest state or grant
     # items and must be disabled after the route.
-      - ./server-extensions/commands/agentquestsafety.lua:/server/scripts/commands/agentquestsafety.lua:ro
-      - ./server-extensions/commands/agentquestmarker.lua:/server/scripts/commands/agentquestmarker.lua:ro
+    - ./server-extensions/commands/agentquestsafety.lua:/server/scripts/commands/agentquestsafety.lua:ro
+    - ./server-extensions/commands/agentquestmarker.lua:/server/scripts/commands/agentquestmarker.lua:ro
 
 services:
   mesh-seed:
