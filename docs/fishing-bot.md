@@ -20,6 +20,13 @@ Gelzerio's local-lab vendor sells one Willow Fishing Rod and up to 99 Little
 Worms using normal gil and inventory checks. Fishing is enabled explicitly with
 `XI_MAP_FISHING_ENABLE=true` in Compose.
 
+The local lab also sets `XI_MAP_FISHING_SKILL_MULTIPLIER=5.0`. LandSandBoat
+describes its default `1.0` rate as “very hard”; the higher rate makes bounded
+automation tests finish in a practical window without manufacturing skill.
+The server still requires an eligible fish catch and owns the skill-up roll,
+amount, rank cap, bait use, and inventory result. This is a private-lab rate,
+not a claim about retail progression speed.
+
 ## Why the bot uses fixed fishing packets
 
 The normal `/fish` command first performs a Windows-client camera/collision

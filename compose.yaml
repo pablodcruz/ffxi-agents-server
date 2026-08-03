@@ -18,6 +18,10 @@ x-lsb-common: &lsb-common
     # Upstream disables fishing by default. This lab explicitly enables the
     # normal LandSandBoat fishing system for the bounded local fishing bot.
     XI_MAP_FISHING_ENABLE: "true"
+    # Upstream labels 1.0 as "very hard". Five times the skill-up chance keeps
+    # the local automation lab observable while catches, eligibility, RNG,
+    # rank caps, bait consumption, and inventory outcomes remain server-owned.
+    XI_MAP_FISHING_SKILL_MULTIPLIER: "5.0"
     # The upstream 2s default is too aggressive for the amd64 image under
     # Apple-Silicon QEMU. Keep the watchdog enabled, but allow slow ticks.
     XI_MAIN_INACTIVITY_WATCHDOG_PERIOD: ${LSB_WATCHDOG_PERIOD_MS:-30000}
