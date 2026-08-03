@@ -13,13 +13,16 @@ The validated starter setup is:
 - Bastok Mines (zone 234), Bastok Markets (zone 235), or Port Bastok
   (zone 236);
 - Willow Fishing Rod (item 17391) in the ranged slot;
-- Little Worm (item 17396) in the ammo slot;
+- one explicitly selected starter bait in the ammo slot or main inventory:
+  Lugworm (17395), Little Worm (17396), or Insect Ball (16998);
 - no open menu, an idle logged-in character, and inventory headroom;
 - the exact `START PRIVATE SERVER FISHING BOT` confirmation phrase.
 
-Gelzerio's local-lab vendor sells one Willow Fishing Rod and up to 99 Little
-Worms using normal gil and inventory checks. Fishing is enabled explicitly with
-`XI_MAP_FISHING_ENABLE=true` in Compose.
+Gelzerio sells Willow Fishing Rods, Lugworms, and Little Worms using normal gil
+and inventory checks. Toji Mumosulah sells Insect Balls (the client resource
+name for Ball of Insect Paste). The exact-vendor purchase helper remains pinned
+to each NPC and item and verifies the inventory and gil deltas. Fishing is
+enabled explicitly with `XI_MAP_FISHING_ENABLE=true` in Compose.
 
 The local lab also sets `XI_MAP_FISHING_SKILL_MULTIPLIER=5.0`. LandSandBoat
 describes its default `1.0` rate as “very hard”; the higher rate makes bounded
@@ -30,13 +33,22 @@ not a claim about retail progression speed.
 
 ## Starter progression bands
 
-The local server's authoritative fishing tables define Crayfish at skill 7 and
-Moat Carp at skill 11. Little Worm has positive affinity for both. Bastok Mines
-group 8 contains Crayfish but not Moat Carp, so it is suitable only through
-skill 7. Bastok Markets groups 5 and 6 contain Moat Carp and provide the
-verified 7-to-10 progression band. AgentBridge therefore allowlists Markets as
-the third narrow Bastok fishing zone; the bot still cannot run in arbitrary
-zones.
+The local server's authoritative fishing tables define Cobalt Jellyfish at
+skill 5, Bastore Sardine at 9, Crayfish at 7, and Moat Carp at 11. Port Bastok
+gives Little Worm affinity 3 for Cobalt Jellyfish. Lugworm then has affinity 2
+for Bastore Sardine and affinity 3 for Quus, so it can continue the same scenic
+harbor camp toward skill 9. Bastok Markets groups 5 and 6 contain Moat Carp;
+Insect Ball has affinity 3 for Moat Carp and provides the final 9-to-10 band.
+AgentBridge allowlists only these three Bastok starter zones and three starter
+baits; it still cannot run in arbitrary zones or with arbitrary bait.
+
+The stream-friendly Port camp is at AgentBridge coordinates
+`x=60, y=-164, z=5.5` with heading `1.5708`. The fishing camera frames Pablo,
+open harbor water, the drawbridge, ship traffic, skyline, and sky. The staged
+route is Little Worm to authoritative database value 50, Lugworm toward 90,
+then Insect Ball in Markets toward 100. This avoids spending bait after the
+current catch reaches its skill cap while preserving the scenic view for most
+of the run.
 
 The stream-friendly Markets camp used for the level-10 run is at AgentBridge
 coordinates `x=-198, y=-73, z=-6`. Heading `3.1415` plus one client camera
@@ -84,6 +96,7 @@ Start a bounded run toward fishing skill 10:
 ```sh
 pnpm mcp:fishing-start -- \
   --target-skill 10 \
+  --bait-item-id 16998 \
   --maximum-seconds 1800 \
   --maximum-casts 100 \
   --minimum-free-inventory-slots 3 \
@@ -98,8 +111,9 @@ pnpm mcp:fishing-status
 pnpm mcp:fishing-stop
 ```
 
-`--heading` is optional and limited to `-pi..pi`. It is useful for a readable
-stream view, but hook checks no longer depend on camera orientation.
+`--bait-item-id` defaults to Little Worm and accepts only 17395, 17396, or
+16998. `--heading` is optional and limited to `-pi..pi`. It is useful for a
+readable stream view, but hook checks no longer depend on camera orientation.
 
 ## State machine and stops
 
@@ -118,13 +132,14 @@ missing rod, missing bait, logout, zoning, disabled control, or unavailable
 player identity. Status reports fishing skill, phase, equipment, inventory,
 casts, hooks, reel requests, catches, failures, and timeouts.
 
-AgentBridge 0.32.4 handles split equipment stacks without a model turn. During
-cooldown, if the equipped Little Worm stack empties but another exact stack
-remains in main inventory, the bot queues the fixed `/equip ammo "Little
-Worm"` command and waits up to eight seconds for verification. It does the
-same for an available spare Willow Fishing Rod. It still stops with
-`missing_bait` or `missing_rod` when no exact replacement exists or the
-re-equip cannot be verified.
+AgentBridge 0.32.9 handles split equipment stacks without a model turn. During
+cooldown, if the selected bait stack empties but another exact stack remains in
+main inventory, the bot queues only that bait's fixed `/equip ammo` command.
+It does the same for an available spare Willow Fishing Rod. FFXI can reject the
+first equip command while a catch result is still resolving, so recovery
+retries no faster than every three seconds for at most twenty seconds. It still
+stops with `missing_bait` or `missing_rod` when no exact replacement exists or
+the bounded re-equip cannot be verified.
 
 After a disconnect, unknown stop, missing equipment, or inventory pressure,
 diagnose authoritative player state before restarting. `mcp:fishing-stop` also

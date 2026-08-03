@@ -591,6 +591,38 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
     "buy_vendor_item",
   );
 
+  const fishingBaitVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17801278,
+      item_id: 16998,
+      maximum_price: 42,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(fishingBaitVendorPurchase.isError, undefined);
+  assert.equal(
+    fishingBaitVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
+
+  const lugwormVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17735725,
+      item_id: 17395,
+      maximum_price: 20,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(lugwormVendorPurchase.isError, undefined);
+  assert.equal(
+    lugwormVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
+
   const interaction = await client.callTool({
     name: "ffxi_interact",
     arguments: {

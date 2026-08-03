@@ -62,6 +62,7 @@ try {
       name: "ffxi_fishing_bot_start",
       arguments: {
         target_skill: integerArgument("--target-skill", 10),
+        bait_item_id: integerArgument("--bait-item-id", 17396),
         maximum_seconds: integerArgument("--maximum-seconds", 1800),
         maximum_casts: integerArgument("--maximum-casts", 100),
         minimum_free_inventory_slots: integerArgument("--minimum-free-inventory-slots", 3),

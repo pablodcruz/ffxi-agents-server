@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.5';
+addon.version = '0.32.9';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -202,6 +202,10 @@ local allowed_npc_sale_items =
 -- arbitrary vendor packet primitive.
 local allowed_vendor_purchases =
 {
+    [17735725] = -- Gelzerio, Bastok Mines
+    {
+        [17395] = true, -- Lugworm
+    },
     [17739798] = -- Zhikkom, Bastok Markets
     {
         [16535] = true, -- Bronze Sword
@@ -233,6 +237,10 @@ local allowed_vendor_purchases =
         [4778] = true, -- Water II
         [4797] = true, -- Stonega
         [4807] = true, -- Waterga
+    },
+    [17801278] = -- Toji Mumosulah, Kazham
+    {
+        [16998] = true, -- Ball of Insect Paste
     },
 };
 
@@ -992,6 +1000,25 @@ local fishing_zone_allowlist =
     [236] = true, -- Port Bastok: fixed starter-fishing zone with accessible docks.
 };
 
+local fishing_bait_allowlist =
+{
+    [17395] =
+    {
+        command = '/equip ammo "Lugworm"',
+        name = 'Lugworm',
+    },
+    [17396] =
+    {
+        command = '/equip ammo "Little Worm"',
+        name = 'Little Worm',
+    },
+    [16998] =
+    {
+        command = '/equip ammo "Insect Ball"',
+        name = 'Insect Ball',
+    },
+};
+
 local function equipped_item_id(inventory, equipment_slot)
     local equipment = inventory:GetEquippedItem(equipment_slot);
     local packed_index = equipment ~= nil and tonumber(equipment.Index) or 0;
@@ -1014,29 +1041,38 @@ local function main_inventory_item_count(inventory, item_id)
     return total;
 end
 
+local update_fishing_overlay;
+
 local function ensure_fishing_item_equipped(bot, inventory, equipment_slot, item_id, command, label, now)
-    local key = ('rearm_%u_started_at'):fmt(equipment_slot);
+    local started_key = ('rearm_%u_started_at'):fmt(equipment_slot);
+    local attempt_key = ('rearm_%u_last_attempt_at'):fmt(equipment_slot);
     if (equipped_item_id(inventory, equipment_slot) == item_id) then
-        bot[key] = nil;
+        bot[started_key] = nil;
+        bot[attempt_key] = nil;
         return true;
     end
     if (main_inventory_item_count(inventory, item_id) <= 0) then
         return false;
     end
-    if bot[key] == nil then
-        bot[key] = now;
+    if bot[started_key] == nil then
+        bot[started_key] = now;
+    end
+    if
+        now - bot[started_key] <= 20.0 and
+        (bot[attempt_key] == nil or now - bot[attempt_key] >= 3.0)
+    then
+        bot[attempt_key] = now;
         AshitaCore:GetChatManager():QueueCommand(1, command);
         update_fishing_overlay(bot, ('Fishing re-equipping %s'):fmt(label));
         add_event(-1, ('Agent fishing bot re-equipping %s from main inventory.'):fmt(label));
-        return nil;
     end
-    if (now - bot[key]) < 8.0 then
+    if now - bot[started_key] <= 20.0 then
         return nil;
     end
     return false;
 end
 
-local function update_fishing_overlay(bot, label)
+update_fishing_overlay = function(bot, label)
     local skill = fishing_skill_snapshot().skill;
     bridge.goal_overlay_enabled = true;
     bridge.goal_current_gil = 0;
@@ -1152,8 +1188,19 @@ local function start_fishing_bot(params)
     if (fishing_zone_allowlist[zone_id] ~= true) then
         error('Fishing bot is allowlisted only for the validated Bastok starter zones.');
     end
-    if (equipped_item_id(inventory, 2) ~= 17391 or equipped_item_id(inventory, 3) ~= 17396) then
-        error('Fishing bot requires the exact Willow Fishing Rod and Little Worm starter setup.');
+    local bait_item_id = math.floor(tonumber(params.bait_item_id) or 17396);
+    local bait = fishing_bait_allowlist[bait_item_id];
+    if bait == nil then
+        error('Fishing bot bait_item_id is not in the narrow starter-bait allowlist.');
+    end
+    if equipped_item_id(inventory, 2) ~= 17391 then
+        error('Fishing bot requires an equipped Willow Fishing Rod.');
+    end
+    if
+        equipped_item_id(inventory, 3) ~= bait_item_id and
+        main_inventory_item_count(inventory, bait_item_id) <= 0
+    then
+        error(('Fishing bot requires the requested %s bait in Inventory.'):fmt(bait.name));
     end
     local target_skill = math.floor(tonumber(params.target_skill) or 10);
     local maximum_seconds = math.floor(tonumber(params.maximum_seconds) or 1800);
@@ -1194,6 +1241,9 @@ local function start_fishing_bot(params)
         phase_deadline = 0,
         pending_special = 0,
         target_skill = target_skill,
+        bait_item_id = bait_item_id,
+        bait_command = bait.command,
+        bait_name = bait.name,
         maximum_seconds = maximum_seconds,
         maximum_casts = maximum_casts,
         minimum_free_inventory_slots = minimum_free,
@@ -1361,9 +1411,9 @@ local function monitor_fishing_bot()
             bot,
             inventory,
             3,
-            17396,
-            '/equip ammo "Little Worm"',
-            'Little Worm',
+            bot.bait_item_id,
+            bot.bait_command,
+            bot.bait_name,
             now
         );
         if bait_ready == false then stop_fishing_bot('missing_bait'); return; end

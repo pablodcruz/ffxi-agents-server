@@ -417,10 +417,15 @@ server.registerTool(
   {
     title: "Start bounded FFXI fishing bot",
     description:
-      "Start the private-server-only fishing supervisor in a validated Bastok fishing zone. AgentBridge requires a Willow Fishing Rod, Little Worm bait, closed menus, idle state, inventory headroom, and exact confirmation. The normal LandSandBoat server retains catch, bait, rod-break, inventory, and skill-up checks.",
+      "Start the private-server-only fishing supervisor in a validated Bastok fishing zone. AgentBridge requires a Willow Fishing Rod, an explicitly allowlisted starter bait, closed menus, idle state, inventory headroom, and exact confirmation. The normal LandSandBoat server retains catch, bait, rod-break, inventory, and skill-up checks.",
     inputSchema: {
       agent_id: agentIdSchema,
       target_skill: z.number().int().min(1).max(100).default(10),
+      bait_item_id: z.union([
+        z.literal(17395),
+        z.literal(17396),
+        z.literal(16998),
+      ]).default(17396),
       maximum_seconds: z.number().int().min(60).max(3600).default(1800),
       maximum_casts: z.number().int().min(1).max(200).default(100),
       minimum_free_inventory_slots: z.number().int().min(1).max(10).default(3),
@@ -436,6 +441,7 @@ server.registerTool(
   async ({
     agent_id,
     target_skill,
+    bait_item_id,
     maximum_seconds,
     maximum_casts,
     minimum_free_inventory_slots,
@@ -448,6 +454,7 @@ server.registerTool(
           "fishing_bot_start",
           {
             target_skill,
+            bait_item_id,
             maximum_seconds,
             maximum_casts,
             minimum_free_inventory_slots,
@@ -1537,10 +1544,12 @@ server.registerTool(
     inputSchema: {
       agent_id: agentIdSchema,
       npc_server_id: z.union([
+        z.literal(17735725),
         z.literal(17739798),
         z.literal(17739806),
         z.literal(17739811),
         z.literal(17793068),
+        z.literal(17801278),
       ]),
       item_id: z.number().int().refine(
         (value) => [
@@ -1549,6 +1558,8 @@ server.registerTool(
           4847, 4848, 4861, 4862,
           13454,
           4768, 4778, 4797, 4807,
+          17395,
+          16998,
         ].includes(value),
         "item_id is outside the repository-controlled vendor-purchase allowlist",
       ),

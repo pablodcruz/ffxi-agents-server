@@ -16,7 +16,11 @@ test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(bridge, /\[235\]\s*=\s*true/);
   assert.match(bridge, /\[236\]\s*=\s*true/);
   assert.match(bridge, /equipped_item_id\(inventory, 2\) ~= 17391/);
-  assert.match(bridge, /equipped_item_id\(inventory, 3\) ~= 17396/);
+  assert.match(bridge, /fishing_bait_allowlist/);
+  assert.match(bridge, /\[17395\]/);
+  assert.match(bridge, /\[17396\]/);
+  assert.match(bridge, /\[16998\]/);
+  assert.match(bridge, /main_inventory_item_count\(inventory, bait_item_id\) <= 0/);
   assert.match(bridge, /minimum_free_inventory_slots/);
   assert.match(bridge, /maximum_seconds < 60 or maximum_seconds > 3600/);
   assert.match(bridge, /maximum_casts < 1 or maximum_casts > 200/);
@@ -27,8 +31,15 @@ test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(bridge, /stop_fishing_bot\('missing_bait'\)/);
   assert.match(bridge, /main_inventory_item_count\(inventory, item_id\)/);
   assert.match(bridge, /ensure_fishing_item_equipped/);
+  assert.match(bridge, /rearm_%u_last_attempt_at/);
+  assert.match(bridge, />= 3\.0/);
+  assert.match(bridge, /<= 20\.0/);
+  assert.match(bridge, /local update_fishing_overlay;/);
+  assert.match(bridge, /update_fishing_overlay = function/);
   assert.match(bridge, /\/equip range \"Willow Fish\. Rod\"/);
+  assert.match(bridge, /\/equip ammo \"Lugworm\"/);
   assert.match(bridge, /\/equip ammo \"Little Worm\"/);
+  assert.match(bridge, /\/equip ammo \"Insect Ball\"/);
   assert.match(bridge, /bot\.phase == 'cooldown'/);
 });
 
