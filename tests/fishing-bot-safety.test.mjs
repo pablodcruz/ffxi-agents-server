@@ -13,6 +13,7 @@ test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(compose, /XI_MAP_FISHING_SKILL_MULTIPLIER:\s*"5\.0"/);
   assert.match(bridge, /START PRIVATE SERVER FISHING BOT/);
   assert.match(bridge, /\[234\]\s*=\s*true/);
+  assert.match(bridge, /\[235\]\s*=\s*true/);
   assert.match(bridge, /\[236\]\s*=\s*true/);
   assert.match(bridge, /equipped_item_id\(inventory, 2\) ~= 17391/);
   assert.match(bridge, /equipped_item_id\(inventory, 3\) ~= 17396/);

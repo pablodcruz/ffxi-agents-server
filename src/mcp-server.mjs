@@ -417,7 +417,7 @@ server.registerTool(
   {
     title: "Start bounded FFXI fishing bot",
     description:
-      "Start the private-server-only fishing supervisor in a validated Bastok starter zone. AgentBridge requires a Willow Fishing Rod, Little Worm bait, closed menus, idle state, inventory headroom, and exact confirmation. The normal LandSandBoat server retains catch, bait, rod-break, inventory, and skill-up checks.",
+      "Start the private-server-only fishing supervisor in a validated Bastok fishing zone. AgentBridge requires a Willow Fishing Rod, Little Worm bait, closed menus, idle state, inventory headroom, and exact confirmation. The normal LandSandBoat server retains catch, bait, rod-break, inventory, and skill-up checks.",
     inputSchema: {
       agent_id: agentIdSchema,
       target_skill: z.number().int().min(1).max(100).default(10),

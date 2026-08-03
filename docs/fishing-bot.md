@@ -10,7 +10,8 @@ It is deliberately narrow and is not a general packet sender or retail bot.
 
 The validated starter setup is:
 
-- Port Bastok (zone 236) or Bastok Mines (zone 234);
+- Bastok Mines (zone 234), Bastok Markets (zone 235), or Port Bastok
+  (zone 236);
 - Willow Fishing Rod (item 17391) in the ranged slot;
 - Little Worm (item 17396) in the ammo slot;
 - no open menu, an idle logged-in character, and inventory headroom;
@@ -26,6 +27,21 @@ automation tests finish in a practical window without manufacturing skill.
 The server still requires an eligible fish catch and owns the skill-up roll,
 amount, rank cap, bait use, and inventory result. This is a private-lab rate,
 not a claim about retail progression speed.
+
+## Starter progression bands
+
+The local server's authoritative fishing tables define Crayfish at skill 7 and
+Moat Carp at skill 11. Little Worm has positive affinity for both. Bastok Mines
+group 8 contains Crayfish but not Moat Carp, so it is suitable only through
+skill 7. Bastok Markets groups 5 and 6 contain Moat Carp and provide the
+verified 7-to-10 progression band. AgentBridge therefore allowlists Markets as
+the third narrow Bastok fishing zone; the bot still cannot run in arbitrary
+zones.
+
+Do not infer a fish cap from client text or the AgentBridge raw skill field.
+For exact progress in tenths, query the server-owned `char_skills.value` for
+skill ID 48. Change camps before the current catch reaches its table cap so a
+healthy bot does not spend bait without a possible skill-up.
 
 ## Why the bot uses fixed fishing packets
 

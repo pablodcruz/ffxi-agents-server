@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.1';
+addon.version = '0.32.2';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -976,6 +976,7 @@ end
 local fishing_zone_allowlist =
 {
     [234] = true, -- Bastok Mines: fixed starter-fishing zone for this bot.
+    [235] = true, -- Bastok Markets: Moat Carp progression through fishing skill 10.
     [236] = true, -- Port Bastok: fixed starter-fishing zone with accessible docks.
 };
 
