@@ -6,6 +6,14 @@ const source = fs.readFileSync(
   new URL("../server-extensions/commands/agentshop.lua", import.meta.url),
   "utf8",
 );
+const reloadSource = fs.readFileSync(
+  new URL("../server-extensions/commands/agentreload.lua", import.meta.url),
+  "utf8",
+);
+const spellSource = fs.readFileSync(
+  new URL("../server-extensions/commands/agentspell.lua", import.meta.url),
+  "utf8",
+);
 
 test("private-server shop preserves proximity, costs, ownership, and sale atomicity", () => {
   assert.match(source, /permission\s*=\s*1/);
@@ -29,6 +37,10 @@ test("private-server shop preserves proximity, costs, ownership, and sale atomic
   assert.match(source, /sparksCost\s*=\s*2755/);
   assert.match(source, /id\s*=\s*17739953, name\s*=\s*'Isakoth'/);
   assert.match(source, /id\s*=\s*17739803, name\s*=\s*'Balthilda'/);
+  for (const itemId of [90, 4401, 4426, 4427, 4472, 13454, 14117, 14242]) {
+    assert.match(source, new RegExp(`\\[${itemId}\\]`));
+  }
+  assert.match(source, /maxSaleQuantity\s*=\s*12/);
   assert.match(source, /player:checkDistance\(npc\)/);
   assert.match(source, /maximumDistance\s*=\s*6/);
   assert.match(source, /player:getCurrency\('spark_of_eminence'\)/);
@@ -36,7 +48,7 @@ test("private-server shop preserves proximity, costs, ownership, and sale atomic
   assert.match(source, /WEEKLY_EXCHANGE_LIMIT/);
   assert.match(source, /npcUtil\.giveItem\(player/);
   assert.match(source, /player:getItemCount\(itemId\) < quantity/);
-  assert.match(source, /quantity ~= 1/);
+  assert.match(source, /config\.maxSaleQuantity or 1/);
   assert.match(source, /GetItemByID\(itemId\)/);
   assert.match(source, /item:getBasePrice\(\)/);
   assert.match(source, /\[8711\]/);
@@ -45,8 +57,16 @@ test("private-server shop preserves proximity, costs, ownership, and sale atomic
   assert.match(source, /player:delItem\(itemId, 1, sourceContainer\)/);
   assert.match(source, /player:addCurrency\('spark_of_eminence', config\.voucherValue, xi\.settings\.main\.CAP_CURRENCY_SPARKS\)/);
 
-  const removal = source.indexOf("player:delItem(itemId, quantity)");
+  const removal = source.indexOf("player:delItem(itemId, quantity, xi.inv.INVENTORY)");
   const reward = source.indexOf("player:addGil(gil)");
   assert.ok(removal >= 0 && reward > removal, "item removal must precede gil reward");
   assert.doesNotMatch(source, /GetPlayerByName|setGil|givegil/);
+});
+
+test("private-server command reload refreshes the fixed shop module without arbitrary paths", () => {
+  assert.match(reloadSource, /name\s*=\s*'agentshop', path\s*=\s*'scripts\/commands\/agentshop'/);
+  assert.match(spellSource, /agentShopModulePath\s*=\s*'scripts\/commands\/agentshop'/);
+  assert.match(spellSource, /package\.loaded\[agentShopModulePath\]\s*=\s*nil/);
+  assert.match(spellSource, /pcall\(require, agentShopModulePath\)/);
+  assert.doesNotMatch(reloadSource, /parameters\s*=\s*'s'/);
 });

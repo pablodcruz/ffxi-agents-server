@@ -38,6 +38,10 @@ verified 7-to-10 progression band. AgentBridge therefore allowlists Markets as
 the third narrow Bastok fishing zone; the bot still cannot run in arbitrary
 zones.
 
+The stream-friendly Markets camp used for the level-10 run is at AgentBridge
+coordinates `x=-198, y=-73, z=-6`. It faces the canal with open sky, trees,
+and city architecture rather than the wall at the original Mines test point.
+
 Do not infer a fish cap from client text or the AgentBridge raw skill field.
 For exact progress in tenths, query the server-owned `char_skills.value` for
 skill ID 48. Change camps before the current catch reaches its table cap so a
@@ -111,10 +115,38 @@ missing rod, missing bait, logout, zoning, disabled control, or unavailable
 player identity. Status reports fishing skill, phase, equipment, inventory,
 casts, hooks, reel requests, catches, failures, and timeouts.
 
+AgentBridge 0.32.4 handles split equipment stacks without a model turn. During
+cooldown, if the equipped Little Worm stack empties but another exact stack
+remains in main inventory, the bot queues the fixed `/equip ammo "Little
+Worm"` command and waits up to eight seconds for verification. It does the
+same for an available spare Willow Fishing Rod. It still stops with
+`missing_bait` or `missing_rod` when no exact replacement exists or the
+re-equip cannot be verified.
+
 After a disconnect, unknown stop, missing equipment, or inventory pressure,
 diagnose authoritative player state before restarting. `mcp:fishing-stop` also
 sends the normal release packet so a completed or interrupted minigame does not
 leave the character stuck in fishing status.
+
+For inventory pressure, the private-server `!agentshop` path allowlists only
+the verified fishing catches and junk produced by these camps: Rusty Bucket,
+Moat Carp, Tricolored Carp, Gold Carp, Crayfish, Copper Ring, Rusty Leggings,
+and Rusty Subligar. Pablo must be within six yalms of Balthilda in Bastok
+Markets. The command removes only main-inventory items, reads each item's
+normal server base-sale value, removes the exact quantity before adding gil,
+and permits stack quantities only for fish. The MCP wrapper independently
+verifies the exact inventory decrease and gil increase before reporting
+success. Broken rods have a zero NPC value and are intentionally excluded.
+
+The same item list is also available through the normal `0x084`/`0x085` sale
+packet helper as a live-compatible fallback when the running map process has
+cached an older `!agentshop` module. The fallback requires opening Balthilda's
+normal shop once, sells only an exact main-inventory slot and quantity, and
+verifies the inventory decrease plus positive gil change. On 2026-08-03 it
+sold 7 Crayfish for 70 gil, 1 Gold Carp for 300 gil, 4 Moat Carp for 40 gil,
+and 2 Tricolored Carp for 104 gil. After a future map restart, live-proof the
+lower-friction proximity-gated path before replacing this fallback in the
+monitor.
 
 ## Live proof
 

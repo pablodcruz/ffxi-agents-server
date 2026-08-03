@@ -21,17 +21,30 @@ const purchasableItems = new Set([
   12385, // Acheron Shield
   17391, 17396, // Willow Fishing Rod and Little Worm
 ]);
-const allowedItems = new Set([...purchasableItems, 8711]);
+const saleUnitGil = new Map([
+  [90, 50], // Rusty Bucket
+  [4401, 10], // Moat Carp
+  [4426, 52], // Tricolored Carp
+  [4427, 300], // Gold Carp
+  [4472, 10], // Crayfish
+  [12385, 27550], // Acheron Shield
+  [13454, 19], // Copper Ring
+  [14117, 10], // Rusty Leggings
+  [14242, 15], // Rusty Subligar
+]);
+const stackableSaleItems = new Set([4401, 4426, 4427, 4472]);
+const allowedItems = new Set([...purchasableItems, ...saleUnitGil.keys(), 8711]);
 if (!["status", "buy", "sell", "voucher"].includes(action)) {
   throw new Error("--action must be status, buy, sell, or voucher.");
 }
 if (!allowedItems.has(itemId)) {
   throw new Error("The requested item is outside the private-shop allowlist.");
 }
-if (!Number.isInteger(quantity) || quantity < 1 || quantity > (itemId === 17396 ? 99 : 4)) {
+const maximumQuantity = itemId === 17396 ? 99 : stackableSaleItems.has(itemId) ? 12 : 4;
+if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximumQuantity) {
   throw new Error("--quantity is outside the exact item's transaction limit.");
 }
-if (action === "sell" && quantity !== 1) {
+if (action === "sell" && !stackableSaleItems.has(itemId) && quantity !== 1) {
   throw new Error("Non-stackable resale requires --quantity 1.");
 }
 if (action === "voucher" && (itemId !== 8711 || quantity !== 1)) {
@@ -40,11 +53,11 @@ if (action === "voucher" && (itemId !== 8711 || quantity !== 1)) {
 if (action === "buy" && !purchasableItems.has(itemId)) {
   throw new Error("Purchase requires an allowlisted Sparks item.");
 }
-if (action === "sell" && itemId !== 12385) {
-  throw new Error("Resale requires --item-id 12385.");
+if (action === "sell" && !saleUnitGil.has(itemId)) {
+  throw new Error("Resale requires an allowlisted item with a verified normal NPC value.");
 }
 
-const expectedUnitGil = 27550;
+const expectedUnitGil = saleUnitGil.get(itemId) || 0;
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(projectDir, "src", "mcp-server.mjs")],
@@ -155,7 +168,7 @@ try {
     action === "sell"
     && (!sold || afterCount !== beforeCount - quantity || afterGil !== beforeGil + expectedUnitGil * quantity)
   ) {
-    throw new Error("Acheron Shield sale was not verified by server response, inventory, and gil.");
+    throw new Error("Item sale was not verified by server response, inventory, and exact normal NPC gil.");
   }
   if (action === "voucher" && !exchanged) {
     throw new Error("Copper Voucher exchange was not verified by the server response.");

@@ -9,6 +9,18 @@
 ---@type TCommand
 local commandObj = {}
 
+-- The live map process may still have the previous single-module
+-- `agentreload` command cached. AgentSpell is the established reload target,
+-- so refreshing it also refreshes the fixed repository-controlled AgentShop
+-- module. This keeps exact shop allowlist updates deployable without a map
+-- restart or player disconnect; no caller-controlled module path is exposed.
+local agentShopModulePath = 'scripts/commands/agentshop'
+package.loaded[agentShopModulePath] = nil
+local agentShopLoaded, agentShopError = pcall(require, agentShopModulePath)
+if not agentShopLoaded then
+    error(string.format('failed to reload agentshop: %s', agentShopError))
+end
+
 commandObj.cmdprops =
 {
     permission = 1,

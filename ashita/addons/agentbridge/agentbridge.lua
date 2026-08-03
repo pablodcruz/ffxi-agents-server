@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.2';
+addon.version = '0.32.4';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -134,6 +134,7 @@ local job_change_npc_names =
 -- wrapper so neither side can expand the destructive scope independently.
 local allowed_npc_sale_items =
 {
+    [90] = true,    -- Rusty Bucket
     [505] = true,   -- Sheepskin
     [573] = true,   -- Vegetable Seeds
     [575] = true,   -- Grain Seeds
@@ -150,6 +151,13 @@ local allowed_npc_sale_items =
     [953] = true,   -- Treant Bulb
     [4570] = true,  -- Bird Egg
     [12385] = true, -- Acheron Shield
+    [4401] = true,  -- Moat Carp
+    [4426] = true,  -- Tricolored Carp
+    [4427] = true,  -- Gold Carp
+    [4472] = true,  -- Crayfish
+    [13454] = true, -- Copper Ring
+    [14117] = true, -- Rusty Leggings
+    [14242] = true, -- Rusty Subligar
     [508] = true,   -- Goblin Helm
     [511] = true,   -- Goblin Mask
     [642] = true,   -- Zinc Ore
@@ -990,6 +998,40 @@ local function equipped_item_id(inventory, equipment_slot)
     return item ~= nil and (tonumber(item.Id) or 0) or 0;
 end
 
+local function main_inventory_item_count(inventory, item_id)
+    local total = 0;
+    local capacity = tonumber(inventory:GetContainerCountMax(0)) or 0;
+    for slot = 1, math.min(capacity, 80) do
+        local item = inventory:GetContainerItem(0, slot);
+        if item ~= nil and tonumber(item.Id) == item_id then
+            total = total + (tonumber(item.Count) or 0);
+        end
+    end
+    return total;
+end
+
+local function ensure_fishing_item_equipped(bot, inventory, equipment_slot, item_id, command, label, now)
+    local key = ('rearm_%u_started_at'):fmt(equipment_slot);
+    if (equipped_item_id(inventory, equipment_slot) == item_id) then
+        bot[key] = nil;
+        return true;
+    end
+    if (main_inventory_item_count(inventory, item_id) <= 0) then
+        return false;
+    end
+    if bot[key] == nil then
+        bot[key] = now;
+        AshitaCore:GetChatManager():QueueCommand(1, command);
+        update_fishing_overlay(bot, ('Fishing re-equipping %s'):fmt(label));
+        add_event(-1, ('Agent fishing bot re-equipping %s from main inventory.'):fmt(label));
+        return nil;
+    end
+    if (now - bot[key]) < 8.0 then
+        return nil;
+    end
+    return false;
+end
+
 local function update_fishing_overlay(bot, label)
     local skill = fishing_skill_snapshot().skill;
     bridge.goal_overlay_enabled = true;
@@ -1294,8 +1336,35 @@ local function monitor_fishing_bot()
     if (capacity - count < bot.minimum_free_inventory_slots) then
         stop_fishing_bot('inventory_pressure'); return;
     end
-    if (equipped_item_id(inventory, 2) ~= 17391) then stop_fishing_bot('missing_rod'); return; end
-    if (equipped_item_id(inventory, 3) ~= 17396) then stop_fishing_bot('missing_bait'); return; end
+    -- Let the current hook/reel/release sequence finish before inspecting
+    -- equipment. If the active bait stack empties (or a spare rod exists),
+    -- re-equip the exact allowlisted item during cooldown instead of stopping
+    -- while an identical stack is still available in main inventory.
+    if (bot.phase == 'cooldown') then
+        local rod_ready = ensure_fishing_item_equipped(
+            bot,
+            inventory,
+            2,
+            17391,
+            '/equip range "Willow Fish. Rod"',
+            'Willow Fishing Rod',
+            now
+        );
+        if rod_ready == false then stop_fishing_bot('missing_rod'); return; end
+        if rod_ready == nil then return; end
+
+        local bait_ready = ensure_fishing_item_equipped(
+            bot,
+            inventory,
+            3,
+            17396,
+            '/equip ammo "Little Worm"',
+            'Little Worm',
+            now
+        );
+        if bait_ready == false then stop_fishing_bot('missing_bait'); return; end
+        if bait_ready == nil then return; end
+    end
 
     if (now - bot.last_overlay_at >= 2.0) then
         update_fishing_overlay(bot);
@@ -2045,6 +2114,14 @@ local function private_server_vendor_transaction(params)
         [8711] = true,  -- Copper Voucher
         [17391] = true, -- Willow Fishing Rod
         [17396] = true, -- Little Worm
+        [90] = true,    -- Rusty Bucket
+        [4401] = true,  -- Moat Carp
+        [4426] = true,  -- Tricolored Carp
+        [4427] = true,  -- Gold Carp
+        [4472] = true,  -- Crayfish
+        [13454] = true, -- Copper Ring
+        [14117] = true, -- Rusty Leggings
+        [14242] = true, -- Rusty Subligar
     };
     local purchasable_items =
     {
@@ -2063,12 +2140,14 @@ local function private_server_vendor_transaction(params)
         (action ~= 'status' and action ~= 'buy' and action ~= 'sell' and action ~= 'voucher') or
         not allowed_items[item_id] or
         quantity < 1 or
-        quantity > (item_id == 17396 and 99 or 4) or
+        quantity > (item_id == 17396 and 99 or
+            ((item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472) and 12 or 4)) or
         quantity ~= math.floor(quantity)
     ) then
         error('Private-server vendor transaction is outside the exact allowlist.');
     end
-    if (action == 'sell' and quantity ~= 1) then
+    local stackable_sale = item_id == 4401 or item_id == 4426 or item_id == 4427 or item_id == 4472;
+    if (action == 'sell' and not stackable_sale and quantity ~= 1) then
         error('Private-server non-stackable resale requires quantity=1.');
     end
     if (action == 'voucher' and (item_id ~= 8711 or quantity ~= 1)) then
@@ -2077,8 +2156,10 @@ local function private_server_vendor_transaction(params)
     if action == 'buy' and not purchasable_items[item_id] then
         error('Private-server purchase requires an allowlisted item.');
     end
-    if (action == 'sell' and item_id ~= 12385) then
-        error('Private-server resale requires Acheron Shield 12385.');
+    local sale_item = item_id == 90 or stackable_sale or item_id == 12385 or
+        item_id == 13454 or item_id == 14117 or item_id == 14242;
+    if (action == 'sell' and not sale_item) then
+        error('Private-server resale requires an allowlisted item with a normal NPC value.');
     end
 
     stop_movement('private_server_vendor_transaction');

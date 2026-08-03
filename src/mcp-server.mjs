@@ -1158,7 +1158,7 @@ server.registerTool(
   {
     title: "Perform an allowlisted transaction at an exact nearby vendor",
     description:
-      "Queue the private server's self-only !agentshop command. The server requires the exact configured NPC within six yalms and preserves normal gil or Sparks costs, exchange caps, inventory capacity, item ownership, and NPC resale value. The narrow allowlist also includes Gelzerio's Willow Fishing Rod and Little Worm starter stock.",
+      "Queue the private server's self-only !agentshop command. The server requires the exact configured NPC within six yalms and preserves normal gil or Sparks costs, exchange caps, inventory capacity, item ownership, and NPC resale value. The narrow allowlist includes Gelzerio's Willow Fishing Rod and Little Worm starter stock plus common fishing catches and junk sold beside Balthilda.",
     inputSchema: {
       agent_id: agentIdSchema,
       action: z.enum(["status", "buy", "sell", "voucher"]),
@@ -1167,6 +1167,9 @@ server.registerTool(
         z.literal(15164), z.literal(15314), z.literal(16545),
         z.literal(16536), z.literal(12385), z.literal(8711),
         z.literal(17391), z.literal(17396),
+        z.literal(90), z.literal(4401), z.literal(4426),
+        z.literal(4427), z.literal(4472), z.literal(13454),
+        z.literal(14117), z.literal(14242),
       ]),
       quantity: z.number().int().min(1).max(99).default(1),
       confirmation: z.literal("TRANSACT WITH NEARBY PRIVATE SERVER VENDOR"),
@@ -1180,13 +1183,15 @@ server.registerTool(
   },
   async ({ agent_id, action, item_id, quantity, confirmation }) => {
     try {
-      if (action === "sell" && quantity !== 1) {
+      const stackableSaleItems = [4401, 4426, 4427, 4472];
+      const saleItems = [90, ...stackableSaleItems, 12385, 13454, 14117, 14242];
+      if (action === "sell" && !stackableSaleItems.includes(item_id) && quantity !== 1) {
         throw new Error("Non-stackable resale requires quantity 1.");
       }
       if (action === "voucher" && (item_id !== 8711 || quantity !== 1)) {
         throw new Error("Voucher exchange requires Copper Voucher 8711 and quantity 1.");
       }
-      if (quantity > (item_id === 17396 ? 99 : 4)) {
+      if (quantity > (item_id === 17396 ? 99 : stackableSaleItems.includes(item_id) ? 12 : 4)) {
         throw new Error("Quantity exceeds the exact item's transaction limit.");
       }
       if (
@@ -1195,8 +1200,8 @@ server.registerTool(
       ) {
         throw new Error("Purchase requires an allowlisted item.");
       }
-      if (action === "sell" && item_id !== 12385) {
-        throw new Error("Resale requires Acheron Shield 12385.");
+      if (action === "sell" && !saleItems.includes(item_id)) {
+        throw new Error("Resale requires an allowlisted item with a verified normal NPC value.");
       }
       return agentResult(
         await agents.request(
@@ -1475,6 +1480,7 @@ server.registerTool(
       source_slot: z.number().int().min(1).max(80),
       item_id: z.number().int().refine(
         (value) => [
+          90, 4401, 4426, 4427, 4472, 13454, 14117, 14242,
           505, 573, 575, 768, 847, 852, 856, 881, 882, 924, 925, 926,
           936, 953, 4570, 12385,
           508, 511, 642, 750, 846, 912, 922, 1984, 4358, 4362, 4366,

@@ -434,6 +434,21 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
     "private_server_vendor_transaction",
   );
 
+  const fishingCatchSale = await client.callTool({
+    name: "ffxi_private_server_vendor_transaction",
+    arguments: {
+      action: "sell",
+      item_id: 4401,
+      quantity: 12,
+      confirmation: "TRANSACT WITH NEARBY PRIVATE SERVER VENDOR",
+    },
+  });
+  assert.equal(fishingCatchSale.isError, undefined);
+  assert.equal(
+    fishingCatchSale.structuredContent.operation,
+    "private_server_vendor_transaction",
+  );
+
   const rdmSpellPurchase = await client.callTool({
     name: "ffxi_private_server_rdm_spell",
     arguments: {

@@ -25,6 +25,11 @@ test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(bridge, /stop_fishing_bot\('inventory_pressure'\)/);
   assert.match(bridge, /stop_fishing_bot\('missing_rod'\)/);
   assert.match(bridge, /stop_fishing_bot\('missing_bait'\)/);
+  assert.match(bridge, /main_inventory_item_count\(inventory, item_id\)/);
+  assert.match(bridge, /ensure_fishing_item_equipped/);
+  assert.match(bridge, /\/equip range \"Willow Fish\. Rod\"/);
+  assert.match(bridge, /\/equip ammo \"Little Worm\"/);
+  assert.match(bridge, /bot\.phase == 'cooldown'/);
 });
 
 test("fishing reel is a fixed normal packet with server-owned outcomes", () => {

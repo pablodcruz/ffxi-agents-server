@@ -20,6 +20,7 @@ commandObj.cmdprops =
 local maximumDistance = 6
 local isakoth = { zone = xi.zone.BASTOK_MARKETS, id = 17739953, name = 'Isakoth' }
 local gelzerio = { zone = xi.zone.BASTOK_MINES, id = 17735725, name = 'Gelzerio' }
+local balthilda = { zone = xi.zone.BASTOK_MARKETS, id = 17739803, name = 'Balthilda' }
 local allowedItems =
 {
     [xi.item.WILLOW_FISHING_ROD] =
@@ -55,8 +56,19 @@ local allowedItems =
     {
         sparksCost = 2755,
         purchaseVendor = isakoth,
-        saleVendor = { zone = xi.zone.BASTOK_MARKETS, id = 17739803, name = 'Balthilda' },
+        saleVendor = balthilda,
     },
+    -- Fishing cleanup. These entries preserve each item's normal NPC base
+    -- sale value and require Pablo to be physically beside Balthilda. Fish
+    -- stacks may be sold together; non-stackable junk remains quantity=1.
+    [90]    = { maxQuantity = 1,  maxSaleQuantity = 1,  saleVendor = balthilda }, -- Rusty bucket
+    [4401]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Moat carp
+    [4426]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Tricolored carp
+    [4427]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Gold carp
+    [4472]  = { maxQuantity = 12, maxSaleQuantity = 12, saleVendor = balthilda }, -- Crayfish
+    [13454] = { maxQuantity = 1,  maxSaleQuantity = 1,  saleVendor = balthilda }, -- Copper ring
+    [14117] = { maxQuantity = 1,  maxSaleQuantity = 1,  saleVendor = balthilda }, -- Rusty leggings
+    [14242] = { maxQuantity = 1,  maxSaleQuantity = 1,  saleVendor = balthilda }, -- Rusty subligar
     [8711] =
     {
         voucherValue = 1000,
@@ -193,8 +205,9 @@ local function purchase(player, itemId, quantity, config)
 end
 
 local function sell(player, itemId, quantity, config)
-    if quantity ~= 1 then
-        return false, 'non-stackable resale requires quantity=1'
+    local maximumSaleQuantity = config.maxSaleQuantity or 1
+    if quantity > maximumSaleQuantity then
+        return false, string.format('resale quantity exceeds maximum=%u', maximumSaleQuantity)
     end
     local nearby, detail = nearbyVendor(player, config.saleVendor)
     if not nearby then
@@ -211,7 +224,10 @@ local function sell(player, itemId, quantity, config)
     local gil = item:getBasePrice() * quantity
 
     local beforeCount = player:getItemCount(itemId)
-    if not player:delItem(itemId, quantity) or player:getItemCount(itemId) ~= beforeCount - quantity then
+    if
+        not player:delItem(itemId, quantity, xi.inv.INVENTORY) or
+        player:getItemCount(itemId) ~= beforeCount - quantity
+    then
         return false, 'exact item removal failed; gil was not added'
     end
     player:addGil(gil)
