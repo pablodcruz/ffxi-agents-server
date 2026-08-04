@@ -15,6 +15,13 @@ Watch the agent live or browse previous broadcasts on the
 Explore aggregate progression, combat, navigation, and MCP reliability data on
 the [public FFXI telemetry dashboard](https://ffxi-telemetry.vercel.app).
 
+## Development cadence
+
+As of August 4, 2026, the project has about 4% of its current Codex usage
+allowance remaining. That allowance resets on August 9, 2026, so development
+and live-agent experimentation will proceed at a slower, lower-token cadence
+until the reset.
+
 ## What exists now
 
 - A Docker Compose deployment based on LandSandBoat's official container layout.

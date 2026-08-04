@@ -1,4 +1,4 @@
-# Current goal
+# Paused goal
 
 Last reviewed: 2026-08-04
 
@@ -7,6 +7,16 @@ LandSandBoat server. The detached supervisor handles the shared 50/50
 Argus/Leech King lottery, treating Leech King as a non-completing support
 target, and stops only after one verified Argus defeat or a material safety
 issue.
+
+## Paused state
+
+- The operator ended the active camp on August 4, 2026 so the project could
+  move on while conserving the remaining Codex allowance.
+- The final supervisor lease stopped cooperatively with `stop_requested`, no
+  live target, zero deaths, and no error. Its one Leech King defeat correctly
+  left `objective_kills: 0`; Argus was not defeated.
+- The monitoring heartbeat was deleted. Resume this goal with a fresh safety
+  audit rather than silently restarting the stopped lease.
 
 ## Completion evidence required
 
