@@ -132,7 +132,7 @@ missing rod, missing bait, logout, zoning, disabled control, or unavailable
 player identity. Status reports fishing skill, phase, equipment, inventory,
 casts, hooks, reel requests, catches, failures, and timeouts.
 
-AgentBridge 0.32.9 handles split equipment stacks without a model turn. During
+AgentBridge 0.32.10 handles split equipment stacks without a model turn. During
 cooldown, if the selected bait stack empties but another exact stack remains in
 main inventory, the bot queues only that bait's fixed `/equip ammo` command.
 It does the same for an available spare Willow Fishing Rod. FFXI can reject the
@@ -140,6 +140,23 @@ first equip command while a catch result is still resolving, so recovery
 retries no faster than every three seconds for at most twenty seconds. It still
 stops with `missing_bait` or `missing_rod` when no exact replacement exists or
 the bounded re-equip cannot be verified.
+
+LandSandBoat reports successful catches as `<player> caught a ...`, rather
+than only the retail-style `You caught ...` text. Version 0.32.10 recognizes
+both forms, increments the stream counter, and sends the fixed release packet
+immediately instead of waiting for the five-second resolution fallback.
+
+Version 0.32.11 also adds the four ordinary Port Bastok catches used by the
+leveling route (Bastore Sardine, Zafmlug Bass, Cobalt Jellyfish, and Quus) to
+the duplicated host-and-client NPC-sale allowlist. Cleanup still requires an
+open normal vendor context, an exact main-inventory slot and quantity, and
+verification of both the item decrease and gil increase. Fishing gear, bait,
+rare items, and broken rods remain outside this catch-specific expansion.
+
+Version 0.32.12 adds only Gelzerio's Willow Fishing Rod to the duplicated
+direct-vendor purchase allowlist. The helper still requires Gelzerio's live
+shop context, a single-unit request, a caller price ceiling, free inventory,
+and exact verification of the rod increase and gil decrease.
 
 After a disconnect, unknown stop, missing equipment, or inventory pressure,
 diagnose authoritative player state before restarting. `mcp:fishing-stop` also
@@ -179,6 +196,31 @@ Goblin Helm produced no verified normal sale, so the monitor leaves them alone
 instead of retrying blindly.
 
 ## Live proof
+
+The full level-10 goal completed on 2026-08-03 without an administrative
+skill-set command. The authoritative `char_skills` row for Pablo
+(`charid=1`, fishing `skillid=48`) reached `value=100, rank=0`; after a
+stability wait, AgentBridge independently reported integer skill 10, capped,
+and the detached supervisor remained stopped with `stop_reason=target_skill`.
+Final client state was logged in and idle with inventory 32/35, six Insect
+Balls, and three usable Willow Fishing Rods (one equipped and two spares).
+
+The final live route also corrected an important camp assumption. Five
+Insect Ball catches at the scenic Port Bastok saltwater dock produced no
+authoritative skill gain. Moving only the 9-to-10 stage to the Bastok Markets
+freshwater canal at `x=-198, y=-73, z=-6`, heading `3.1415`, produced Moat
+Carp and advanced the database from 90 to 100 through normal server skill-up
+rolls. The Port dock remains the stream-friendly Little Worm/Lugworm camp for
+the earlier bands; it is not the verified Insect Ball finish.
+
+The completion run exercised both bounded recovery paths. Inventory-pressure
+stops were diagnosed before exact allowlisted catches and rusty junk were sold
+through a live normal vendor context. Missing-bait stops were followed by
+verified one-unit normal `0x083` purchases from Toji Mumosulah. Two broken
+spare rods were replaced with exact verified Gelzerio purchases, leaving three
+usable rods at completion. A future friction improvement may add a separately
+bounded stack purchase for bait, but the live bridge and helper intentionally
+remain one-unit-per-verified-packet in this proof.
 
 Bounded live proofs caught two Rusty Subligars in Port Bastok and one Crayfish
 in Bastok Mines, with inventory changes verified through authoritative client

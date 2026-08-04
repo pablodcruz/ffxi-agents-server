@@ -10,7 +10,7 @@ service travel and a few exact, guarded normal-client packet flows.
 
 addon.name = 'agentbridge';
 addon.author = 'FFXI Agent Lab';
-addon.version = '0.32.9';
+addon.version = '0.32.12';
 addon.desc = 'Local observation and allowlisted gameplay bridge for private-server agents.';
 
 require 'common';
@@ -156,6 +156,10 @@ local allowed_npc_sale_items =
     [4570] = true,  -- Bird Egg
     [12385] = true, -- Acheron Shield
     [4401] = true,  -- Moat Carp
+    [4360] = true,  -- Bastore Sardine
+    [4385] = true,  -- Zafmlug Bass
+    [4443] = true,  -- Cobalt Jellyfish
+    [4514] = true,  -- Quus
     [4426] = true,  -- Tricolored Carp
     [4427] = true,  -- Gold Carp
     [4472] = true,  -- Crayfish
@@ -204,6 +208,7 @@ local allowed_vendor_purchases =
 {
     [17735725] = -- Gelzerio, Bastok Mines
     {
+        [17391] = true, -- Willow Fishing Rod
         [17395] = true, -- Lugworm
     },
     [17739798] = -- Zhikkom, Bastok Markets
@@ -3592,7 +3597,12 @@ ashita.events.register('text_in', 'text_in_cb', function (event)
     local bot = bridge.fishing;
     if (bot ~= nil and bot.active and type(event.message_modified) == 'string') then
         local message = event.message_modified:gsub('%c', ' ');
-        if (message:find('You catch') ~= nil or message:find('You caught') ~= nil) then
+        if
+            message:find('You catch') ~= nil or
+            message:find('You caught') ~= nil or
+            message:find(' caught a ') ~= nil or
+            message:find(' caught an ') ~= nil
+        then
             bot.catches = bot.catches + 1;
             if (bot.phase == 'resolving') then
                 send_fishing_release_packet();

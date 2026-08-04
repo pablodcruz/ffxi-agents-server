@@ -623,6 +623,22 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
     "buy_vendor_item",
   );
 
+  const willowRodVendorPurchase = await client.callTool({
+    name: "ffxi_buy_vendor_item",
+    arguments: {
+      npc_server_id: 17735725,
+      item_id: 17391,
+      maximum_price: 1000,
+      quantity: 1,
+      confirmation: "BUY PRIVATE SERVER VENDOR ITEM",
+    },
+  });
+  assert.equal(willowRodVendorPurchase.isError, undefined);
+  assert.equal(
+    willowRodVendorPurchase.structuredContent.operation,
+    "buy_vendor_item",
+  );
+
   const interaction = await client.callTool({
     name: "ffxi_interact",
     arguments: {

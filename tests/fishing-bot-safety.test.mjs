@@ -7,6 +7,10 @@ const bridge = fs.readFileSync(
   "utf8",
 );
 const compose = fs.readFileSync(new URL("../compose.yaml", import.meta.url), "utf8");
+const sellHelper = fs.readFileSync(
+  new URL("../scripts/mcp-sell-inventory-item.mjs", import.meta.url),
+  "utf8",
+);
 
 test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(compose, /XI_MAP_FISHING_ENABLE:\s*"true"/);
@@ -41,6 +45,25 @@ test("fishing bot is bounded to private-server starter fishing", () => {
   assert.match(bridge, /\/equip ammo \"Little Worm\"/);
   assert.match(bridge, /\/equip ammo \"Insect Ball\"/);
   assert.match(bridge, /bot\.phase == 'cooldown'/);
+  assert.match(bridge, /message:find\(' caught a '\)/);
+  assert.match(bridge, /message:find\(' caught an '\)/);
+  for (const itemId of [4360, 4385, 4443, 4514]) {
+    assert.match(
+      bridge,
+      new RegExp(`\\[${itemId}\\] = true,\\s+--`),
+      `expected ordinary Port Bastok catch ${itemId} in the guarded NPC-sale allowlist`,
+    );
+    assert.match(
+      sellHelper,
+      new RegExp(`(?:^|\\s|,)${itemId}(?:\\s|,)`),
+      `expected ordinary Port Bastok catch ${itemId} in the guarded host sale helper`,
+    );
+  }
+  assert.match(
+    bridge,
+    /\[17735725\][\s\S]*?\[17391\] = true, -- Willow Fishing Rod/,
+    "expected Gelzerio's Willow Fishing Rod in the guarded client purchase allowlist",
+  );
 });
 
 test("fishing reel is a fixed normal packet with server-owned outcomes", () => {
