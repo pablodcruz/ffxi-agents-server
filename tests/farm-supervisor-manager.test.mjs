@@ -114,6 +114,7 @@ test("passes the explicit caution opt-in to the detached supervisor process", ()
     "--maximum-route-rounds", "2",
     "--minimum-free-inventory-slots", "6",
     "--objective-target-name", "",
+    "--objective-support-target-name", "",
     "--objective-kill-count", "0",
     "--confirmation", FARM_CONFIRMATION,
   ]);
@@ -186,8 +187,9 @@ test("preserves every RDM spell option across watchdog renewal", () => {
         nm_route: false,
         maximum_route_rounds: 1,
         minimum_free_inventory_slots: 5,
-        objective_target_name: "",
-        objective_kill_count: 0,
+        objective_target_name: "Argus",
+        objective_support_target_name: "Leech King",
+        objective_kill_count: 1,
       },
     },
   });
@@ -200,5 +202,46 @@ test("preserves every RDM spell option across watchdog renewal", () => {
   assert.equal(renewed.minimumOpeningSpellMpPercent, 65);
   assert.equal(renewed.selfBuffSpell, "Enthunder");
   assert.equal(renewed.selfBuffIntervalSeconds, 150);
+  assert.equal(renewed.objectiveSupportTargetName, "Leech King");
   assert.equal(renewed.confirmation, FARM_CONFIRMATION);
+});
+
+test("passes a non-completing support target beside an exact objective", () => {
+  const args = farmSupervisorArgs({
+    projectDir: "/private/test-project",
+    agentId: "primary",
+    leaseId: "00000000-0000-4000-8000-000000000003",
+    zoneId: 198,
+    maximumSeconds: 3600,
+    maximumFights: 50,
+    scanRadius: 50,
+    minimumStartHpPercent: 75,
+    allowCaution: true,
+    autoRelocate: true,
+    autoTransition: false,
+    targetLevel: 0,
+    questItemId: 0,
+    trustedCampSweep: false,
+    maximumTargetLevelOffset: 5,
+    autoJobAbilities: true,
+    summonTrusts: true,
+    weaponSkill: "Fast Blade",
+    combatSpell: "Thunder",
+    maximumCombatSpellsPerFight: 1,
+    minimumCastMpPercent: 35,
+    openingCombatSpell: "Dia II",
+    minimumOpeningSpellMpPercent: 65,
+    selfBuffSpell: "Enthunder",
+    selfBuffIntervalSeconds: 150,
+    nmRoute: false,
+    maximumRouteRounds: 1,
+    minimumFreeInventorySlots: 5,
+    objectiveTargetName: "Argus",
+    objectiveSupportTargetName: "Leech King",
+    objectiveKillCount: 1,
+  });
+  const supportIndex = args.indexOf("--objective-support-target-name");
+  assert.equal(args[supportIndex + 1], "Leech King");
+  const objectiveIndex = args.indexOf("--objective-target-name");
+  assert.equal(args[objectiveIndex + 1], "Argus");
 });

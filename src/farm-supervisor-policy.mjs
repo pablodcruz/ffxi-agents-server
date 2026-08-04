@@ -70,6 +70,36 @@ export function selectProactiveTarget({
   )) || null;
 }
 
+export function selectObjectiveTarget({
+  observation,
+  primaryName,
+  supportName = "",
+  radius = 50,
+  excludedServerIds = new Set(),
+}) {
+  const nearestNamedTarget = (name) => {
+    if (!name) return null;
+    return (observation?.nearby_entities || [])
+      .filter((entity) => (
+        Number(entity?.entity_type) === 2
+        && entity?.name === name
+        && Number(entity?.status) === 0
+        && Number(entity?.hp_percent) > 0
+        && Number(entity?.distance) <= Number(radius)
+        && !excludedServerIds.has(Number(entity?.server_id))
+      ))
+      .sort((left, right) => (
+        Number(left.distance) - Number(right.distance)
+        || Number(left.server_id) - Number(right.server_id)
+      ))[0] || null;
+  };
+
+  // The primary objective always wins when both are visible. A support target
+  // exists only to advance an alternating/timed spawn cycle and never changes
+  // the completion counter.
+  return nearestNamedTarget(primaryName) || nearestNamedTarget(supportName);
+}
+
 export function selectTrustedCampSweepTarget({
   observation,
   metadata,
@@ -226,7 +256,7 @@ export function selectRelocationCamp({
     && (
       Number(mob?.mob_type || 0) === 0
       || (
-        normalizedServerIds
+        (normalizedServerIds || normalizedNames)
         && Number(mob?.mob_type || 0) === 2
       )
     )

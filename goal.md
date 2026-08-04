@@ -1,3 +1,23 @@
+# Current goal
+
+Last reviewed: 2026-08-04
+
+Farm Argus at the proven Maze of Shakhrami camp on the isolated local
+LandSandBoat server. The detached supervisor handles the alternating Leech
+King slot as a non-completing support target and stops only after one verified
+Argus defeat or a material safety issue.
+
+## Completion evidence required
+
+- Persisted lease reports `objective_kills: 1` and a normal
+  `objective_kill_limit` stop.
+- Pablo is alive, logged in, menu-free, and no longer in combat.
+- The Argus fight and any drop are reconciled from the audit log and
+  authoritative inventory state.
+- Pablo is returned safely to Bastok Markets.
+- New collision/timer findings are tested, documented, committed, and pushed
+  to `main` without credentials or runtime logs.
+
 # Latest completed goal
 
 Last reviewed: 2026-08-03

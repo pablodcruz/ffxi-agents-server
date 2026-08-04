@@ -1226,6 +1226,40 @@ server.registerTool(
 );
 
 server.registerTool(
+  "ffxi_private_server_nm_reposition",
+  {
+    title: "Reposition an exact nearby collision-blocked NM",
+    description:
+      "Queue the private server's self-only !agentnmhere command for naturally spawned Argus or Leech King. Both client and server require Maze of Shakhrami, the exact live mob within ten yalms, an idle character, and closed menus. The command cannot spawn, defeat, or reward a mob; it only recovers a normal fight from broken collision.",
+    inputSchema: {
+      agent_id: agentIdSchema,
+      mob_id: z.union([z.literal(17588674), z.literal(17588685)]),
+      confirmation: z.literal("REPOSITION NEARBY PRIVATE SERVER NM"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ agent_id, mob_id, confirmation }) => {
+    try {
+      return agentResult(
+        await agents.request(
+          agent_id,
+          "private_server_nm_reposition",
+          { mob_id, confirmation },
+          { write: true },
+        ),
+      );
+    } catch (error) {
+      return toolError(error);
+    }
+  },
+);
+
+server.registerTool(
   "ffxi_private_server_rdm30_gear",
   {
     title: "Buy the exact RDM level-30 gear checkpoint",
@@ -1759,6 +1793,11 @@ server.registerTool(
         .max(64)
         .regex(/^[^"\r\n;|]*$/)
         .default(""),
+      objective_support_target_name: z
+        .string()
+        .max(64)
+        .regex(/^[^"\r\n;|]*$/)
+        .default(""),
       objective_kill_count: z.number().int().min(0).max(200).default(0),
       confirmation: z.literal(FARM_CONFIRMATION),
     },
@@ -1800,6 +1839,7 @@ server.registerTool(
     maximum_route_rounds,
     minimum_free_inventory_slots,
     objective_target_name,
+    objective_support_target_name,
     objective_kill_count,
     confirmation,
   }) => {
@@ -1836,6 +1876,7 @@ server.registerTool(
         maximumRouteRounds: maximum_route_rounds,
         minimumFreeInventorySlots: minimum_free_inventory_slots,
         objectiveTargetName: objective_target_name,
+        objectiveSupportTargetName: objective_support_target_name,
         objectiveKillCount: objective_kill_count,
         confirmation,
       }));

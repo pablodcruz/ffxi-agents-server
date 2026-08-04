@@ -44,6 +44,9 @@ x-lsb-common: &lsb-common
     # items and must be disabled after the route.
     - ./server-extensions/commands/agentquestsafety.lua:/server/scripts/commands/agentquestsafety.lua:ro
     - ./server-extensions/commands/agentquestmarker.lua:/server/scripts/commands/agentquestmarker.lua:ro
+    # Exact, proximity-gated collision recovery for naturally spawned Argus
+    # and Leech King. It cannot spawn, defeat, or reward either NM.
+    - ./server-extensions/commands/agentnmhere.lua:/server/scripts/commands/agentnmhere.lua:ro
 
 services:
   mesh-seed:

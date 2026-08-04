@@ -750,6 +750,45 @@ four-camp implementation moves on immediately after its configured
 placeholder quota is dead and lets the route itself absorb respawn time. See
 `docs/notorious-monster-loop.md`.
 
+### Argus and Leech King alternating camp
+
+Maze of Shakhrami does not use ordinary Protozoans as Argus placeholders. The
+pinned zone script alternates one timed slot between Argus (`17588674`) and
+Leech King (`17588685`): the initial delay is randomly 15–120 minutes and a
+defeat starts a new random 60–120 minute delay for the other NM. Killing nearby
+Protozoans therefore does not accelerate the lottery.
+
+Use an exact objective with one non-completing support target:
+
+```sh
+--objective-target-name Argus \
+--objective-support-target-name 'Leech King' \
+--objective-kill-count 1
+```
+
+The selector always prefers live Argus when both names are observable. A Leech
+King defeat counts as an ordinary/support fight and never increments
+`objective_kills`; it merely clears the alternating slot so Argus can become
+the next timed spawn.
+
+The live camp exposed a broken collision pocket near Leech King's randomized
+position. A client could reach within one yalm and still receive `Unable to see
+the Leech King`. Normal retry plus a guarded service-teleport nudge remains the
+first response. Only after two fresh normal attack failures may the supervisor
+queue `ffxi_private_server_nm_reposition`. Both AgentBridge and the server then
+require all of the following:
+
+- Pablo is idle, logged in, menu-free, and in zone 198;
+- the ID is exactly Argus or Leech King and the name matches;
+- the NM is naturally spawned, alive, and within ten yalms;
+- the fixed confirmation phrase is present.
+
+The server command cannot spawn, despawn, damage, defeat, or reward the NM. It
+only moves that already-live entity to Pablo, after which the supervisor must
+observe it within four yalms and complete an ordinary fight. This preserves
+the timer, combat, drop ownership, and server RNG while removing a verified
+geometry failure.
+
 ### Verified Elder Memories completion
 
 The normal quest finished without grants or quest-state writes:

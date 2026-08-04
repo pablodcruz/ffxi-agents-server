@@ -86,6 +86,7 @@ export function farmRenewalConfig({ projectDir, agentId = "primary", farm }) {
     maximumRouteRounds: config.maximum_route_rounds,
     minimumFreeInventorySlots: config.minimum_free_inventory_slots,
     objectiveTargetName: config.objective_target_name ?? "",
+    objectiveSupportTargetName: config.objective_support_target_name ?? "",
     objectiveKillCount: config.objective_kill_count ?? 0,
     confirmation: FARM_CONFIRMATION,
   };
@@ -124,6 +125,7 @@ export function farmSupervisorArgs({
   maximumRouteRounds,
   minimumFreeInventorySlots,
   objectiveTargetName = "",
+  objectiveSupportTargetName = "",
   objectiveKillCount = 0,
 }) {
   return [
@@ -159,6 +161,7 @@ export function farmSupervisorArgs({
     "--maximum-route-rounds", String(maximumRouteRounds),
     "--minimum-free-inventory-slots", String(minimumFreeInventorySlots),
     "--objective-target-name", objectiveTargetName,
+    "--objective-support-target-name", objectiveSupportTargetName,
     "--objective-kill-count", String(objectiveKillCount),
     "--confirmation", FARM_CONFIRMATION,
   ];
@@ -196,6 +199,7 @@ export async function startFarm({
   maximumRouteRounds = 1,
   minimumFreeInventorySlots = 5,
   objectiveTargetName = "",
+  objectiveSupportTargetName = "",
   objectiveKillCount = 0,
   confirmation,
 }) {
@@ -254,6 +258,7 @@ export async function startFarm({
       maximum_route_rounds: maximumRouteRounds,
       minimum_free_inventory_slots: minimumFreeInventorySlots,
       objective_target_name: objectiveTargetName,
+      objective_support_target_name: objectiveSupportTargetName,
       objective_kill_count: objectiveKillCount,
     },
     counters: {
@@ -325,6 +330,7 @@ export async function startFarm({
     maximumRouteRounds,
     minimumFreeInventorySlots,
     objectiveTargetName,
+    objectiveSupportTargetName,
     objectiveKillCount,
   });
   const child = spawn(process.execPath, args, {

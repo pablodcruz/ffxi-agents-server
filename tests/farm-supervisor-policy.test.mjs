@@ -20,6 +20,7 @@ import {
   relocationMaximumLevelOffset,
   safeCombatPosition,
   selectProactiveTarget,
+  selectObjectiveTarget,
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
   shouldAbandonStaleEngagement,
@@ -233,6 +234,41 @@ test("selects an approved proactive target and preserves family exclusions", () 
   assert.equal(selected?.server_id, 101);
 });
 
+test("prioritizes the exact objective while admitting one support target", () => {
+  const observation = {
+    nearby_entities: [
+      {
+        entity_type: 2,
+        name: "Leech King",
+        server_id: 17588685,
+        status: 0,
+        hp_percent: 100,
+        distance: 4,
+      },
+      {
+        entity_type: 2,
+        name: "Argus",
+        server_id: 17588674,
+        status: 0,
+        hp_percent: 100,
+        distance: 20,
+      },
+    ],
+  };
+  assert.equal(selectObjectiveTarget({
+    observation,
+    primaryName: "Argus",
+    supportName: "Leech King",
+  })?.name, "Argus");
+
+  observation.nearby_entities = observation.nearby_entities.slice(0, 1);
+  assert.equal(selectObjectiveTarget({
+    observation,
+    primaryName: "Argus",
+    supportName: "Leech King",
+  })?.name, "Leech King");
+});
+
 test("selects a dense level-appropriate relocation camp away from aggro", () => {
   const camp = selectRelocationCamp({
     metadata: [
@@ -387,6 +423,42 @@ test("exact watched-server relocation can admit a notorious monster", () => {
     maximumLevelOffset: 4,
   });
   assert.equal(camp?.server_id, 17588674);
+});
+
+test("exact objective names can relocate between alternating notorious monsters", () => {
+  const metadata = [
+    {
+      server_id: 17588674,
+      zone_id: 198,
+      name: "Argus",
+      mob_type: 2,
+      maximum_level: 37,
+      aggro: true,
+      spawn: { x: 261, y: -87, z: 20 },
+    },
+    {
+      server_id: 17588685,
+      zone_id: 198,
+      name: "Leech King",
+      mob_type: 2,
+      maximum_level: 36,
+      aggro: true,
+      spawn: { x: 270, y: -205, z: 18 },
+    },
+  ];
+  const camp = selectRelocationCamp({
+    metadata,
+    playerLevel: 55,
+    zoneId: 198,
+    currentPosition: { x: 261, y: -87, z: 20 },
+    allowedNames: ["Argus", "Leech King"],
+    allowAggressiveCandidates: true,
+    minimumAggroDistance: 0,
+    minimumLevelOffset: 99,
+    maximumLevelOffset: 5,
+  });
+  assert.equal(camp?.name, "Leech King");
+  assert.equal(camp?.server_id, 17588685);
 });
 
 test("selects a cross-zone camp without comparing unrelated coordinates", () => {

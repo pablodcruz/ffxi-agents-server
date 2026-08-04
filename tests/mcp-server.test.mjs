@@ -37,6 +37,7 @@ async function createMockBridge(token) {
         "service_teleport",
         "private_server_bastok_mission",
         "private_server_vendor_transaction",
+        "private_server_nm_reposition",
         "private_server_rdm30_gear",
         "private_server_rdm_spell",
         "private_server_rdm_spell_grant",
@@ -188,6 +189,7 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
       "ffxi_observe",
       "ffxi_private_server_bastok_mission",
       "ffxi_private_server_vendor_transaction",
+      "ffxi_private_server_nm_reposition",
       "ffxi_private_server_rdm30_gear",
       "ffxi_private_server_rdm_spell",
       "ffxi_private_server_rdm_spell_grant",
@@ -447,6 +449,19 @@ test("MCP server lists tools and reaches the bridge and LSB API", async (context
   assert.equal(
     fishingCatchSale.structuredContent.operation,
     "private_server_vendor_transaction",
+  );
+
+  const nmReposition = await client.callTool({
+    name: "ffxi_private_server_nm_reposition",
+    arguments: {
+      mob_id: 17588685,
+      confirmation: "REPOSITION NEARBY PRIVATE SERVER NM",
+    },
+  });
+  assert.equal(nmReposition.isError, undefined);
+  assert.equal(
+    nmReposition.structuredContent.operation,
+    "private_server_nm_reposition",
   );
 
   const rdmSpellPurchase = await client.callTool({

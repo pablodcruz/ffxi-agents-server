@@ -2255,6 +2255,84 @@ local function private_server_vendor_transaction(params)
     };
 end
 
+local function private_server_nm_reposition(params)
+    require_control_enabled();
+
+    local memory = AshitaCore:GetMemoryManager();
+    local player = memory:GetPlayer();
+    local party = memory:GetParty();
+    local target = memory:GetTarget();
+    local entities = memory:GetEntity();
+    if (player:GetLoginStatus() ~= 2) then
+        error('Private-server NM reposition requires a logged-in character.');
+    end
+    if (target:GetIsMenuOpen() ~= 0) then
+        error('Private-server NM reposition requires all menus and dialogue to be closed.');
+    end
+    if (params.confirmation ~= 'REPOSITION NEARBY PRIVATE SERVER NM') then
+        error('Private-server NM reposition requires the exact confirmation phrase.');
+    end
+    if (party:GetMemberZone(0) ~= 198) then
+        error('Private-server NM reposition is limited to Maze of Shakhrami zone 198.');
+    end
+
+    local player_index = party:GetMemberTargetIndex(0);
+    if (
+        player_index <= 0 or
+        entities:GetServerId(player_index) == 0 or
+        entities:GetStatus(player_index) ~= 0
+    ) then
+        error('Private-server NM reposition requires the character to be idle.');
+    end
+
+    local mob_id = tonumber(params.mob_id) or 0;
+    local allowed_names =
+    {
+        [17588674] = 'Argus',
+        [17588685] = 'Leech King',
+    };
+    local expected_name = allowed_names[mob_id];
+    if (expected_name == nil or mob_id ~= math.floor(mob_id)) then
+        error('Private-server NM reposition is outside the exact mob allowlist.');
+    end
+
+    local found = nil;
+    local entity_map_size = entities:GetEntityMapSize();
+    for index = 0, entity_map_size - 1 do
+        if (entities:GetServerId(index) == mob_id) then
+            found = entity_snapshot(index, entities);
+            break;
+        end
+    end
+    if (
+        found == nil or found.name ~= expected_name or
+        found.hp_percent <= 0 or found.distance > 10
+    ) then
+        error('Private-server NM reposition requires the exact live NM within ten yalms.');
+    end
+
+    stop_movement('private_server_nm_reposition');
+    stop_input_pulse('private_server_nm_reposition');
+    stop_heading_hold('private_server_nm_reposition');
+    target:SetTarget(0, true);
+    AshitaCore:GetChatManager():QueueCommand(1, ('!agentnmhere %u'):fmt(mob_id));
+    add_event(-1, ('Agent private-server NM reposition queued: %s (%u).'):fmt(
+        expected_name,
+        mob_id
+    ));
+    return
+    {
+        queued = true,
+        name = expected_name,
+        mob_id = mob_id,
+        distance = found.distance,
+        private_server_only = true,
+        naturally_spawned_required_by_server = true,
+        proximity_enforced_by_server = true,
+        control = control_snapshot(),
+    };
+end
+
 local function private_server_rdm30_gear(params)
     require_control_enabled();
 
@@ -3426,6 +3504,8 @@ local function dispatch(request)
         return private_server_bastok_mission(params);
     elseif (request.operation == 'private_server_vendor_transaction') then
         return private_server_vendor_transaction(params);
+    elseif (request.operation == 'private_server_nm_reposition') then
+        return private_server_nm_reposition(params);
     elseif (request.operation == 'private_server_rdm30_gear') then
         return private_server_rdm30_gear(params);
     elseif (request.operation == 'private_server_rdm_spell') then

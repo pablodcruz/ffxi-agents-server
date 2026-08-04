@@ -159,6 +159,7 @@ destroy state even when the first response was lost.
 | Exact Maat trade | Three-item menu trade was fragile; the quest itself was completed normally | Exact Maat ID/items/slots/proximity; event dialogue performed; cap verified |
 | Quest safety | Unrelated aggro prevented diagnosis of multi-zone marker behavior | Quest/cap gated, temporary, removable, no cap or completion grant |
 | `qm18` marker recovery | Pinned marker failed after exact live interaction attempts | Restores only coal fragment 1 beside exact marker; cannot finish quest |
+| Argus/Leech collision recovery | A naturally spawned NM remained unattackable at less than one yalm because of a broken Maze of Shakhrami collision pocket | Zone 198 only; exact two IDs/names; spawned, alive, idle, and within ten yalms; repositions only, then normal combat/drop RNG |
 
 ## Scope and public-server boundary
 

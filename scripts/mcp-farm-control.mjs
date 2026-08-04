@@ -134,6 +134,10 @@ try {
         argument("--minimum-free-inventory-slots", "5"),
       ),
       objective_target_name: argument("--objective-target-name", ""),
+      objective_support_target_name: argument(
+        "--objective-support-target-name",
+        "",
+      ),
       objective_kill_count: Number(argument("--objective-kill-count", "0")),
       confirmation: FARM_CONFIRMATION,
     });

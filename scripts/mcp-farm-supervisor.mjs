@@ -27,6 +27,7 @@ import {
   readyTrustSupport,
   relocationMaximumLevelOffset,
   safeCombatPosition,
+  selectObjectiveTarget,
   selectProactiveTarget,
   selectRelocationCamp,
   selectTrustedCampSweepTarget,
@@ -198,6 +199,15 @@ const objectiveTargetNameValue = String(argument("--objective-target-name", ""))
 const objectiveTargetName = objectiveTargetNameValue
   ? safeLabel(objectiveTargetNameValue, "--objective-target-name")
   : "";
+const objectiveSupportTargetNameValue = String(
+  argument("--objective-support-target-name", ""),
+);
+const objectiveSupportTargetName = objectiveSupportTargetNameValue
+  ? safeLabel(
+      objectiveSupportTargetNameValue,
+      "--objective-support-target-name",
+    )
+  : "";
 const objectiveKillCount = integerArgument(
   "--objective-kill-count",
   0,
@@ -207,6 +217,19 @@ const objectiveKillCount = integerArgument(
 if (Boolean(objectiveTargetName) !== (objectiveKillCount > 0)) {
   throw new Error(
     "--objective-target-name and a positive --objective-kill-count must be provided together.",
+  );
+}
+if (objectiveSupportTargetName && !objectiveTargetName) {
+  throw new Error(
+    "--objective-support-target-name requires --objective-target-name.",
+  );
+}
+if (
+  objectiveSupportTargetName
+  && objectiveSupportTargetName === objectiveTargetName
+) {
+  throw new Error(
+    "--objective-support-target-name must differ from --objective-target-name.",
   );
 }
 if (!combatSpell && maximumCombatSpellsPerFight > 0) {
@@ -468,6 +491,7 @@ async function writeState(force = false) {
       maximum_route_rounds: maximumRouteRounds,
       minimum_free_inventory_slots: minimumFreeInventorySlots,
       objective_target_name: objectiveTargetName,
+      objective_support_target_name: objectiveSupportTargetName,
       objective_kill_count: objectiveKillCount,
     },
     nm_route: nmRoute
@@ -2154,6 +2178,7 @@ async function nudgeThroughTarget(observation, target, {
   requireEngaged,
   reason,
   maximumTargetDistance = 4,
+  useServiceTeleport = false,
 }) {
   const destination = lineOfSightNudgeDestination({
     player: observation?.player,
@@ -2171,24 +2196,35 @@ async function nudgeThroughTarget(observation, target, {
     destination,
   });
   await armControl();
-  try {
-    await call("ffxi_move_to_position", {
+  if (useServiceTeleport && !hasLiveCombat(observation)) {
+    await call("ffxi_service_teleport", {
       x: destination.x,
       y: destination.y,
-      max_start_distance: 6,
-      stop_distance: 0.5,
-      timeout_seconds: 2,
-      stuck_seconds: 1,
+      z: Number(target?.position?.z ?? observation?.player?.position?.z),
+      zone_id: activeZoneId,
+      reason: "combat_position",
+      confirmation: "TELEPORT PRIVATE SERVER CHARACTER",
     });
-  } catch (error) {
-    if (!isRecoverableMovementRace(error)) throw error;
-    log("line_of_sight_nudge_race", {
-      name: target.name,
-      server_id: target.server_id,
-      attempt,
-      reason,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } else {
+    try {
+      await call("ffxi_move_to_position", {
+        x: destination.x,
+        y: destination.y,
+        max_start_distance: 6,
+        stop_distance: 0.5,
+        timeout_seconds: 2,
+        stuck_seconds: 1,
+      });
+    } catch (error) {
+      if (!isRecoverableMovementRace(error)) throw error;
+      log("line_of_sight_nudge_race", {
+        name: target.name,
+        server_id: target.server_id,
+        attempt,
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   await new Promise((resolve) => setTimeout(resolve, 1400));
   await call("ffxi_stop_movement").catch(() => {});
@@ -2200,6 +2236,7 @@ async function nudgeThroughTarget(observation, target, {
     reason,
     player_position: after?.player?.position,
     target_distance: entityById(after, target.server_id)?.distance,
+    recovery_method: useServiceTeleport ? "service_teleport" : "movement",
   });
   await transition(requireEngaged ? "fighting" : "positioning");
   return after;
@@ -2215,23 +2252,6 @@ function clearExpiredCooldowns() {
 function excludedServerIds() {
   clearExpiredCooldowns();
   return new Set(cooldowns.keys());
-}
-
-function selectObjectiveTarget(observation, name, radius, excludedIds) {
-  if (!name) return null;
-  return (observation?.nearby_entities || [])
-    .filter((entity) => (
-      entity.entity_type === 2
-      && entity.name === name
-      && Number(entity.status) === 0
-      && Number(entity.hp_percent) > 0
-      && Number(entity.distance) <= Number(radius)
-      && !excludedIds.has(Number(entity.server_id))
-    ))
-    .sort((left, right) => (
-      Number(left.distance) - Number(right.distance)
-      || Number(left.server_id) - Number(right.server_id)
-    ))[0] || null;
 }
 
 function watchedDropNames() {
@@ -2543,6 +2563,54 @@ async function handleFight(observation) {
       return;
     }
     const retryTarget = entityById(retryObservation, rejectedTarget.server_id);
+    const exactObjectiveNames = [objectiveTargetName, objectiveSupportTargetName]
+      .filter(Boolean);
+    if (
+      rejectedMode === "proactive"
+      && Number(rejectedTarget.attack_attempts) >= 2
+      && retryTarget
+      && exactObjectiveNames.includes(retryTarget.name)
+      && [17588674, 17588685].includes(Number(retryTarget.server_id))
+      && Number(retryTarget.distance) <= 10
+      && !hasLiveCombat(retryObservation)
+    ) {
+      await transition("private_server_nm_collision_recovery", {
+        name: retryTarget.name,
+        server_id: retryTarget.server_id,
+        distance: retryTarget.distance,
+        attack_attempts: rejectedTarget.attack_attempts,
+      });
+      await armControl();
+      await call("ffxi_private_server_nm_reposition", {
+        mob_id: Number(retryTarget.server_id),
+        confirmation: "REPOSITION NEARBY PRIVATE SERVER NM",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      retryObservation = await sample();
+      const repositionedTarget = entityById(
+        retryObservation,
+        rejectedTarget.server_id,
+      );
+      if (
+        !repositionedTarget
+        || Number(repositionedTarget.distance) > 4
+        || hasLiveCombat(retryObservation)
+      ) {
+        throw new Error(
+          `Private-server NM collision recovery did not verify ${retryTarget.name} within four yalms.`,
+        );
+      }
+      log("private_server_nm_repositioned", {
+        name: repositionedTarget.name,
+        server_id: repositionedTarget.server_id,
+        distance: repositionedTarget.distance,
+      });
+      await engage(repositionedTarget, "proactive", {
+        handoff: rejectedTarget.handoff,
+        attempt: Number(rejectedTarget.attack_attempts) + 1,
+      });
+      return;
+    }
     if (
       rejectedMode === "proactive"
       && Number(rejectedTarget.attack_attempts) < 2
@@ -2561,6 +2629,11 @@ async function handleFight(observation) {
               attempt: Number(rejectedTarget.attack_attempts),
               requireEngaged: false,
               reason: "proactive_visibility_failure",
+              useServiceTeleport: Boolean(
+                objectiveTargetName
+                && [objectiveTargetName, objectiveSupportTargetName]
+                  .includes(retryTarget.name)
+              ),
             },
           );
         } else {
@@ -2715,6 +2788,7 @@ try {
     maximum_route_rounds: maximumRouteRounds,
     minimum_free_inventory_slots: minimumFreeInventorySlots,
     objective_target_name: objectiveTargetName,
+    objective_support_target_name: objectiveSupportTargetName,
     objective_kill_count: objectiveKillCount,
   });
 
@@ -3048,12 +3122,13 @@ try {
       : null;
     const routeProfile = nmRoute ? currentNmRouteProfile() : null;
     const currentExcludedServerIds = excludedServerIds();
-    const objectiveTarget = selectObjectiveTarget(
+    const objectiveTarget = selectObjectiveTarget({
       observation,
-      objectiveTargetName,
-      scanRadius,
-      currentExcludedServerIds,
-    );
+      primaryName: objectiveTargetName,
+      supportName: objectiveSupportTargetName,
+      radius: scanRadius,
+      excludedServerIds: currentExcludedServerIds,
+    });
     const target = objectiveTargetName ? objectiveTarget : (nmRoute
       ? selectExactLotteryTarget({
           observation,
@@ -3198,7 +3273,7 @@ try {
             ? watchedSpawnServerIds()
             : null,
           allowedNames: objectiveTargetName
-            ? [objectiveTargetName]
+            ? [objectiveTargetName, objectiveSupportTargetName].filter(Boolean)
             : questItemId > 0
             ? null
             : (trustedCampSweep ? null : questProfile?.names),

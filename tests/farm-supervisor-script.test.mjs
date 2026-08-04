@@ -54,9 +54,22 @@ test("exact-name objectives count confirmed kills and drain at their limit", asy
     path.join(projectDir, "scripts", "mcp-farm-supervisor.mjs"),
     "utf8",
   );
-  assert.match(source, /function selectObjectiveTarget\(/);
-  assert.match(source, /entity\.name === name/);
+  const policy = await fs.readFile(
+    path.join(projectDir, "src", "farm-supervisor-policy.mjs"),
+    "utf8",
+  );
+  assert.match(policy, /function selectObjectiveTarget\(/);
+  assert.match(policy, /entity\?\.name === name/);
+  assert.match(policy, /nearestNamedTarget\(primaryName\) \|\| nearestNamedTarget\(supportName\)/);
   assert.match(source, /objectiveTargetName \? objectiveTarget : \(nmRoute/);
+  assert.match(source, /\[objectiveTargetName, objectiveSupportTargetName\]\.filter\(Boolean\)/);
+  assert.match(source, /useServiceTeleport: Boolean\(/);
+  assert.match(source, /recovery_method: useServiceTeleport \? "service_teleport" : "movement"/);
+  assert.match(source, /ffxi_private_server_nm_reposition/);
+  assert.match(source, /Number\(rejectedTarget\.attack_attempts\) >= 2/);
+  assert.match(source, /\[17588674, 17588685\]\.includes/);
+  assert.match(source, /Number\(retryTarget\.distance\) <= 10/);
+  assert.match(source, /REPOSITION NEARBY PRIVATE SERVER NM/);
   assert.match(source, /defeatedTarget\.name === objectiveTargetName/);
   assert.match(source, /stopReason = "objective_kill_limit"/);
   assert.match(source, /cooperativeStopRequestedAt \?\?= Date\.now\(\)/);
