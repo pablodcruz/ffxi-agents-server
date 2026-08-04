@@ -3,9 +3,10 @@
 Last reviewed: 2026-08-04
 
 Farm Argus at the proven Maze of Shakhrami camp on the isolated local
-LandSandBoat server. The detached supervisor handles the alternating Leech
-King slot as a non-completing support target and stops only after one verified
-Argus defeat or a material safety issue.
+LandSandBoat server. The detached supervisor handles the shared 50/50
+Argus/Leech King lottery, treating Leech King as a non-completing support
+target, and stops only after one verified Argus defeat or a material safety
+issue.
 
 ## Completion evidence required
 

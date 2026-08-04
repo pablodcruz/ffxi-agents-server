@@ -750,13 +750,15 @@ four-camp implementation moves on immediately after its configured
 placeholder quota is dead and lets the route itself absorb respawn time. See
 `docs/notorious-monster-loop.md`.
 
-### Argus and Leech King alternating camp
+### Argus and Leech King shared lottery camp
 
 Maze of Shakhrami does not use ordinary Protozoans as Argus placeholders. The
-pinned zone script alternates one timed slot between Argus (`17588674`) and
-Leech King (`17588685`): the initial delay is randomly 15–120 minutes and a
-defeat starts a new random 60–120 minute delay for the other NM. Killing nearby
-Protozoans therefore does not accelerate the lottery.
+pinned zone script assigns one timed slot to either Argus (`17588674`) or Leech
+King (`17588685`) with an independent 50% roll after every despawn. The initial
+delay is randomly 15–120 minutes and a defeat starts a new random 60–120 minute
+delay before another 50% choice. This is not strict alternation: the live run
+defeated Leech King at 16:17 and again at 17:33. Killing nearby Protozoans does
+not accelerate the lottery.
 
 Use an exact objective with one non-completing support target:
 
@@ -768,8 +770,9 @@ Use an exact objective with one non-completing support target:
 
 The selector always prefers live Argus when both names are observable. A Leech
 King defeat counts as an ordinary/support fight and never increments
-`objective_kills`; it merely clears the alternating slot so Argus can become
-the next timed spawn.
+`objective_kills`; it merely advances the shared lottery to its next timed
+50% roll. Consecutive Leech King spawns are expected and must remain in the
+loop until Argus wins a roll.
 
 The live camp exposed a broken collision pocket near Leech King's randomized
 position. A client could reach within one yalm and still receive `Unable to see
