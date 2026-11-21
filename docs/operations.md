@@ -45,6 +45,20 @@ xidb-YYYYMMDDTHHMMSSZ.sql.gz
 xidb-YYYYMMDDTHHMMSSZ.sql.gz.verified
 ```
 
+To restore a plain dump or a scheduled compressed backup, first verify it with
+the disposable verifier above. Then double-check the intended database before
+running the command below: it modifies the running Compose database and cannot
+roll back a SQL import that fails partway.
+
+```sh
+./scripts/server.sh restore /absolute/path/to/xidb-YYYYMMDDTHHMMSSZ.sql.gz --yes
+```
+
+The command unpacks a compressed dump completely before opening the database
+client. Ensure your trusted local temporary directory (`TMPDIR`, or `/tmp` when
+unset) has enough space for the uncompressed SQL. A damaged gzip checksum does
+not start an import.
+
 Pruning is disabled by default. Copy verified backups to a separate machine or
 object store and perform a restore drill before setting
 `FFXI_BACKUP_PRUNE=true`. The Linux systemd template is under

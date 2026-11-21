@@ -191,7 +191,7 @@ case "${command_name}" in
     if [[ -z "${restore_path}" || "${confirmation}" != "--yes" ]]; then
       printf '%s\n' \
         "Restore overwrites database objects from a SQL dump." \
-        "Usage: ./scripts/server.sh restore /absolute/path/to/xidb.sql --yes"
+        "Usage: ./scripts/server.sh restore /absolute/path/to/xidb.sql[.gz] --yes"
       exit 1
     fi
     [[ -f "${restore_path}" ]] || {
@@ -202,13 +202,24 @@ case "${command_name}" in
       printf '%s\n' "Run ./scripts/server.sh init first."
       exit 1
     }
-    compose="$(compose_command)"
-    # Intentional word splitting: compose is either "docker compose" or "docker-compose".
-    # shellcheck disable=SC2086
-    ${compose} --project-directory "${PROJECT_DIR}" --env-file "${ENV_FILE}" \
-      exec -T database sh -c \
-      'exec mariadb --user=root --password="$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"' \
-      < "${restore_path}"
+    (
+      restore_sql_path="${restore_path}"
+      if [[ "${restore_path}" == *.sql.gz ]]; then
+        # Finish decompression before opening the database client: gzip can
+        # report a bad trailer after already emitting valid SQL statements.
+        restore_sql_path="$(umask 077; mktemp "${TMPDIR:-/tmp}/ffxi-restore.XXXXXXXX")"
+        trap 'rm -f -- "${restore_sql_path}"' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+        if ! gzip -dc -- "${restore_path}" > "${restore_sql_path}"; then
+          printf 'Could not decompress backup: %s\n' "${restore_path}" >&2
+          exit 1
+        fi
+      fi
+      run_compose exec -T database sh -c \
+        'exec mariadb --user=root --password="$MARIADB_ROOT_PASSWORD" "$MARIADB_DATABASE"' \
+        < "${restore_sql_path}"
+    )
     printf 'Restored %s\n' "${restore_path}"
     ;;
   set-network)
