@@ -1,0 +1,24 @@
+name: Backup restore smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/backup-restore-smoke.yml'
+      - 'scripts/server.sh'
+      - 'tests/backup-restore-mariadb.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  mariadb-restore:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Restore synthetic SQL into disposable MariaDB
+        run: bash tests/backup-restore-mariadb.sh
